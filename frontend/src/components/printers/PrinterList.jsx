@@ -41,8 +41,9 @@ export default function PrinterList({ printers, onRefresh }) {
             <tr>
               <th>Name</th>
               <th>Host</th>
-              <th>Port</th>
-              <th>API Key</th>
+              <th>Bed Size</th>
+              <th>Filaments</th>
+              <th>Toolheads</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -50,9 +51,29 @@ export default function PrinterList({ printers, onRefresh }) {
             {printers.map(p => (
               <tr key={p.id}>
                 <td>{p.name}</td>
-                <td>{p.host}</td>
-                <td>{p.port}</td>
-                <td>{p.api_key ? '••••••' : '—'}</td>
+                <td>{p.host}:{p.port}</td>
+                <td>
+                  {p.bed_width && p.bed_depth ? (
+                    <span>{p.bed_width}×{p.bed_depth}×{p.bed_height || '?'}mm</span>
+                  ) : (
+                    <span className="text-muted">Not set</span>
+                  )}
+                </td>
+                <td>
+                  {Array.isArray(p.filament_types) && p.filament_types.length > 0 ? (
+                    <div className="badge-row">
+                      {p.filament_types.slice(0, 3).map(t => (
+                        <span key={t} className="badge badge-filament">{t}</span>
+                      ))}
+                      {p.filament_types.length > 3 && (
+                        <span className="badge badge-muted">+{p.filament_types.length - 3}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
+                <td>{p.toolhead_count || 1}</td>
                 <td className="file-actions">
                   <button className="btn btn-sm" onClick={() => setEditingPrinter(p)}>
                     Edit

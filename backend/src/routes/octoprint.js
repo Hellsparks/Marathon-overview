@@ -6,13 +6,14 @@ const { getDb } = require('../db');
 const upload = require('../middleware/upload');
 const apiKeyAuth = require('../middleware/apiKeyAuth');
 const printerCache = require('../services/printerCache');
+const { parseGcodeFile } = require('../services/gcodeParser');
 
 // GET /api/version  — slicer connectivity test
 router.get('/version', (req, res) => {
   res.json({
     api: '0.1',
     server: '1.1.0',
-    text: 'Marathon-overview',
+    text: 'OctoPrint (Marathon)',
   });
 });
 
@@ -65,6 +66,22 @@ router.post('/files/local', apiKeyAuth, upload.single('file'), (req, res) => {
     `INSERT OR IGNORE INTO gcode_files (filename, display_name, size_bytes, upload_source, slicer_name)
      VALUES (?, ?, ?, 'slicer', ?)`
   ).run(req.file.filename, req.file.originalname, req.file.size, slicerName);
+
+  // Parse G-code metadata for safety checks (runs in background after response)
+  const record = db.prepare('SELECT * FROM gcode_files WHERE filename = ?').get(req.file.filename);
+  if (record) {
+    parseGcodeFile(req.file.filename).then(meta => {
+      if (meta) {
+        db.prepare(
+          `INSERT OR REPLACE INTO gcode_metadata (file_id, min_x, max_x, min_y, max_y, min_z, max_z, filament_type, estimated_time_s)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(record.id, meta.min_x, meta.max_x, meta.min_y, meta.max_y, meta.min_z, meta.max_z, meta.filament_type, meta.estimated_time_s);
+        console.log(`[OctoPrint/GcodeParser] Parsed ${req.file.filename}: X[${meta.min_x}→${meta.max_x}] Y[${meta.min_y}→${meta.max_y}] Z[${meta.min_z}→${meta.max_z}] filament=${meta.filament_type}`);
+      }
+    }).catch(err => {
+      console.error('[OctoPrint/GcodeParser]', err.message);
+    });
+  }
 
   res.status(201).json({
     files: {

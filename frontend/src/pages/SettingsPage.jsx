@@ -1,5 +1,6 @@
 import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
+import PresetList from '../components/printers/PresetList';
 
 export default function SettingsPage() {
   const { printers, loading, error, refresh } = usePrinters();
@@ -17,6 +18,12 @@ export default function SettingsPage() {
         ) : (
           <PrinterList printers={printers} onRefresh={refresh} />
         )}
+      </section>
+
+      <section className="page-section">
+        <h2 className="section-title">Printer Presets</h2>
+        <p>Presets let you quickly configure printers with common build volumes and filament capabilities. Built-in presets cannot be edited or deleted.</p>
+        <PresetList />
       </section>
 
       <section className="page-section">

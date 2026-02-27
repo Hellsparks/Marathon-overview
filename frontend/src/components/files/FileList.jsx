@@ -39,7 +39,8 @@ export default function FileList({ files, onDeleted }) {
           <thead>
             <tr>
               <th>Name</th>
-              <th>Size</th>
+              <th>Print Size</th>
+              <th>File Size</th>
               <th>Source</th>
               <th>Uploaded</th>
               <th>Actions</th>
@@ -49,6 +50,31 @@ export default function FileList({ files, onDeleted }) {
             {files.map(file => (
               <tr key={file.id}>
                 <td className="file-name">{file.display_name}</td>
+                <td>
+                  {file.max_x != null && file.min_x != null ? (
+                    <div className="print-dimensions">
+                      <span>
+                        {(file.max_x - file.min_x).toFixed(1)} × {(file.max_y - file.min_y).toFixed(1)} × {(file.max_z - (file.min_z || 0)).toFixed(1)}mm
+                      </span>
+                      {file.filament_type && (
+                        <span className="badge badge-filament">{file.filament_type}</span>
+                      )}
+                    </div>
+                  ) : file.max_z != null ? (
+                    <div className="print-dimensions">
+                      <span>H: {(file.max_z - (file.min_z || 0)).toFixed(1)}mm</span>
+                      {file.filament_type && (
+                        <span className="badge badge-filament">{file.filament_type}</span>
+                      )}
+                    </div>
+                  ) : file.filament_type ? (
+                    <div className="print-dimensions">
+                      <span className="badge badge-filament">{file.filament_type}</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
                 <td>{formatBytes(file.size_bytes)}</td>
                 <td>
                   <span className="source-badge">{file.slicer_name || file.upload_source}</span>
