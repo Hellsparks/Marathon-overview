@@ -243,6 +243,48 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
 .upload-progress-bar { background: var(--surface2); border-radius: 4px; height: 8px; overflow: hidden; margin-bottom: 8px; }
 .upload-progress-fill { background: var(--primary); height: 100%; border-radius: 4px; transition: width .3s; }
 
+/* ─── Temp Control ──────────────────────────────────────────────── */
+.printer-temps { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.temp-control { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 110px; }
+.temp-control-display { display: flex; flex-direction: column; }
+.temp-control-set { display: flex; gap: 4px; align-items: center; }
+
+.temp-input {
+  width: 54px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 12px;
+  /* hide number spinners */
+  -moz-appearance: textfield;
+}
+.temp-input::-webkit-outer-spin-button,
+.temp-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.temp-input:focus { outline: none; border-color: var(--primary); }
+
+/* ─── Webcam ─────────────────────────────────────────────────────── */
+.webcam-wrap {
+  border-radius: 6px;
+  overflow: hidden;
+  background: #000;
+  line-height: 0;
+}
+.webcam-stream {
+  width: 100%;
+  display: block;
+  object-fit: contain;
+  max-height: 240px;
+}
+.webcam-offline {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 /* ─── Queue ─────────────────────────────────────────────────────── */
 .queue-page-layout { display: grid; grid-template-columns: 320px 1fr; gap: 24px; align-items: start; }
 @media (max-width: 700px) { .queue-page-layout { grid-template-columns: 1fr; } }

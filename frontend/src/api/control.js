@@ -14,3 +14,12 @@ export const resumePrint = (printerId) =>
 
 export const cancelPrint = (printerId) =>
   apiFetch(`/api/printers/${printerId}/print/cancel`, { method: 'POST' });
+
+export const sendGcode = (printerId, script) =>
+  apiFetch(`/api/printers/${printerId}/gcode`, {
+    method: 'POST',
+    body: JSON.stringify({ script }),
+  });
+
+export const getWebcams = (printerId) =>
+  apiFetch(`/api/printers/${printerId}/webcams`);

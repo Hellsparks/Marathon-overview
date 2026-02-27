@@ -69,6 +69,19 @@ class MoonrakerClient {
     return this._post('/server/job_queue/start');
   }
 
+  async sendGcode(script) {
+    return this._post('/printer/gcode/script', { script });
+  }
+
+  async getWebcams() {
+    const r = await fetch(`${this.baseUrl}/server/webcams/list`, {
+      headers: this._headers(),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) throw new Error(`Moonraker webcams ${r.status}`);
+    return (await r.json()).result.webcams ?? [];
+  }
+
   async uploadFile(filename, fileBuffer) {
     const form = new FormData();
     form.append('file', fileBuffer, { filename });

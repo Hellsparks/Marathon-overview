@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StatusBadge from '../common/StatusBadge';
-import TempGauge from '../common/TempGauge';
+import TempControl from '../common/TempControl';
 import ProgressBar from '../common/ProgressBar';
 import ConfirmDialog from '../common/ConfirmDialog';
-import { pausePrint, resumePrint, cancelPrint } from '../../api/control';
+import WebcamStream from './WebcamStream';
+import { pausePrint, resumePrint, cancelPrint, sendGcode } from '../../api/control';
 
 export default function PrinterCard({ printer, status }) {
   const [confirming, setConfirming] = useState(false);
@@ -20,16 +21,18 @@ export default function PrinterCard({ printer, status }) {
   const isPrinting = state === 'printing';
   const isPaused = state === 'paused';
 
-  async function handlePause() {
+  async function run(fn) {
     setBusy(true);
-    try { await pausePrint(printer.id); } catch (e) { alert(e.message); }
-    setBusy(false);
+    try { await fn(); } catch (e) { alert(e.message); }
+    finally { setBusy(false); }
   }
 
-  async function handleResume() {
-    setBusy(true);
-    try { await resumePrint(printer.id); } catch (e) { alert(e.message); }
-    setBusy(false);
+  async function handleSetTemp(heater, temp) {
+    try {
+      await sendGcode(printer.id, `SET_HEATER_TEMPERATURE HEATER=${heater} TARGET=${temp}`);
+    } catch (e) {
+      alert(e.message);
+    }
   }
 
   async function handleCancel() {
@@ -40,6 +43,7 @@ export default function PrinterCard({ printer, status }) {
 
   return (
     <div className={`printer-card state-${state}`}>
+      {/* Header */}
       <div className="printer-card-header">
         <h3 className="printer-name">{printer.name}</h3>
         <StatusBadge state={state} />
@@ -47,32 +51,67 @@ export default function PrinterCard({ printer, status }) {
 
       {online ? (
         <>
+          {/* Temperature controls */}
           <div className="printer-temps">
-            <TempGauge label="Hotend" actual={extruder?.temperature} target={extruder?.target} />
-            <TempGauge label="Bed"    actual={bed?.temperature}      target={bed?.target} />
+            <TempControl
+              label="Hotend"
+              actual={extruder?.temperature}
+              target={extruder?.target}
+              onSet={temp => handleSetTemp('extruder', temp)}
+            />
+            <TempControl
+              label="Bed"
+              actual={bed?.temperature}
+              target={bed?.target}
+              onSet={temp => handleSetTemp('heater_bed', temp)}
+            />
           </div>
 
+          {/* Printer actions */}
+          <div className="printer-actions">
+            <button
+              className="btn btn-sm"
+              onClick={() => run(() => sendGcode(printer.id, 'G28'))}
+              disabled={busy || isPrinting}
+              title="Home all axes"
+            >
+              Home
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={() => run(() => sendGcode(printer.id, 'QUAD_GANTRY_LEVEL'))}
+              disabled={busy || isPrinting}
+              title="Quad Gantry Level"
+            >
+              QGL
+            </button>
+
+            {isPrinting && (
+              <button className="btn btn-sm" onClick={() => run(() => pausePrint(printer.id))} disabled={busy}>
+                Pause
+              </button>
+            )}
+            {isPaused && (
+              <button className="btn btn-sm btn-primary" onClick={() => run(() => resumePrint(printer.id))} disabled={busy}>
+                Resume
+              </button>
+            )}
+            {(isPrinting || isPaused) && (
+              <button className="btn btn-sm btn-danger" onClick={() => setConfirming(true)} disabled={busy}>
+                Cancel
+              </button>
+            )}
+          </div>
+
+          {/* Progress (only when active) */}
           {(isPrinting || isPaused) && (
-            <>
-              <ProgressBar value={progress} filename={filename} />
-              <div className="printer-actions">
-                {isPrinting && (
-                  <button className="btn btn-sm" onClick={handlePause} disabled={busy}>
-                    Pause
-                  </button>
-                )}
-                {isPaused && (
-                  <button className="btn btn-sm btn-primary" onClick={handleResume} disabled={busy}>
-                    Resume
-                  </button>
-                )}
-                <button className="btn btn-sm btn-danger" onClick={() => setConfirming(true)} disabled={busy}>
-                  Cancel
-                </button>
-              </div>
-            </>
+            <ProgressBar value={progress} filename={filename} />
           )}
 
+          {/* Webcam */}
+          <WebcamStream printerId={printer.id} />
+
+          {/* Footer */}
           <div className="printer-card-footer">
             <button className="btn-link" onClick={() => navigate(`/queue/${printer.id}`)}>
               View Queue →
