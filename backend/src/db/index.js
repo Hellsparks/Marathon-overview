@@ -1,4 +1,4 @@
-const Database = require('better-sqlite3');
+const { Database } = require('node-sqlite3-wasm');
 const path = require('path');
 const fs = require('fs');
 
@@ -10,8 +10,8 @@ function getDb() {
   if (!db) {
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
     db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+    db.exec('PRAGMA journal_mode = WAL');
+    db.exec('PRAGMA foreign_keys = ON');
     runMigrations(db);
   }
   return db;
