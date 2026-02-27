@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_PATH: /app/data/marathon.db
+      UPLOADS_DIR: /app/uploads
+      # OCTOPRINT_API_KEY: changeme
+    volumes:
+      - backend_data:/app/data
+      - gcode_uploads:/app/uploads
+    expose:
+      - "3000"
+    networks:
+      - marathon_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - marathon_net
+
+volumes:
+  backend_data:
+    driver: local
+  gcode_uploads:
+    driver: local
+
+networks:
+  marathon_net:
+    driver: bridge
