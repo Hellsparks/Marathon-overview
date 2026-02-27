@@ -19,7 +19,7 @@ router.post('/', (req, res) => {
   const db = getDb();
   const result = db
     .prepare('INSERT INTO printers (name, host, port, api_key) VALUES (?, ?, ?, ?)')
-    .run([name, host, port, api_key || null]);
+    .run(name, host, port, api_key || null);
   const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(result.lastInsertRowid);
   pollAll(); // trigger immediate status poll to populate cache for new printer
   res.status(201).json(printer);
@@ -35,14 +35,14 @@ router.put('/:id', (req, res) => {
   db.prepare(
     `UPDATE printers SET name=?, host=?, port=?, api_key=?, enabled=?, updated_at=datetime('now')
      WHERE id=?`
-  ).run([
+  ).run(
     name ?? printer.name,
     host ?? printer.host,
     port ?? printer.port,
     api_key !== undefined ? api_key : printer.api_key,
     enabled !== undefined ? (enabled ? 1 : 0) : printer.enabled,
-    req.params.id,
-  ]);
+    req.params.id
+  );
   res.json(db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id));
 });
 

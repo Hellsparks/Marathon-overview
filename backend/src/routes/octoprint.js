@@ -64,7 +64,7 @@ router.post('/files/local', apiKeyAuth, upload.single('file'), (req, res) => {
   db.prepare(
     `INSERT OR IGNORE INTO gcode_files (filename, display_name, size_bytes, upload_source, slicer_name)
      VALUES (?, ?, ?, 'slicer', ?)`
-  ).run([req.file.filename, req.file.originalname, req.file.size, slicerName]);
+  ).run(req.file.filename, req.file.originalname, req.file.size, slicerName);
 
   res.status(201).json({
     files: {
