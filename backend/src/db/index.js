@@ -1,4 +1,4 @@
-const { Database } = require('node-sqlite3-wasm');
+const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 const fs = require('fs');
 
@@ -9,7 +9,7 @@ let db;
 function getDb() {
   if (!db) {
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-    db = new Database(DB_PATH);
+    db = new DatabaseSync(DB_PATH);
     db.exec('PRAGMA journal_mode = WAL');
     db.exec('PRAGMA foreign_keys = ON');
     runMigrations(db);

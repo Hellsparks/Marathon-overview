@@ -23,7 +23,7 @@ router.post('/upload', upload.single('file'), (req, res) => {
   db.prepare(
     `INSERT INTO gcode_files (filename, display_name, size_bytes, upload_source)
      VALUES (?, ?, ?, 'web')`
-  ).run([req.file.filename, req.file.originalname, req.file.size]);
+  ).run(req.file.filename, req.file.originalname, req.file.size);
 
   const record = db
     .prepare('SELECT * FROM gcode_files WHERE filename = ?')
@@ -71,7 +71,7 @@ router.post('/:id/send', async (req, res) => {
       // Log to history
       db.prepare(
         `INSERT INTO print_history (printer_id, file_id, filename) VALUES (?, ?, ?)`
-      ).run([printer.id, file.id, file.display_name]);
+      ).run(printer.id, file.id, file.display_name);
       return res.json({ success: true, action: 'started' });
     }
 
