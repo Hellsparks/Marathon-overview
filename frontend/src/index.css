@@ -1160,7 +1160,7 @@ code {
 
 .spoolman-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 1fr 260px;
   gap: 24px;
   align-items: start;
 }
@@ -1325,6 +1325,19 @@ code {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: .04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spool-card-hex {
+  font-family: monospace;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--text-muted);
 }
 
 .spool-card-vendor {

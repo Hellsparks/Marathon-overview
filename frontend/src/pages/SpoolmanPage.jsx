@@ -46,7 +46,8 @@ export default function SpoolmanPage() {
         return (
             (s.filament?.name || '').toLowerCase().includes(q) ||
             (s.filament?.material || '').toLowerCase().includes(q) ||
-            (s.filament?.vendor?.name || '').toLowerCase().includes(q)
+            (s.filament?.vendor?.name || '').toLowerCase().includes(q) ||
+            (s.filament?.color_hex || '').toLowerCase().includes(q)
         );
     });
 
@@ -122,7 +123,75 @@ export default function SpoolmanPage() {
             <h1 className="page-title">Spoolman</h1>
 
             <div className="spoolman-layout">
-                {/* Left column: Printer list */}
+                {/* Center: Spool inventory */}
+                <div className="spoolman-inventory">
+                    <input
+                        type="text"
+                        className="input spoolman-search"
+                        placeholder="Search spools by name, material, vendor, or color (hex)..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+
+                    {loading ? (
+                        <div className="loading">Loading spools…</div>
+                    ) : error ? (
+                        <div className="error">
+                            <p>Failed to load spools: {error}</p>
+                            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                                Configure your Spoolman URL in <a href="/settings">Settings</a>.
+                            </p>
+                        </div>
+                    ) : filtered.length === 0 ? (
+                        <div className="text-muted" style={{ padding: '20px', textAlign: 'center' }}>
+                            {search ? 'No spools match your search' : 'No spools found in Spoolman'}
+                        </div>
+                    ) : (
+                        <div className="spoolman-grid">
+                            {filtered.map(spool => {
+                                const f = spool.filament || {};
+                                const pct = getSpoolPercentage(spool);
+                                const color = `#${f.color_hex || '888888'}`;
+                                return (
+                                    <div
+                                        key={spool.id}
+                                        className="spoolman-spool-card"
+                                        draggable
+                                        onDragStart={e => onDragStart(e, spool)}
+                                    >
+                                        <div className="spool-card-header">
+                                            <div className="spool-color-circle" style={{ backgroundColor: color }} />
+                                            <div className="spool-card-info">
+                                                <span className="spool-card-name">{f.name || `Spool #${spool.id}`}</span>
+                                                <span className="spool-card-material">
+                                                    {f.material || '—'}
+                                                    {f.color_hex && (
+                                                        <span className="spool-card-hex">#{f.color_hex.toUpperCase()}</span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {f.vendor?.name && (
+                                            <span className="spool-card-vendor">{f.vendor.name}</span>
+                                        )}
+                                        <div className="spool-card-weight">
+                                            <span>{Math.round(spool.remaining_weight ?? 0)}g / {Math.round(spool.initial_weight ?? 0)}g</span>
+                                            <span className="spool-card-pct">{Math.round(pct)}%</span>
+                                        </div>
+                                        <div className="spool-weight-bar">
+                                            <div
+                                                className="spool-weight-fill"
+                                                style={{ width: `${pct}%`, backgroundColor: color }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Right column: Printer list */}
                 <div className="spoolman-printers">
                     <h3 className="spoolman-column-title">Printers</h3>
                     <p className="spoolman-hint">Drag a spool onto a printer to assign it</p>
@@ -161,69 +230,6 @@ export default function SpoolmanPage() {
                             </div>
                         );
                     })}
-                </div>
-
-                {/* Center: Spool inventory */}
-                <div className="spoolman-inventory">
-                    <input
-                        type="text"
-                        className="input spoolman-search"
-                        placeholder="Search spools by name, material, or vendor..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                    />
-
-                    {loading ? (
-                        <div className="loading">Loading spools…</div>
-                    ) : error ? (
-                        <div className="error">
-                            <p>Failed to load spools: {error}</p>
-                            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                Configure your Spoolman URL in <a href="/settings">Settings</a>.
-                            </p>
-                        </div>
-                    ) : filtered.length === 0 ? (
-                        <div className="text-muted" style={{ padding: '20px', textAlign: 'center' }}>
-                            {search ? 'No spools match your search' : 'No spools found in Spoolman'}
-                        </div>
-                    ) : (
-                        <div className="spoolman-grid">
-                            {filtered.map(spool => {
-                                const f = spool.filament || {};
-                                const pct = getSpoolPercentage(spool);
-                                const color = `#${f.color_hex || '888888'}`;
-                                return (
-                                    <div
-                                        key={spool.id}
-                                        className="spoolman-spool-card"
-                                        draggable
-                                        onDragStart={e => onDragStart(e, spool)}
-                                    >
-                                        <div className="spool-card-header">
-                                            <div className="spool-color-circle" style={{ backgroundColor: color }} />
-                                            <div className="spool-card-info">
-                                                <span className="spool-card-name">{f.name || `Spool #${spool.id}`}</span>
-                                                <span className="spool-card-material">{f.material || '—'}</span>
-                                            </div>
-                                        </div>
-                                        {f.vendor?.name && (
-                                            <span className="spool-card-vendor">{f.vendor.name}</span>
-                                        )}
-                                        <div className="spool-card-weight">
-                                            <span>{Math.round(spool.remaining_weight ?? 0)}g / {Math.round(spool.initial_weight ?? 0)}g</span>
-                                            <span className="spool-card-pct">{Math.round(pct)}%</span>
-                                        </div>
-                                        <div className="spool-weight-bar">
-                                            <div
-                                                className="spool-weight-fill"
-                                                style={{ width: `${pct}%`, backgroundColor: color }}
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
