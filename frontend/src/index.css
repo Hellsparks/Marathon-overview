@@ -744,6 +744,143 @@ code {
   margin-top: 20px;
 }
 
+.dialog.dialog-expanded {
+  max-width: 800px;
+}
+
+.dialog-split-pane {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.dialog-left {
+  flex: 1;
+  min-width: 320px;
+}
+
+.dialog-right {
+  flex: 1;
+  min-width: 320px;
+  border-left: 1px solid var(--border);
+  padding-left: 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.dialog-right-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mini-spools-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.mini-spools-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mini-spools-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mini-spools-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.mini-spool-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.mini-spool-card:hover {
+  background: color-mix(in srgb, var(--surface2) 80%, white);
+  border-color: var(--text-muted);
+}
+
+.mini-spool-card.selected {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface2));
+}
+
+.mini-spool-card.active-spool-marker {
+  border-color: var(--primary);
+  border-style: dashed;
+}
+
+.mini-spool-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.mini-spool-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-spool-vendor {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.mini-spool-weight {
+  font-size: 11px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--text) 80%, transparent);
+}
+
+.spool-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  transition: all 0.15s;
+  margin-bottom: 8px;
+}
+
+.spool-action-btn:hover {
+  background: var(--surface2);
+  border-color: var(--text-muted);
+}
+
+.spool-action-btn.selected {
+  border-color: var(--primary);
+  border-style: solid;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
 .dialog p {
   margin-bottom: 12px;
 }
