@@ -1,0 +1,231 @@
+import { useState, useEffect, useCallback } from 'react';
+import { usePrinters } from '../hooks/usePrinters';
+import { getSpools, setActiveSpool } from '../api/spoolman';
+
+export default function SpoolmanPage() {
+    const { printers } = usePrinters();
+    const [spools, setSpools] = useState([]);
+    const [search, setSearch] = useState('');
+    const [statuses, setStatuses] = useState({});
+    const [dragSpool, setDragSpool] = useState(null);
+    const [dropTarget, setDropTarget] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const fetchSpools = useCallback(async () => {
+        try {
+            const data = await getSpools();
+            setSpools(data.filter(s => !s.archived));
+            setError(null);
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // Fetch spools
+    useEffect(() => { fetchSpools(); }, [fetchSpools]);
+
+    // Fetch printer statuses for active spool display
+    useEffect(() => {
+        async function fetchStatuses() {
+            try {
+                const r = await fetch('/api/status');
+                if (r.ok) setStatuses(await r.json());
+            } catch { }
+        }
+        fetchStatuses();
+        const interval = setInterval(fetchStatuses, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const filtered = spools.filter(s => {
+        if (!search.trim()) return true;
+        const q = search.toLowerCase();
+        return (
+            (s.filament?.name || '').toLowerCase().includes(q) ||
+            (s.filament?.material || '').toLowerCase().includes(q) ||
+            (s.filament?.vendor?.name || '').toLowerCase().includes(q)
+        );
+    });
+
+    // Drag handlers
+    function onDragStart(e, spool) {
+        setDragSpool(spool);
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', spool.id.toString());
+    }
+
+    function onDragOver(e, printerId) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setDropTarget(printerId);
+    }
+
+    function onDragLeave() {
+        setDropTarget(null);
+    }
+
+    async function onDrop(e, printer) {
+        e.preventDefault();
+        setDropTarget(null);
+        const spool = dragSpool;
+        setDragSpool(null);
+        if (!spool) return;
+
+        // Check filament compatibility
+        const material = (spool.filament?.material || '').toUpperCase();
+        let supported = [];
+        try { supported = JSON.parse(printer.filament_types || '[]'); } catch { }
+        const supportedUpper = supported.map(s => s.toUpperCase());
+
+        if (material && supportedUpper.length > 0 && !supportedUpper.includes(material)) {
+            const proceed = confirm(
+                `⚠️ ${printer.name} does not list "${spool.filament?.material}" as a supported filament.\n\n` +
+                `Supported: ${supported.join(', ')}\n\n` +
+                `Assign anyway?`
+            );
+            if (!proceed) return;
+        }
+
+        try {
+            await setActiveSpool(printer.id, spool.id);
+            const r = await fetch('/api/status');
+            if (r.ok) setStatuses(await r.json());
+        } catch (err) {
+            alert(`Failed to set spool: ${err.message}`);
+        }
+    }
+
+    async function handleClearSpool(printerId) {
+        try {
+            await setActiveSpool(printerId, null);
+            const r = await fetch('/api/status');
+            if (r.ok) setStatuses(await r.json());
+        } catch (err) {
+            alert(`Failed to clear spool: ${err.message}`);
+        }
+    }
+
+    function getActiveSpool(printerId) {
+        return statuses[printerId]?._active_spool || null;
+    }
+
+    function getSpoolPercentage(spool) {
+        if (!spool.initial_weight || spool.initial_weight === 0) return 100;
+        return Math.min(100, (spool.remaining_weight / spool.initial_weight) * 100);
+    }
+
+    return (
+        <div className="page spoolman-page">
+            <h1 className="page-title">Spoolman</h1>
+
+            <div className="spoolman-layout">
+                {/* Left column: Printer list */}
+                <div className="spoolman-printers">
+                    <h3 className="spoolman-column-title">Printers</h3>
+                    <p className="spoolman-hint">Drag a spool onto a printer to assign it</p>
+                    {printers.map(p => {
+                        const active = getActiveSpool(p.id);
+                        const isTarget = dropTarget === p.id;
+                        return (
+                            <div
+                                key={p.id}
+                                className={`spoolman-printer-card${isTarget ? ' drop-hover' : ''}`}
+                                onDragOver={e => onDragOver(e, p.id)}
+                                onDragLeave={onDragLeave}
+                                onDrop={e => onDrop(e, p)}
+                            >
+                                <span className="spoolman-printer-name">{p.name}</span>
+                                {active ? (
+                                    <div className="spoolman-loaded-spool">
+                                        <span
+                                            className="spool-color-dot"
+                                            style={{ backgroundColor: `#${active.color_hex || '888'}` }}
+                                        />
+                                        <span className="spoolman-loaded-label">
+                                            {active.material} {active.filament_name}
+                                        </span>
+                                        <button
+                                            className="spoolman-clear-btn"
+                                            onClick={() => handleClearSpool(p.id)}
+                                            title="Unload spool"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <span className="spoolman-no-spool">No spool loaded</span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Center: Spool inventory */}
+                <div className="spoolman-inventory">
+                    <input
+                        type="text"
+                        className="input spoolman-search"
+                        placeholder="Search spools by name, material, or vendor..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                    />
+
+                    {loading ? (
+                        <div className="loading">Loading spools…</div>
+                    ) : error ? (
+                        <div className="error">
+                            <p>Failed to load spools: {error}</p>
+                            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                                Configure your Spoolman URL in <a href="/settings">Settings</a>.
+                            </p>
+                        </div>
+                    ) : filtered.length === 0 ? (
+                        <div className="text-muted" style={{ padding: '20px', textAlign: 'center' }}>
+                            {search ? 'No spools match your search' : 'No spools found in Spoolman'}
+                        </div>
+                    ) : (
+                        <div className="spoolman-grid">
+                            {filtered.map(spool => {
+                                const f = spool.filament || {};
+                                const pct = getSpoolPercentage(spool);
+                                const color = `#${f.color_hex || '888888'}`;
+                                return (
+                                    <div
+                                        key={spool.id}
+                                        className="spoolman-spool-card"
+                                        draggable
+                                        onDragStart={e => onDragStart(e, spool)}
+                                    >
+                                        <div className="spool-card-header">
+                                            <div className="spool-color-circle" style={{ backgroundColor: color }} />
+                                            <div className="spool-card-info">
+                                                <span className="spool-card-name">{f.name || `Spool #${spool.id}`}</span>
+                                                <span className="spool-card-material">{f.material || '—'}</span>
+                                            </div>
+                                        </div>
+                                        {f.vendor?.name && (
+                                            <span className="spool-card-vendor">{f.vendor.name}</span>
+                                        )}
+                                        <div className="spool-card-weight">
+                                            <span>{Math.round(spool.remaining_weight ?? 0)}g / {Math.round(spool.initial_weight ?? 0)}g</span>
+                                            <span className="spool-card-pct">{Math.round(pct)}%</span>
+                                        </div>
+                                        <div className="spool-weight-bar">
+                                            <div
+                                                className="spool-weight-fill"
+                                                style={{ width: `${pct}%`, backgroundColor: color }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}

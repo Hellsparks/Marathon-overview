@@ -1152,3 +1152,198 @@ code {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ─── Spoolman Page ─────────────────────────────────────────────── */
+.spoolman-page {
+  max-width: none;
+}
+
+.spoolman-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ── Left column: Printers ── */
+.spoolman-printers {
+  position: sticky;
+  top: 16px;
+}
+
+.spoolman-column-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.spoolman-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  opacity: .7;
+}
+
+.spoolman-printer-card {
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+
+.spoolman-printer-card.drop-hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 12px rgba(var(--primary-rgb, 255, 255, 255), .15);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+}
+
+.spoolman-printer-name {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.spoolman-loaded-spool {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.spoolman-loaded-label {
+  color: var(--text-muted);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spoolman-clear-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  opacity: .6;
+  transition: opacity .2s, color .2s;
+}
+
+.spoolman-clear-btn:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+
+.spoolman-no-spool {
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: .5;
+  font-style: italic;
+}
+
+/* ── Center: Spool inventory ── */
+.spoolman-inventory {
+  min-width: 0;
+}
+
+.spoolman-search {
+  width: 100%;
+  margin-bottom: 16px;
+  font-size: 14px;
+  padding: 10px 14px;
+}
+
+.spoolman-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.spoolman-spool-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: grab;
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+  user-select: none;
+}
+
+.spoolman-spool-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .3);
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+}
+
+.spoolman-spool-card:active {
+  cursor: grabbing;
+  transform: scale(.97);
+}
+
+.spool-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.spool-color-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid rgba(255, 255, 255, .15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+}
+
+.spool-card-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.spool-card-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.spool-card-material {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.spool-card-vendor {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.spool-card-weight {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+
+.spool-card-pct {
+  font-weight: 600;
+  color: var(--text);
+}
