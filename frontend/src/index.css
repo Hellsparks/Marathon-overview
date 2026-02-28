@@ -1267,6 +1267,7 @@ code {
   position: relative;
   flex: 1;
   min-width: 250px;
+  max-width: 450px;
 }
 
 .spoolman-search-icon {
@@ -1284,6 +1285,16 @@ code {
   padding: 10px 14px 10px 36px;
   font-size: 14px;
   margin-bottom: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color .15s;
+}
+
+.spoolman-search-input:focus {
+  border-color: var(--primary);
 }
 
 .spoolman-filter-select {
@@ -1292,11 +1303,21 @@ code {
   min-width: 160px;
   cursor: pointer;
   margin-bottom: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color .15s;
   appearance: none;
   background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg width%3D"12" height%3D"8" viewBox%3D"0 0 12 8" fill%3D"none" xmlns%3D"http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg"%3E%3Cpath d%3D"M1.41 0.589966L6 5.16997L10.59 0.589966L12 1.99997L6 7.99997L0 1.99997L1.41 0.589966Z" fill%3D"%23888888" %2F%3E%3C%2Fsvg%3E');
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 10px;
+}
+
+.spoolman-filter-select:focus {
+  border-color: var(--primary);
 }
 
 .spoolman-grid {
