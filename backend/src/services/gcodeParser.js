@@ -39,6 +39,7 @@ async function parseGcodeFile(filename) {
         filament_type: null,
         estimated_time_s: null,
         sliced_for: null,
+        has_thumbnail: false,
     };
 
     // Parse slicer comments from header
@@ -46,10 +47,91 @@ async function parseGcodeFile(filename) {
     // Parse slicer comments from tail (config block)
     parseComments(tailStr, meta);
 
+    // --- Pass 1.5: Search for Embedded Thumbnail ---
+    await extractThumbnail(filename, filePath, meta);
+
     // --- Pass 2: Scan G-code moves for bounding box ---
     await scanMoves(filePath, meta);
 
     return meta;
+}
+
+/**
+ * Extract embedded base64 thumbnails.
+ * Slicers dump thumbnails in the header using a format like:
+ * ; thumbnail begin 300x300 17740
+ * ; iVBORw0KGgoAAAANSUhEUg...
+ * ; thumbnail end
+ */
+async function extractThumbnail(filename, filePath, meta) {
+    const thumbDir = path.join(UPLOADS_DIR, '.thumbnails');
+    if (!fs.existsSync(thumbDir)) {
+        fs.mkdirSync(thumbDir, { recursive: true });
+    }
+
+    const thumbPath = path.join(thumbDir, `${filename}.png`);
+
+    return new Promise((resolve) => {
+        const rl = readline.createInterface({
+            input: fs.createReadStream(filePath, { encoding: 'utf8' }),
+            crlfDelay: Infinity,
+        });
+
+        let inThumbnailBlock = false;
+        let base64Data = '';
+        let currentWidth = 0;
+        let bestWidth = 0;
+        let bestBase64 = '';
+        let bytesRead = 0;
+        const MAX_SCAN_BYTES = 1024 * 1024 * 3; // Scan up to 3MB of the file for thumbnails
+
+        rl.on('line', (line) => {
+            bytesRead += Buffer.byteLength(line, 'utf8');
+            if (bytesRead > MAX_SCAN_BYTES && !inThumbnailBlock) {
+                rl.close();
+                return;
+            }
+
+            const trimmed = line.trim();
+            if (trimmed.startsWith('; thumbnail begin')) {
+                // e.g., "; thumbnail begin 300x300 17740" -> match "300x300"
+                const match = trimmed.match(/(\d+)x(\d+)/);
+                if (match) {
+                    currentWidth = parseInt(match[1], 10);
+                }
+                inThumbnailBlock = true;
+                base64Data = ''; // Reset for this block
+            } else if (trimmed.startsWith('; thumbnail end')) {
+                inThumbnailBlock = false;
+                // Keep the largest thumbnail we find
+                if (currentWidth >= bestWidth) {
+                    bestWidth = currentWidth;
+                    bestBase64 = base64Data;
+                }
+            } else if (inThumbnailBlock) {
+                // Append base64 chunk, stripping the leading semicolon and whitespace
+                base64Data += trimmed.replace(/^;\s*/, '');
+            }
+        });
+
+        rl.on('close', () => {
+            if (bestBase64) {
+                try {
+                    const buf = Buffer.from(bestBase64, 'base64');
+                    fs.writeFileSync(thumbPath, buf);
+                    meta.has_thumbnail = true;
+                    console.log(`[GcodeParser] Extracted ${bestWidth}x${bestWidth} thumbnail for ${filename}`);
+                } catch (err) {
+                    console.error(`[GcodeParser] Failed to decode/write thumbnail for ${filename}:`, err);
+                }
+            }
+            resolve();
+        });
+
+        rl.on('error', () => {
+            resolve();
+        });
+    });
 }
 
 /**
