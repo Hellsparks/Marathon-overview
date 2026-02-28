@@ -40,6 +40,63 @@ export async function measureFilament(spoolId, weight) {
     return r.json();
 }
 
+export async function getVendors() {
+    const r = await fetch(`${API}/vendors`);
+    if (!r.ok) throw new Error(`Failed to fetch vendors: ${r.status}`);
+    return r.json();
+}
+
+export async function createVendor(data) {
+    const r = await fetch(`${API}/vendors`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+export async function getFilaments() {
+    const r = await fetch(`${API}/filaments`);
+    if (!r.ok) throw new Error(`Failed to fetch filaments: ${r.status}`);
+    return r.json();
+}
+
+export async function createFilament(data) {
+    const r = await fetch(`${API}/filaments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+export async function createSpool(data) {
+    const r = await fetch(`${API}/spools`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+export async function getFields(entity) {
+    const r = await fetch(`${API}/fields/${entity}`);
+    if (!r.ok) throw new Error(`Failed to fetch fields: ${r.status}`);
+    return r.json();
+}
+
 export async function setActiveSpool(printerId, spoolId) {
     const r = await fetch(`${API}/set-active`, {
         method: 'POST',
