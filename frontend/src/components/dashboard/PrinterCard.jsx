@@ -311,7 +311,35 @@ ${cardSel} .printer-card {
               <ProgressBar value={progress} filename={filename} />
             )}
 
-            {/* Collapsibles */}
+            {/* Active spool info */}
+            {status?._active_spool && (
+              <div className="spool-info">
+                <span
+                  className="spool-color-dot"
+                  style={{ backgroundColor: `#${status._active_spool.color_hex || '888'}` }}
+                />
+                <span className="spool-details">
+                  <span className="spool-material">{status._active_spool.material}</span>
+                  {' '}
+                  {status._active_spool.filament_name}
+                  {status._active_spool.vendor && (
+                    <span className="spool-vendor"> — {status._active_spool.vendor}</span>
+                  )}
+                </span>
+                <span className="spool-weight">
+                  {status._active_spool.remaining_weight}g / {status._active_spool.initial_weight}g
+                </span>
+                <div className="spool-weight-bar">
+                  <div
+                    className="spool-weight-fill"
+                    style={{
+                      width: `${Math.min(100, (status._active_spool.remaining_weight / status._active_spool.initial_weight) * 100)}%`,
+                      backgroundColor: `#${status._active_spool.color_hex || '888'}`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
             <div className="card-collapsibles">
               {/* Webcam */}
               <div className="collapsible-section">

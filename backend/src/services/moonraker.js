@@ -95,6 +95,20 @@ class MoonrakerClient {
       .map(obj => obj.replace('gcode_macro ', ''));
   }
 
+  async getActiveSpoolId() {
+    try {
+      const r = await fetch(`${this.baseUrl}/server/spoolman/spool_id`, {
+        headers: this._headers(),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!r.ok) return null; // Spoolman not configured on this printer
+      const data = await r.json();
+      return data.result?.spool_id ?? null;
+    } catch {
+      return null; // Fail silently
+    }
+  }
+
   async uploadFile(filename, fileBuffer) {
     const form = new FormData();
     form.append('file', new Blob([fileBuffer]), filename);
