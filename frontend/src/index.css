@@ -1347,6 +1347,11 @@ code {
   color: var(--badge-color, var(--primary));
 }
 
+.badge-success {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  color: var(--success);
+}
+
 .filament-PLA {
   --badge-color: #3b82f6;
 }
