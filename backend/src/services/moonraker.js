@@ -1,5 +1,4 @@
-const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
-const FormData = require('form-data');
+// Node.js 22+ has built-in fetch and FormData globals — no imports needed.
 
 class MoonrakerClient {
   constructor(printer) {
@@ -69,8 +68,9 @@ class MoonrakerClient {
     return this._post('/server/job_queue/start');
   }
 
+  // Long timeout — gcode commands like G28 and QUAD_GANTRY_LEVEL can take 2+ minutes
   async sendGcode(script) {
-    return this._post('/printer/gcode/script', { script });
+    return this._post('/printer/gcode/script', { script }, 180000);
   }
 
   async getWebcams() {
@@ -82,37 +82,51 @@ class MoonrakerClient {
     return (await r.json()).result.webcams ?? [];
   }
 
+  async getMacros() {
+    const r = await fetch(`${this.baseUrl}/printer/objects/list`, {
+      headers: this._headers(),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) throw new Error(`Moonraker objects list ${r.status}`);
+    const data = await r.json();
+    const objects = data.result?.objects || [];
+    return objects
+      .filter(obj => obj.startsWith('gcode_macro '))
+      .map(obj => obj.replace('gcode_macro ', ''));
+  }
+
   async uploadFile(filename, fileBuffer) {
     const form = new FormData();
-    form.append('file', fileBuffer, { filename });
+    form.append('file', new Blob([fileBuffer]), filename);
     form.append('root', 'gcodes');
 
-    const headers = form.getHeaders();
+    const headers = {};
     if (this.apiKey) headers['X-Api-Key'] = this.apiKey;
+    // Do NOT set Content-Type manually — built-in fetch sets it with the correct boundary
 
     const r = await fetch(`${this.baseUrl}/server/files/upload`, {
       method: 'POST',
       headers,
       body: form,
-      signal: AbortSignal.timeout(120000), // 2 min for large files
+      signal: AbortSignal.timeout(120000),
     });
     if (!r.ok) {
-      const body = await r.text().catch(() => '');
-      throw new Error(`Moonraker upload failed (${r.status}): ${body}`);
+      const text = await r.text().catch(() => '');
+      throw new Error(`Moonraker upload failed (${r.status}): ${text}`);
     }
     return (await r.json()).item;
   }
 
-  async _post(path, body) {
+  async _post(path, body, timeoutMs = 10000) {
     const r = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
       headers: this._headers(),
       body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!r.ok) {
-      const body = await r.text().catch(() => '');
-      throw new Error(`Moonraker ${r.status} @ ${path}: ${body}`);
+      const text = await r.text().catch(() => '');
+      throw new Error(`Moonraker ${r.status} @ ${path}: ${text}`);
     }
     return (await r.json()).result;
   }

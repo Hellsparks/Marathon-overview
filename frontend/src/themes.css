@@ -1,0 +1,129 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Marathon — Global Themes
+   Default (no data-theme) = Dark theme (defined in index.css :root)
+
+   ALL visual customisations are expressed as CSS variables.
+   No theme may set direct properties on component selectors (.printer-card,
+   .btn-primary, etc.) — this ensures per-printer card isolation works:
+   the card polyfill only needs to override variables, not fight specificity.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Light ──────────────────────────────────────────────────────── */
+[data-theme="light"] {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface2: #e8eaef;
+    --border: #d1d5db;
+    --text: #1a1d27;
+    --text-muted: #6b7280;
+    --primary: #3b82f6;
+    --primary-d: #2563eb;
+    --danger: #dc2626;
+    --warning: #d97706;
+    --success: #16a34a;
+    --offline: #9ca3af;
+    --shadow: 0 2px 8px rgba(0, 0, 0, .08);
+}
+
+[data-theme="light"] .navbar,
+[data-theme="light"] .sidebar {
+    background: #ffffff;
+}
+
+[data-theme="light"] code {
+    background: #e8eaef;
+    color: #1a1d27;
+}
+
+/* ─── Cyberpunk ──────────────────────────────────────────────────── */
+[data-theme="cyberpunk"] {
+    --bg: #0a0015;
+    --surface: #140028;
+    --surface2: #1e0040;
+    --border: #3d0066;
+    --text: #e0d4ff;
+    --text-muted: #9b7ecf;
+    --primary: #ff00ff;
+    --primary-d: #cc00cc;
+    --danger: #ff3366;
+    --warning: #ffcc00;
+    --success: #00ff88;
+    --offline: #4a3568;
+    --shadow: 0 2px 16px rgba(255, 0, 255, .15);
+    /* Card glow effects */
+    --card-glow: 0 0 20px rgba(255, 0, 255, .08);
+    --card-glow-active: 0 0 24px rgba(255, 0, 255, .2);
+    /* Button flourishes */
+    --btn-text-shadow: 0 0 8px rgba(255, 0, 255, .5);
+}
+
+[data-theme="cyberpunk"] .navbar {
+    background: #140028;
+    border-bottom-color: #ff00ff33;
+}
+
+[data-theme="cyberpunk"] .sidebar {
+    background: #140028;
+    border-right-color: #ff00ff22;
+}
+
+/* ─── Ocean ──────────────────────────────────────────────────────── */
+[data-theme="ocean"] {
+    --bg: #091a2a;
+    --surface: #0d2137;
+    --surface2: #132d47;
+    --border: #1c3d5a;
+    --text: #c8e1f7;
+    --text-muted: #6a9cc7;
+    --primary: #00b4d8;
+    --primary-d: #0096b7;
+    --danger: #e05c5c;
+    --warning: #e8a838;
+    --success: #2dd4a8;
+    --offline: #3a5068;
+    --shadow: 0 2px 12px rgba(0, 180, 216, .1);
+    /* Card glow effects */
+    --card-glow-active: 0 0 16px rgba(0, 180, 216, .15);
+}
+
+[data-theme="ocean"] .navbar {
+    background: #0d2137;
+    border-bottom-color: #00b4d822;
+}
+
+[data-theme="ocean"] .sidebar {
+    background: #0d2137;
+    border-right-color: #00b4d818;
+}
+
+/* ─── Sunset ─────────────────────────────────────────────────────── */
+[data-theme="sunset"] {
+    --bg: #1a0f0a;
+    --surface: #261510;
+    --surface2: #331d16;
+    --border: #4d2e22;
+    --text: #f5e0d4;
+    --text-muted: #b8917c;
+    --primary: #f97316;
+    --primary-d: #ea580c;
+    --danger: #ef4444;
+    --warning: #fbbf24;
+    --success: #4ade80;
+    --offline: #5a473e;
+    --shadow: 0 2px 12px rgba(249, 115, 22, .1);
+    /* Card glow effects */
+    --card-glow-active: 0 0 16px rgba(249, 115, 22, .15);
+    /* Button flourishes */
+    --btn-primary-bg: linear-gradient(135deg, #f97316, #ef4444);
+    --btn-primary-bg-hover: linear-gradient(135deg, #ea580c, #dc2626);
+}
+
+[data-theme="sunset"] .navbar {
+    background: #261510;
+    border-bottom-color: #f9731622;
+}
+
+[data-theme="sunset"] .sidebar {
+    background: #261510;
+    border-right-color: #f9731618;
+}

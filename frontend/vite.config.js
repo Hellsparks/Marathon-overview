@@ -10,6 +10,10 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      '/themes': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
     },
   },
 });

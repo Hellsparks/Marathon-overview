@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+// ... existing imports
+import { useState, useEffect, useRef } from 'react';
 import { createPrinter, updatePrinter } from '../../api/printers';
 import { getPresets } from '../../api/presets';
 
@@ -17,10 +18,13 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
     filament_types: printer?.filament_types ?? [],
     toolhead_count: printer?.toolhead_count ?? 1,
     preset_id: printer?.preset_id ?? '',
+    custom_css: printer?.custom_css ?? '',
+    theme_mode: printer?.theme_mode ?? 'global',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('connection');
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     getPresets().then(setPresets).catch(() => { });
@@ -55,6 +59,17 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
       filament_types: preset.filament_types,
       toolhead_count: preset.toolhead_count,
     }));
+  }
+
+  function handleCssUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      set('custom_css', ev.target.result);
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // Reset input so same file can be selected again
   }
 
   async function handleSubmit(e) {
@@ -120,6 +135,8 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
             onClick={() => setTab('connection')}>Connection</button>
           <button type="button" className={`tab-btn ${tab === 'capabilities' ? 'active' : ''}`}
             onClick={() => setTab('capabilities')}>Capabilities</button>
+          <button type="button" className={`tab-btn ${tab === 'theme' ? 'active' : ''}`}
+            onClick={() => setTab('theme')}>Theme (CSS)</button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -187,6 +204,61 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                   ))}
                 </div>
               </fieldset>
+            </>
+          )}
+
+          {tab === 'theme' && (
+            <>
+              <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span className="form-label" style={{ marginBottom: '4px' }}>Dashboard Theme Mode</span>
+
+                <label className="radio-label">
+                  <input type="radio" name="theme_mode" value="global"
+                    checked={form.theme_mode === 'global'}
+                    onChange={() => set('theme_mode', 'global')} />
+                  <strong>Global Theme</strong>
+                  <span className="text-muted" style={{ fontSize: '12px', marginLeft: '6px' }}>— Follows the navbar theme.</span>
+                </label>
+
+                <label className="radio-label">
+                  <input type="radio" name="theme_mode" value="scrape"
+                    checked={form.theme_mode === 'scrape'}
+                    onChange={() => set('theme_mode', 'scrape')} />
+                  <strong>Auto-Scrape Klipper</strong>
+                  <span className="text-muted" style={{ fontSize: '12px', marginLeft: '6px' }}>— Automatically synchronizes with Mainsail CSS in the background.</span>
+                </label>
+
+                <label className="radio-label">
+                  <input type="radio" name="theme_mode" value="custom"
+                    checked={form.theme_mode === 'custom'}
+                    onChange={() => set('theme_mode', 'custom')} />
+                  <strong>Custom CSS Editor</strong>
+                  <span className="text-muted" style={{ fontSize: '12px', marginLeft: '6px' }}>— Enter or upload custom card styling manually.</span>
+                </label>
+              </div>
+
+              {form.theme_mode === 'custom' && (
+                <div style={{ marginTop: '20px', padding: '16px', background: 'var(--surface2)', borderRadius: 'var(--radius)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span className="form-label" style={{ margin: 0 }}>Custom CSS Override</span>
+                    <button type="button" className="btn btn-sm btn-primary" onClick={() => fileInputRef.current?.click()}>
+                      Upload .css File
+                    </button>
+                    <input type="file" ref={fileInputRef} onChange={handleCssUpload} accept=".css" style={{ display: 'none' }} />
+                  </div>
+                  <textarea
+                    className="form-input"
+                    style={{ fontFamily: 'monospace', height: '200px', fontSize: '13px', resize: 'vertical' }}
+                    value={form.custom_css}
+                    onChange={e => set('custom_css', e.target.value)}
+                    placeholder="/* Paste custom.css contents here */&#10;:root {&#10;  --primary: #ff00ff;&#10;}"
+                  />
+                  <p className="text-muted" style={{ fontSize: '12px', marginTop: '8px' }}>
+                    Styles will be automatically scoped to this printer's card using CSS nesting.
+                    Changes to `:root` will be mapped to the card.
+                  </p>
+                </div>
+              )}
             </>
           )}
 

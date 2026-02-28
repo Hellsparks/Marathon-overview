@@ -6,8 +6,8 @@ export const startPrint = (printerId, filename) =>
     body: JSON.stringify({ filename }),
   });
 
-export const pausePrint  = (printerId) =>
-  apiFetch(`/api/printers/${printerId}/print/pause`,  { method: 'POST' });
+export const pausePrint = (printerId) =>
+  apiFetch(`/api/printers/${printerId}/print/pause`, { method: 'POST' });
 
 export const resumePrint = (printerId) =>
   apiFetch(`/api/printers/${printerId}/print/resume`, { method: 'POST' });
@@ -23,3 +23,6 @@ export const sendGcode = (printerId, script) =>
 
 export const getWebcams = (printerId) =>
   apiFetch(`/api/printers/${printerId}/webcams`);
+
+export const getMacros = (printerId) =>
+  apiFetch(`/api/printers/${printerId}/macros`);

@@ -25,7 +25,7 @@ export default function TempControl({ label, actual, target, onSet }) {
       </div>
       <div className="temp-control-set">
         <input
-          className="temp-input"
+          className="temp-input v-input"
           type="number"
           min="0"
           max="350"
@@ -34,9 +34,9 @@ export default function TempControl({ label, actual, target, onSet }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSet()}
         />
-        <button className="btn btn-sm" onClick={handleSet} disabled={!input}>Set</button>
+        <button className="btn btn-sm v-btn" onClick={handleSet} disabled={!input}>Set</button>
         {t > 0 && (
-          <button className="btn btn-sm" onClick={() => onSet(0)} title="Turn off">Off</button>
+          <button className="btn btn-sm v-btn" onClick={() => onSet(0)} title="Turn off">Off</button>
         )}
       </div>
     </div>

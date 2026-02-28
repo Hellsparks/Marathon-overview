@@ -15,7 +15,7 @@ export default function AppShell() {
       <NavBar onlineCount={onlineCount} totalCount={totalCount} />
       <div className="app-body">
         <Sidebar />
-        <main className="app-main">
+        <main className="app-main v-main">
           {error && (
             <div className="error-banner">
               Backend unreachable: {error}

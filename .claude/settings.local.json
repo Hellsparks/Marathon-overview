@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add .gitignore backend/ docker-compose.yml frontend/ package.json package-lock.json)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
