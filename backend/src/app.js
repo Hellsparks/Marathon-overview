@@ -9,6 +9,8 @@ const controlRouter = require('./routes/control');
 const octoprintRouter = require('./routes/octoprint');
 const presetsRouter = require('./routes/presets');
 const themesRouter = require('./routes/themes');
+const settingsRouter = require('./routes/settings');
+const spoolmanRouter = require('./routes/spoolman');
 const errorHandler = require('./middleware/errorHandler');
 const path = require('path');
 
@@ -25,6 +27,8 @@ app.use('/api/printers', queueRouter);   // /api/printers/:id/queue
 app.use('/api/printers', controlRouter); // /api/printers/:id/print/*
 app.use('/api/presets', presetsRouter);
 app.use('/api/themes', themesRouter);
+app.use('/api/settings', settingsRouter);
+app.use('/api/spoolman', spoolmanRouter);
 
 // Statically serve cloned Community Themes — dotfiles: 'allow' exposes .theme/ subdirectories
 app.use('/themes', express.static(path.join(__dirname, '../data/themes'), { dotfiles: 'allow' }));

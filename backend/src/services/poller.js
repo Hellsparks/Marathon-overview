@@ -8,9 +8,44 @@ let pollTimer = null;
 const scrapeCache = new Map();
 const SCRAPE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
+// Spool detail cache: spoolId → { data, fetchedAt }
+const spoolCache = new Map();
+const SPOOL_CACHE_TTL_MS = 30_000; // 30 seconds
+
+/** Fetch full spool details from Spoolman, with caching */
+async function getSpoolDetails(spoolId, spoolmanUrl) {
+  if (!spoolId || !spoolmanUrl) return null;
+  const cached = spoolCache.get(spoolId);
+  if (cached && Date.now() - cached.fetchedAt < SPOOL_CACHE_TTL_MS) return cached.data;
+  try {
+    const r = await fetch(`${spoolmanUrl}/api/v1/spool/${spoolId}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) return null;
+    const spool = await r.json();
+    const data = {
+      id: spool.id,
+      filament_name: spool.filament?.name ?? '',
+      material: spool.filament?.material ?? '',
+      color_hex: spool.filament?.color_hex ?? '',
+      vendor: spool.filament?.vendor?.name ?? '',
+      remaining_weight: Math.round(spool.remaining_weight ?? 0),
+      initial_weight: Math.round(spool.initial_weight ?? 0),
+    };
+    spoolCache.set(spoolId, { data, fetchedAt: Date.now() });
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 async function pollAll() {
   const db = getDb();
   const printers = db.prepare('SELECT * FROM printers WHERE enabled = 1').all();
+
+  // Get Spoolman URL once per poll cycle
+  const settingsRow = db.prepare("SELECT value FROM settings WHERE key = 'spoolman_url'").get();
+  const spoolmanUrl = settingsRow?.value || '';
 
   await Promise.allSettled(
     printers.map(async (printer) => {
@@ -39,10 +74,20 @@ async function pollAll() {
           }
         }
 
+        // Fetch active spool from Moonraker → Spoolman
+        let activeSpool = null;
+        if (spoolmanUrl) {
+          const spoolId = await client.getActiveSpoolId();
+          if (spoolId) {
+            activeSpool = await getSpoolDetails(spoolId, spoolmanUrl);
+          }
+        }
+
         printerCache.set(printer.id, {
           ...status,
           _online: true,
           _polled_at: Date.now(),
+          _active_spool: activeSpool,
         });
       } catch (err) {
         printerCache.set(printer.id, {
