@@ -103,7 +103,7 @@ async function pollAll() {
 
             try {
               db.prepare(`
-                INSERT INTO gcode_print_jobs 
+                INSERT INTO gcode_print_jobs
                 (printer_id, filename, total_duration_s, filament_used_mm, spool_id, spool_name, material, color_hex, vendor, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               `).run(
@@ -119,6 +119,10 @@ async function pollAll() {
                 currentState
               );
               console.log(`[Poller] Logged print job (${currentState}): ${prevStateObj.filename} on Printer ${printer.id}`);
+              // Accumulate runtime for maintenance tracking
+              if (duration > 0) {
+                db.prepare('UPDATE printers SET runtime_s = runtime_s + ? WHERE id = ?').run(Math.round(duration), printer.id);
+              }
             } catch (jobErr) {
               console.error(`[Poller] Failed to log print job:`, jobErr.message);
             }

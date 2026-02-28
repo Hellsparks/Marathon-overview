@@ -4,6 +4,7 @@ const links = [
   { to: '/', label: 'Dashboard', icon: '▦' },
   { to: '/files', label: 'Files', icon: '📁' },
   { to: '/spoolman', label: 'Spoolman', icon: '🧵' },
+  { to: '/maintenance', label: 'Maintenance', icon: '🔧' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
 

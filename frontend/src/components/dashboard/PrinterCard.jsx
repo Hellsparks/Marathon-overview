@@ -6,6 +6,7 @@ import ProgressBar from '../common/ProgressBar';
 import ConfirmDialog from '../common/ConfirmDialog';
 import WebcamStream from './WebcamStream';
 import { pausePrint, resumePrint, cancelPrint, sendGcode, getMacros } from '../../api/control';
+import { scrapedCssCache } from '../../services/scrapedCssCache';
 
 /**
  * Scope every CSS rule to `scope` so per-printer styles can't bleed to other cards.
@@ -66,9 +67,6 @@ function scopeCSS(css, scope) {
   }
   return out.join('');
 }
-
-// Module-level cache for scraped CSS — persists across page navigations
-const scrapedCssCache = new Map();
 
 export default function PrinterCard({ printer, status }) {
   const [confirming, setConfirming] = useState(false);

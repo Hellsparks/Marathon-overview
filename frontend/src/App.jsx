@@ -5,6 +5,7 @@ import FilesPage from './pages/FilesPage';
 import QueuePage from './pages/QueuePage';
 import SettingsPage from './pages/SettingsPage';
 import SpoolmanPage from './pages/SpoolmanPage';
+import MaintenancePage from './pages/MaintenancePage';
 import { ThemeProvider } from './components/layout/ThemeProvider';
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
             <Route path="files" element={<FilesPage />} />
             <Route path="queue/:printerId" element={<QueuePage />} />
             <Route path="spoolman" element={<SpoolmanPage />} />
+            <Route path="maintenance" element={<MaintenancePage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
