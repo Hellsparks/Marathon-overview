@@ -38,6 +38,7 @@ async function parseGcodeFile(filename) {
         min_z: null, max_z: null,
         filament_type: null,
         estimated_time_s: null,
+        sliced_for: null,
     };
 
     // Parse slicer comments from header
@@ -88,6 +89,15 @@ function parseComments(text, meta) {
         if (!meta.estimated_time_s) {
             matchFloat(c, /^estimated_?printing_?time(?:_?in_?seconds)?\s*=\s*([\d.]+)/i, v => {
                 meta.estimated_time_s = Math.round(v);
+            });
+        }
+
+        // Target Printer Model
+        if (!meta.sliced_for) {
+            matchString(c, /^(?:printer_model|machine_type|TargetMachine|FLAVOR)\s*[:=]\s*(.+)/i, v => {
+                const model = v.trim().split(/[;,]/)[0].trim();
+                // Strip out some common noisy prefixes/suffixes from slicers if desired
+                if (model && model.length < 50) meta.sliced_for = model;
             });
         }
     }
