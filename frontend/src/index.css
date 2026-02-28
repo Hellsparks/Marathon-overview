@@ -86,6 +86,97 @@ code {
   font-size: 13px;
 }
 
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ─── Theme Picker ──────────────────────────────────────────────── */
+.theme-picker {
+  position: relative;
+}
+
+.theme-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.theme-picker-btn:hover {
+  background: var(--border);
+}
+
+.theme-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.theme-picker-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.theme-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 4px;
+  min-width: 140px;
+  z-index: 100;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.theme-option:hover {
+  background: var(--surface2);
+}
+
+.theme-option.active {
+  background: var(--primary-d);
+  color: #fff;
+}
+
+.theme-option-swatches {
+  display: flex;
+  margin-right: 4px;
+}
+
+.theme-option-swatches .theme-swatch:nth-child(2) {
+  margin-left: -4px;
+}
+
+.theme-check {
+  margin-left: auto;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
@@ -221,25 +312,28 @@ code {
 .printer-card {
   background: var(--surface);
   border: 1px solid var(--border);
+  color: var(--text);
   border-radius: var(--radius);
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: var(--shadow);
-  transition: border-color .2s;
+  box-shadow: var(--card-glow, var(--shadow));
+  transition: box-shadow .2s;
+}
+
+/* Isolate default cards from heavily customized global Mainsail fonts */
+.printer-card:not(.isolated-theme) {
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+
+.printer-card button,
+.printer-card input {
+  font-family: inherit;
 }
 
 .printer-card.state-printing {
-  border-color: var(--primary);
-}
-
-.printer-card.state-paused {
-  border-color: var(--warning);
-}
-
-.printer-card.state-error {
-  border-color: var(--danger);
+  box-shadow: var(--card-glow-active, var(--card-glow, var(--shadow)));
 }
 
 .printer-card.state-offline {
@@ -408,13 +502,14 @@ code {
 }
 
 .btn-primary {
-  background: var(--primary);
+  background: var(--btn-primary-bg, var(--primary));
   border-color: var(--primary);
   color: #fff;
+  text-shadow: var(--btn-text-shadow, none);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--primary-d);
+  background: var(--btn-primary-bg-hover, var(--primary-d));
   border-color: var(--primary-d);
 }
 
@@ -439,6 +534,56 @@ code {
 
 .btn-link:hover {
   text-decoration: underline;
+}
+
+/* ─── Collapsible Sections ────────────────────────────────────────── */
+.card-collapsibles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.collapsible-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.collapsible-toggle {
+  width: 100%;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.collapsible-toggle:hover {
+  background: color-mix(in srgb, var(--primary) 15%, var(--surface));
+  color: var(--text);
+  border-bottom: 1px solid var(--primary);
+}
+
+.collapsible-content {
+  padding: 4px;
+}
+
+.macro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.macro-grid button {
+  color: var(--text);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.macro-grid button:hover {
+  border-color: var(--primary);
+  color: var(--text);
 }
 
 /* ─── Forms ─────────────────────────────────────────────────────── */
@@ -685,6 +830,7 @@ code {
   font-size: 12px;
   /* hide number spinners */
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .temp-input::-webkit-outer-spin-button,

@@ -10,3 +10,6 @@ export const updatePrinter = (id, data) =>
 
 export const deletePrinter = (id) =>
   apiFetch(`/api/printers/${id}`, { method: 'DELETE' });
+
+export const scrapePrinterTheme = (host, port) =>
+  apiFetch('/api/printers/scrape-theme', { method: 'POST', body: JSON.stringify({ host, port }) });

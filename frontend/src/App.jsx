@@ -4,19 +4,22 @@ import DashboardPage from './pages/DashboardPage';
 import FilesPage from './pages/FilesPage';
 import QueuePage from './pages/QueuePage';
 import SettingsPage from './pages/SettingsPage';
+import { ThemeProvider } from './components/layout/ThemeProvider';
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<AppShell />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="files" element={<FilesPage />} />
-          <Route path="queue/:printerId" element={<QueuePage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<AppShell />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="files" element={<FilesPage />} />
+            <Route path="queue/:printerId" element={<QueuePage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
