@@ -75,11 +75,11 @@ export default function SettingsPage() {
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '8px' }}>
           <input
             type="url"
-            className="input"
+            className="form-input"
             placeholder="http://10.0.0.24:32000"
             value={spoolmanUrl}
             onChange={e => setSpoolmanUrl(e.target.value)}
-            style={{ flex: 1, minWidth: '200px' }}
+            style={{ flex: 1, minWidth: '200px', maxWidth: '400px', fontSize: '14px', padding: '10px 14px' }}
           />
           <button className="btn btn-sm btn-primary" onClick={handleSpoolmanSave}>
             Save
