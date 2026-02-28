@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePrinters } from '../hooks/usePrinters';
 import { getSpools, setActiveSpool } from '../api/spoolman';
+import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
 
 const COLOR_NAMES = {
     red: [255, 0, 0],
@@ -285,35 +286,16 @@ export default function SpoolmanPage() {
                         const active = getActiveSpool(p.id);
                         const isTarget = dropTarget === p.id;
                         return (
-                            <div
+                            <SpoolmanPrinterCard
                                 key={p.id}
-                                className={`spoolman-printer-card${isTarget ? ' drop-hover' : ''}`}
+                                printer={p}
+                                activeSpool={active}
+                                isTarget={isTarget}
                                 onDragOver={e => onDragOver(e, p.id)}
                                 onDragLeave={onDragLeave}
                                 onDrop={e => onDrop(e, p)}
-                            >
-                                <span className="spoolman-printer-name">{p.name}</span>
-                                {active ? (
-                                    <div className="spoolman-loaded-spool">
-                                        <span
-                                            className="spool-color-dot"
-                                            style={{ backgroundColor: `#${active.color_hex || '888'}` }}
-                                        />
-                                        <span className="spoolman-loaded-label">
-                                            {active.material} {active.filament_name}
-                                        </span>
-                                        <button
-                                            className="spoolman-clear-btn"
-                                            onClick={() => handleClearSpool(p.id)}
-                                            title="Unload spool"
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <span className="spoolman-no-spool">No spool loaded</span>
-                                )}
-                            </div>
+                                onClearSpool={() => handleClearSpool(p.id)}
+                            />
                         );
                     })}
                 </div>
