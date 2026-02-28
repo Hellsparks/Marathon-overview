@@ -59,6 +59,11 @@ export default function FileList({ files, onDeleted }) {
                       {file.filament_type && (
                         <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
                       )}
+                      {file.sliced_for && (
+                        <span className="badge badge-info" style={{ marginLeft: '4px' }} title="Sliced for this printer model">
+                          {file.sliced_for}
+                        </span>
+                      )}
                     </div>
                   ) : file.max_z != null ? (
                     <div className="print-dimensions">
@@ -66,10 +71,22 @@ export default function FileList({ files, onDeleted }) {
                       {file.filament_type && (
                         <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
                       )}
+                      {file.sliced_for && (
+                        <span className="badge badge-info" style={{ marginLeft: '4px' }} title="Sliced for this printer model">
+                          {file.sliced_for}
+                        </span>
+                      )}
                     </div>
-                  ) : file.filament_type ? (
+                  ) : file.filament_type || file.sliced_for ? (
                     <div className="print-dimensions">
-                      <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
+                      {file.filament_type && (
+                        <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
+                      )}
+                      {file.sliced_for && (
+                        <span className="badge badge-info" style={{ marginLeft: '4px' }} title="Sliced for this printer model">
+                          {file.sliced_for}
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <span className="text-muted">—</span>

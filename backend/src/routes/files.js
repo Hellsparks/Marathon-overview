@@ -12,7 +12,7 @@ router.get('/', (req, res) => {
   const db = getDb();
   const files = db.prepare(
     `SELECT f.*, m.min_x, m.max_x, m.min_y, m.max_y, m.min_z, m.max_z,
-            m.filament_type, m.estimated_time_s
+            m.filament_type, m.estimated_time_s, m.sliced_for
      FROM gcode_files f
      LEFT JOIN gcode_metadata m ON m.file_id = f.id
      ORDER BY f.created_at DESC`
@@ -161,10 +161,10 @@ async function storeGcodeMetadata(db, fileId, filename) {
     const meta = await parseGcodeFile(filename);
     if (!meta) return;
     db.prepare(
-      `INSERT OR REPLACE INTO gcode_metadata (file_id, min_x, max_x, min_y, max_y, min_z, max_z, filament_type, estimated_time_s)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(fileId, meta.min_x, meta.max_x, meta.min_y, meta.max_y, meta.min_z, meta.max_z, meta.filament_type, meta.estimated_time_s);
-    console.log(`[GcodeParser] Parsed ${filename}: X[${meta.min_x}→${meta.max_x}] Y[${meta.min_y}→${meta.max_y}] Z[${meta.min_z}→${meta.max_z}] filament=${meta.filament_type}`);
+      `INSERT OR REPLACE INTO gcode_metadata (file_id, min_x, max_x, min_y, max_y, min_z, max_z, filament_type, estimated_time_s, sliced_for)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(fileId, meta.min_x, meta.max_x, meta.min_y, meta.max_y, meta.min_z, meta.max_z, meta.filament_type, meta.estimated_time_s, meta.sliced_for);
+    console.log(`[GcodeParser] Parsed ${filename}: X[${meta.min_x}→${meta.max_x}] Y[${meta.min_y}→${meta.max_y}] Z[${meta.min_z}→${meta.max_z}] filament=${meta.filament_type} model=${meta.sliced_for}`);
   } catch (err) {
     console.error('[GcodeParser]', err.message);
   }

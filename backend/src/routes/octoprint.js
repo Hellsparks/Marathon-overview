@@ -73,10 +73,10 @@ router.post('/files/local', apiKeyAuth, upload.single('file'), (req, res) => {
     parseGcodeFile(req.file.filename).then(meta => {
       if (meta) {
         db.prepare(
-          `INSERT OR REPLACE INTO gcode_metadata (file_id, min_x, max_x, min_y, max_y, min_z, max_z, filament_type, estimated_time_s)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(record.id, meta.min_x, meta.max_x, meta.min_y, meta.max_y, meta.min_z, meta.max_z, meta.filament_type, meta.estimated_time_s);
-        console.log(`[OctoPrint/GcodeParser] Parsed ${req.file.filename}: X[${meta.min_x}→${meta.max_x}] Y[${meta.min_y}→${meta.max_y}] Z[${meta.min_z}→${meta.max_z}] filament=${meta.filament_type}`);
+          `INSERT OR REPLACE INTO gcode_metadata (file_id, min_x, max_x, min_y, max_y, min_z, max_z, filament_type, estimated_time_s, sliced_for)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(record.id, meta.min_x, meta.max_x, meta.min_y, meta.max_y, meta.min_z, meta.max_z, meta.filament_type, meta.estimated_time_s, meta.sliced_for);
+        console.log(`[OctoPrint/GcodeParser] Parsed ${req.file.filename}: X[${meta.min_x}→${meta.max_x}] Y[${meta.min_y}→${meta.max_y}] Z[${meta.min_z}→${meta.max_z}] filament=${meta.filament_type} model=${meta.sliced_for}`);
       }
     }).catch(err => {
       console.error('[OctoPrint/GcodeParser]', err.message);
