@@ -2,6 +2,52 @@ import { useState, useEffect, useCallback } from 'react';
 import { usePrinters } from '../hooks/usePrinters';
 import { getSpools, setActiveSpool } from '../api/spoolman';
 
+const COLOR_NAMES = {
+    red: [255, 0, 0],
+    green: [0, 128, 0],
+    blue: [0, 0, 255],
+    yellow: [255, 255, 0],
+    orange: [255, 165, 0],
+    purple: [128, 0, 128],
+    pink: [255, 192, 203],
+    black: [0, 0, 0],
+    white: [255, 255, 255],
+    gray: [128, 128, 128],
+    grey: [128, 128, 128],
+    silver: [192, 192, 192],
+    cyan: [0, 255, 255],
+    magenta: [255, 0, 255],
+    brown: [165, 42, 42]
+};
+
+function hexToRgb(hex) {
+    if (!hex) return null;
+    const m = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
+}
+
+function colorDistance(rgb1, rgb2) {
+    return Math.sqrt(
+        Math.pow(rgb1[0] - rgb2[0], 2) +
+        Math.pow(rgb1[1] - rgb2[1], 2) +
+        Math.pow(rgb1[2] - rgb2[2], 2)
+    );
+}
+
+function matchesColor(hex, queryTokens) {
+    if (!hex || queryTokens.length === 0) return false;
+    const rgb = hexToRgb(hex);
+    if (!rgb) return false;
+
+    for (const token of queryTokens) {
+        if (COLOR_NAMES[token]) {
+            const dist = colorDistance(rgb, COLOR_NAMES[token]);
+            if (dist < 120) return true;
+        }
+    }
+    return false;
+}
+
 export default function SpoolmanPage() {
     const { printers } = usePrinters();
     const [spools, setSpools] = useState([]);
@@ -11,6 +57,9 @@ export default function SpoolmanPage() {
     const [dropTarget, setDropTarget] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    const [materialFilter, setMaterialFilter] = useState('');
+    const [vendorFilter, setVendorFilter] = useState('');
 
     const fetchSpools = useCallback(async () => {
         try {
@@ -40,15 +89,27 @@ export default function SpoolmanPage() {
         return () => clearInterval(interval);
     }, []);
 
+    const uniqueMaterials = Array.from(new Set(spools.map(s => s.filament?.material).filter(Boolean))).sort();
+    const uniqueVendors = Array.from(new Set(spools.map(s => s.filament?.vendor?.name).filter(Boolean))).sort();
+
     const filtered = spools.filter(s => {
+        const f = s.filament || {};
+        if (materialFilter && f.material !== materialFilter) return false;
+        if (vendorFilter && f.vendor?.name !== vendorFilter) return false;
+
         if (!search.trim()) return true;
         const q = search.toLowerCase();
-        return (
-            (s.filament?.name || '').toLowerCase().includes(q) ||
-            (s.filament?.material || '').toLowerCase().includes(q) ||
-            (s.filament?.vendor?.name || '').toLowerCase().includes(q) ||
-            (s.filament?.color_hex || '').toLowerCase().includes(q)
-        );
+        const qTokens = q.split(/\s+/);
+
+        const textMatch =
+            (f.name || '').toLowerCase().includes(q) ||
+            (f.material || '').toLowerCase().includes(q) ||
+            (f.vendor?.name || '').toLowerCase().includes(q) ||
+            (f.color_hex || '').toLowerCase().includes(q);
+
+        const colorMatch = matchesColor(f.color_hex, qTokens);
+
+        return textMatch || colorMatch;
     });
 
     // Drag handlers
@@ -125,13 +186,38 @@ export default function SpoolmanPage() {
             <div className="spoolman-layout">
                 {/* Center: Spool inventory */}
                 <div className="spoolman-inventory">
-                    <input
-                        type="text"
-                        className="input spoolman-search"
-                        placeholder="Search spools by name, material, vendor, or color (hex)..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                    />
+                    <div className="spoolman-filters-bar">
+                        <div className="spoolman-search-wrap">
+                            <span className="spoolman-search-icon">🔍</span>
+                            <input
+                                type="text"
+                                className="input spoolman-search-input"
+                                placeholder="Search spools by name, color (e.g. 'yellow'), vendor..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                            />
+                        </div>
+                        <select
+                            className="input spoolman-filter-select"
+                            value={materialFilter}
+                            onChange={e => setMaterialFilter(e.target.value)}
+                        >
+                            <option value="">All Materials</option>
+                            {uniqueMaterials.map(m => (
+                                <option key={m} value={m}>{m}</option>
+                            ))}
+                        </select>
+                        <select
+                            className="input spoolman-filter-select"
+                            value={vendorFilter}
+                            onChange={e => setVendorFilter(e.target.value)}
+                        >
+                            <option value="">All Vendors</option>
+                            {uniqueVendors.map(v => (
+                                <option key={v} value={v}>{v}</option>
+                            ))}
+                        </select>
+                    </div>
 
                     {loading ? (
                         <div className="loading">Loading spools…</div>
