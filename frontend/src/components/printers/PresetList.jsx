@@ -129,7 +129,7 @@ function FilamentBadges({ types }) {
     return (
         <div className="badge-row">
             {types.map(t => (
-                <span key={t} className="badge badge-filament">{t}</span>
+                <span key={t} className={`badge badge-filament filament-${t}`}>{t}</span>
             ))}
         </div>
     );

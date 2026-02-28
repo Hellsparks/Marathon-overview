@@ -53,7 +53,7 @@ export default function SendToPrinterModal({ file, onClose }) {
         {/* File metadata summary */}
         {(file.filament_type || file.max_z != null) && (
           <div className="compat-file-info">
-            {file.filament_type && <span className="badge badge-filament">{file.filament_type}</span>}
+            {file.filament_type && <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>}
             {file.max_z != null && (
               <span className="text-muted" style={{ fontSize: '0.85em' }}>
                 Height: {(file.max_z - (file.min_z || 0)).toFixed(1)}mm

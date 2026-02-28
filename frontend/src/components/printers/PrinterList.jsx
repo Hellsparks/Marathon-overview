@@ -63,7 +63,7 @@ export default function PrinterList({ printers, onRefresh }) {
                   {Array.isArray(p.filament_types) && p.filament_types.length > 0 ? (
                     <div className="badge-row">
                       {p.filament_types.slice(0, 3).map(t => (
-                        <span key={t} className="badge badge-filament">{t}</span>
+                        <span key={t} className={`badge badge-filament filament-${t}`}>{t}</span>
                       ))}
                       {p.filament_types.length > 3 && (
                         <span className="badge badge-muted">+{p.filament_types.length - 3}</span>
