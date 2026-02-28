@@ -112,6 +112,111 @@ router.put('/spool/:id/measure', async (req, res) => {
     }
 });
 
+// GET /api/spoolman/vendors — list all vendors
+router.get('/vendors', async (_req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/vendor`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) throw new Error(`Spoolman ${r.status}`);
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// POST /api/spoolman/vendors — create a vendor
+router.post('/vendors', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/vendor`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// GET /api/spoolman/filaments — list all filaments
+router.get('/filaments', async (_req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/filament`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) throw new Error(`Spoolman ${r.status}`);
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// POST /api/spoolman/filaments — create a filament
+router.post('/filaments', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/filament`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// POST /api/spoolman/spools — create a spool
+router.post('/spools', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/spool`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// GET /api/spoolman/fields/:entity — get custom field definitions (entity: filament | vendor | spool)
+router.get('/fields/:entity', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    const allowed = ['filament', 'vendor', 'spool'];
+    if (!allowed.includes(req.params.entity))
+        return res.status(400).json({ error: 'Invalid entity type' });
+    try {
+        const r = await fetch(`${url}/api/v1/field/${req.params.entity}`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) throw new Error(`Spoolman ${r.status}`);
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
 // GET /api/spoolman/test — test connection to Spoolman
 router.get('/test', async (_req, res) => {
     const url = getSpoolmanUrl();
