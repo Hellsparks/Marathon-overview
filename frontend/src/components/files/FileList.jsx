@@ -39,6 +39,7 @@ export default function FileList({ files, onDeleted }) {
           <thead>
             <tr>
               <th>Name</th>
+              <th>Target Printer</th>
               <th>Print Size</th>
               <th>File Size</th>
               <th>Source</th>
@@ -51,6 +52,15 @@ export default function FileList({ files, onDeleted }) {
               <tr key={file.id}>
                 <td className="file-name">{file.display_name}</td>
                 <td>
+                  {file.sliced_for ? (
+                    <span className="badge badge-info" title="Sliced for this printer model">
+                      {file.sliced_for}
+                    </span>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
+                <td>
                   {file.max_x != null && file.min_x != null ? (
                     <div className="print-dimensions">
                       <span>
@@ -59,11 +69,6 @@ export default function FileList({ files, onDeleted }) {
                       {file.filament_type && (
                         <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
                       )}
-                      {file.sliced_for && (
-                        <span className="badge badge-info" style={{ marginLeft: '4px' }} title="Sliced for this printer model">
-                          {file.sliced_for}
-                        </span>
-                      )}
                     </div>
                   ) : file.max_z != null ? (
                     <div className="print-dimensions">
@@ -71,21 +76,11 @@ export default function FileList({ files, onDeleted }) {
                       {file.filament_type && (
                         <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
                       )}
-                      {file.sliced_for && (
-                        <span className="badge badge-info" style={{ marginLeft: '4px' }} title="Sliced for this printer model">
-                          {file.sliced_for}
-                        </span>
-                      )}
                     </div>
-                  ) : file.filament_type || file.sliced_for ? (
+                  ) : file.filament_type ? (
                     <div className="print-dimensions">
                       {file.filament_type && (
                         <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
-                      )}
-                      {file.sliced_for && (
-                        <span className="badge badge-info" style={{ marginLeft: '4px' }} title="Sliced for this printer model">
-                          {file.sliced_for}
-                        </span>
                       )}
                     </div>
                   ) : (
