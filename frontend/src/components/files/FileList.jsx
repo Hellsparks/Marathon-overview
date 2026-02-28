@@ -92,13 +92,15 @@ export default function FileList({ files, onDeleted }) {
                   <span className="source-badge">{file.slicer_name || file.upload_source}</span>
                 </td>
                 <td>{formatDate(file.created_at)}</td>
-                <td className="file-actions">
-                  <button className="btn btn-sm btn-primary" onClick={() => setSendingFile(file)}>
-                    Send to Printer
-                  </button>
-                  <button className="btn btn-sm btn-danger" onClick={() => setDeletingId(file.id)}>
-                    Delete
-                  </button>
+                <td>
+                  <div className="file-actions">
+                    <button className="btn btn-sm btn-primary" onClick={() => setSendingFile(file)}>
+                      Send to Printer
+                    </button>
+                    <button className="btn btn-sm btn-danger" onClick={() => setDeletingId(file.id)}>
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
