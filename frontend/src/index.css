@@ -1049,9 +1049,50 @@ code {
 }
 
 .badge-filament {
-  background: color-mix(in srgb, var(--primary) 18%, transparent);
-  color: var(--primary);
+  background: color-mix(in srgb, var(--badge-color, var(--primary)) 18%, transparent);
+  color: var(--badge-color, var(--primary));
 }
+
+.filament-PLA {
+  --badge-color: #3b82f6;
+}
+
+/* Blue */
+.filament-PETG {
+  --badge-color: #10b981;
+}
+
+/* Green */
+.filament-ABS {
+  --badge-color: #eab308;
+}
+
+/* Yellow */
+.filament-ASA {
+  --badge-color: #f59e0b;
+}
+
+/* Orange/Amber */
+.filament-TPU {
+  --badge-color: #8b5cf6;
+}
+
+/* Purple */
+.filament-NYLON {
+  --badge-color: #f43f5e;
+}
+
+/* Rose/Red */
+.filament-PC {
+  --badge-color: #0ea5e9;
+}
+
+/* Sky Blue */
+.filament-CF {
+  --badge-color: #64748b;
+}
+
+/* Slate Grey */
 
 .badge-muted {
   background: var(--surface2);

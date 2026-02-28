@@ -57,19 +57,19 @@ export default function FileList({ files, onDeleted }) {
                         {(file.max_x - file.min_x).toFixed(1)} × {(file.max_y - file.min_y).toFixed(1)} × {(file.max_z - (file.min_z || 0)).toFixed(1)}mm
                       </span>
                       {file.filament_type && (
-                        <span className="badge badge-filament">{file.filament_type}</span>
+                        <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
                       )}
                     </div>
                   ) : file.max_z != null ? (
                     <div className="print-dimensions">
                       <span>H: {(file.max_z - (file.min_z || 0)).toFixed(1)}mm</span>
                       {file.filament_type && (
-                        <span className="badge badge-filament">{file.filament_type}</span>
+                        <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
                       )}
                     </div>
                   ) : file.filament_type ? (
                     <div className="print-dimensions">
-                      <span className="badge badge-filament">{file.filament_type}</span>
+                      <span className={`badge badge-filament filament-${file.filament_type}`}>{file.filament_type}</span>
                     </div>
                   ) : (
                     <span className="text-muted">—</span>

@@ -199,7 +199,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                       <input type="checkbox"
                         checked={(form.filament_types || []).includes(type)}
                         onChange={() => toggleFilament(type)} />
-                      {type}
+                      <span className={`badge badge-filament filament-${type}`}>{type}</span>
                     </label>
                   ))}
                 </div>

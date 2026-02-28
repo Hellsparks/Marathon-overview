@@ -92,7 +92,7 @@ export default function PresetForm({ preset, onSaved, onCancel }) {
                                         checked={form.filament_types.includes(type)}
                                         onChange={() => toggleFilament(type)}
                                     />
-                                    {type}
+                                    <span className={`badge badge-filament filament-${type}`}>{type}</span>
                                 </label>
                             ))}
                         </div>
