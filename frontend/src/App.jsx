@@ -4,6 +4,7 @@ import DashboardPage from './pages/DashboardPage';
 import FilesPage from './pages/FilesPage';
 import QueuePage from './pages/QueuePage';
 import SettingsPage from './pages/SettingsPage';
+import SpoolmanPage from './pages/SpoolmanPage';
 import { ThemeProvider } from './components/layout/ThemeProvider';
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
             <Route index element={<DashboardPage />} />
             <Route path="files" element={<FilesPage />} />
             <Route path="queue/:printerId" element={<QueuePage />} />
+            <Route path="spoolman" element={<SpoolmanPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
