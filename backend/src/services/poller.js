@@ -12,6 +12,10 @@ const SCRAPE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 const spoolCache = new Map();
 const SPOOL_CACHE_TTL_MS = 30_000; // 30 seconds
 
+// Printer state tracking to log finished/cancelled jobs
+// Maps printerId -> { state, filename, startTime, activeSpool }
+const previousStates = new Map();
+
 /** Fetch full spool details from Spoolman, with caching */
 async function getSpoolDetails(spoolId, spoolmanUrl) {
   if (!spoolId || !spoolmanUrl) return null;
@@ -82,6 +86,51 @@ async function pollAll() {
             activeSpool = await getSpoolDetails(spoolId, spoolmanUrl);
           }
         }
+
+        // --- Print Job Tracking Logic ---
+        const currentState = status.print_stats?.state;
+        const currentFilename = status.print_stats?.filename;
+        const prevStateObj = previousStates.get(printer.id);
+
+        if (prevStateObj) {
+          // Detect transition FROM printing TO a terminal state
+          if (prevStateObj.state === 'printing' && ['complete', 'cancelled', 'error'].includes(currentState)) {
+            const duration = status.print_stats?.total_duration || status.print_stats?.print_duration || 0;
+            const filamentUsed = status.print_stats?.filament_used || 0;
+
+            // Re-acquire the spool data that was active during the print
+            const spoolUsed = prevStateObj.activeSpool || activeSpool;
+
+            try {
+              db.prepare(`
+                INSERT INTO gcode_print_jobs 
+                (printer_id, filename, total_duration_s, filament_used_mm, spool_id, spool_name, material, color_hex, vendor, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(
+                printer.id,
+                prevStateObj.filename || currentFilename || 'Unknown',
+                Math.round(duration),
+                filamentUsed,
+                spoolUsed?.id || null,
+                spoolUsed?.filament_name || null,
+                spoolUsed?.material || null,
+                spoolUsed?.color_hex || null,
+                spoolUsed?.vendor || null,
+                currentState
+              );
+              console.log(`[Poller] Logged print job (${currentState}): ${prevStateObj.filename} on Printer ${printer.id}`);
+            } catch (jobErr) {
+              console.error(`[Poller] Failed to log print job:`, jobErr.message);
+            }
+          }
+        }
+
+        // Update previous state tracker
+        previousStates.set(printer.id, {
+          state: currentState,
+          filename: currentFilename,
+          activeSpool: activeSpool
+        });
 
         printerCache.set(printer.id, {
           ...status,

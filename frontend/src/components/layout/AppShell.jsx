@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import NavBar from './NavBar';
 import Sidebar from './Sidebar';
+import FleetInsights from './FleetInsights';
 import { useStatus } from '../../hooks/useStatus';
 
 export default function AppShell() {
@@ -24,8 +25,7 @@ export default function AppShell() {
           <Outlet context={{ status }} />
         </main>
         <aside className="sidebar-right">
-          <h3 style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Insights</h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.5' }}>Future statistics, insights, and advanced fleet features will appear here.</p>
+          <FleetInsights />
         </aside>
       </div>
     </div>

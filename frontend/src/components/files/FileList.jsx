@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { deleteFile } from '../../api/files';
 import ConfirmDialog from '../common/ConfirmDialog';
 import SendToPrinterModal from './SendToPrinterModal';
@@ -17,6 +17,14 @@ export default function FileList({ files, onDeleted }) {
   const [deletingId, setDeletingId] = useState(null);
   const [sendingFile, setSendingFile] = useState(null);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('marathon_file_view') || 'list');
+  const [fileStats, setFileStats] = useState({});
+
+  useEffect(() => {
+    fetch('/api/stats/files')
+      .then(r => r.json())
+      .then(data => setFileStats(data))
+      .catch(err => console.error('Failed to load file stats:', err));
+  }, []);
 
   const updateViewMode = (mode) => {
     setViewMode(mode);
@@ -90,6 +98,11 @@ export default function FileList({ files, onDeleted }) {
                       </span>
                     ) : (
                       <span className="text-muted">—</span>
+                    )}
+                    {fileStats[file.filename] && (
+                      <span className="badge badge-success" style={{ marginLeft: '4px' }} title={`Completed ${fileStats[file.filename].print_count} times`}>
+                        ★ {fileStats[file.filename].print_count}
+                      </span>
                     )}
                   </td>
                   <td>
