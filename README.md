@@ -15,6 +15,9 @@
 - **Print queue** — Per-printer queues with auto-start capability
 - **Macro support** — Execute Klipper macros from the UI
 - **Webcam integration** — Embedded webcam streams per printer
+- **Spoolman integration** — View active spool info, track filament usage per print
+- **Print history & statistics** — Tracks completed prints with duration, filament used, material, and spool data
+- **Preventive maintenance tracking** — Track maintenance tasks (lubrication, belt checks, etc.) per printer based on cumulative print-time runtime hours
 
 ## Architecture
 
@@ -98,10 +101,11 @@ Data is persisted in Docker volumes:
 Marathon-overview/
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/          Dashboard, Files, Queue, Settings
-│   │   ├── components/     UI components (PrinterCard, dialogs, layout)
+│   │   ├── pages/          Dashboard, Files, Queue, Spoolman, Maintenance, Settings
+│   │   ├── components/     UI components (PrinterCard, MaintenancePrinterCard, layout, etc.)
 │   │   ├── api/            API client functions
 │   │   ├── hooks/          Custom React hooks
+│   │   ├── services/       Shared singletons (scrapedCssCache)
 │   │   ├── index.css       Base styles + CSS variable system
 │   │   ├── themes.css      Built-in theme definitions (variables only)
 │   │   └── App.jsx         Router + layout
@@ -128,10 +132,8 @@ Marathon-overview/
 ### High Priority
 - [ ] **WebSocket status updates** — Replace polling with Moonraker WebSocket subscriptions for real-time updates
 - [ ] **Authentication** — Add user login / API key support for multi-user or public-facing deployments
-- [ ] **Print history** — Track completed prints with stats (time, filament used, success/fail)
 
 ### Features
-- [ ] **Spoolman integration** — Show active spool info, track filament usage per print
 - [ ] **Multi-file upload** — Drag-and-drop multiple G-code files at once
 - [ ] **Printer groups** — Organize printers by location, type, or custom tags
 - [ ] **Notifications** — Email/Discord/push alerts for print completion, errors, or temperature warnings

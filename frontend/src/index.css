@@ -1758,3 +1758,261 @@ code {
   font-weight: 600;
   color: var(--text);
 }
+/* ─── Maintenance Page ──────────────────────────────────────────── */
+.maintenance-page {
+  padding: 24px;
+  max-width: 1400px;
+}
+
+.maintenance-header {
+  margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ── Card interior ── */
+.maint-card-runtime {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.maint-card-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.maint-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.maint-task-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.maint-task-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.maint-task-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.maint-task-status {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.maint-task-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.maint-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--surface2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.maint-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .3s ease, background .3s ease;
+  min-width: 2px;
+}
+
+.maint-bar-unset {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.maint-done-btn {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  font-size: 11px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.maint-done-btn:hover:not(:disabled) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.maint-done-btn:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+/* ── Config section ── */
+.maint-config-section {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.maint-config-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 12px;
+}
+
+.maint-add-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.maint-task-input {
+  flex: 1;
+  max-width: 360px;
+  padding: 7px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.maint-task-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.maint-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+.maint-table-wrap {
+  overflow-x: auto;
+}
+
+.maint-table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.maint-th {
+  padding: 8px 12px;
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.maint-th-printer {
+  min-width: 130px;
+}
+
+.maint-row:hover {
+  background: rgba(255,255,255,0.02);
+}
+
+.maint-td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.maint-td-task {
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  padding-right: 20px;
+}
+
+.maint-interval-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.maint-interval-input {
+  width: 72px;
+  padding: 4px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+}
+
+.maint-interval-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.maint-interval-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.maint-save-btn {
+  padding: 4px 10px;
+  background: var(--primary);
+  color: #fff;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-size: 12px;
+}
+
+.maint-save-btn:hover { background: var(--primary-d); }
+
+.maint-delete-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.maint-delete-btn:hover {
+  color: var(--danger);
+  background: rgba(224, 92, 92, 0.1);
+}
+
+.page-loading {
+  padding: 48px;
+  text-align: center;
+  color: var(--text-muted);
+}

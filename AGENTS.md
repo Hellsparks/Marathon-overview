@@ -23,7 +23,7 @@ monitor and control multiple Klipper/Moonraker printers from a single dashboard.
 
 ```
 frontend/src/
-├── App.jsx                 Router: / → Dashboard, /files → Files, /queue/:id → Queue, /settings → Settings
+├── App.jsx                 Router: /, /files, /queue/:id, /spoolman, /maintenance, /settings
 ├── main.jsx                React entry point
 ├── index.css               Base styles, CSS variable system, ALL component styles
 ├── themes.css              Built-in theme definitions (VARIABLES ONLY — see Theming)
@@ -31,21 +31,28 @@ frontend/src/
 │   ├── DashboardPage.jsx   Grid of PrinterCards + status polling
 │   ├── FilesPage.jsx       G-code file browser + upload
 │   ├── QueuePage.jsx       Per-printer print queue
+│   ├── SpoolmanPage.jsx    Spool management + drag-to-assign
+│   ├── MaintenancePage.jsx Maintenance tasks/intervals config + printer cards
 │   └── SettingsPage.jsx    Printer CRUD + theme settings
 ├── components/
 │   ├── dashboard/
 │   │   └── PrinterCard.jsx ★ Most complex component — per-printer theming, CSS scoping
+│   ├── maintenance/
+│   │   └── MaintenancePrinterCard.jsx  Copy of PrinterCard shell with maintenance bars
 │   └── layout/
 │       ├── ThemeProvider.jsx  Global theme switcher + community theme loader
 │       ├── Navbar.jsx
 │       └── Sidebar.jsx
 ├── api/                    Fetch wrappers for each backend route group
-└── hooks/                  usePolling, etc.
+├── hooks/                  usePolling, usePrinters, useStatus, etc.
+└── services/
+    └── scrapedCssCache.js  Shared module-level Map — PrinterCard + MaintenancePrinterCard
+                            both import this so scraped CSS is cached across page navigations
 
 backend/src/
 ├── index.js                Entry point: DB init → Express listen → start poller
 ├── app.js                  Express app: CORS, body-parser, route mounting
-├── db/                     SQLite schema, migrations, connection singleton
+├── db/                     SQLite schema, migrations (001–012), connection singleton
 ├── routes/
 │   ├── printers.js         CRUD printers + scrape-theme endpoint
 │   ├── control.js          Moonraker proxy: gcode, pause, resume, cancel
@@ -54,9 +61,12 @@ backend/src/
 │   ├── queue.js            Per-printer print queue management
 │   ├── presets.js          Temperature presets CRUD
 │   ├── themes.js           Community theme git clone/list/delete
+│   ├── stats.js            Fleet + per-file print statistics
+│   ├── spoolman.js         Spoolman proxy (spool list, active spool assignment)
+│   ├── maintenance.js      Maintenance tasks, intervals, history, mark-done
 │   └── octoprint.js        OctoPrint stub (partial implementation)
 ├── services/
-│   └── poller.js           Status polling loop for all printers
+│   └── poller.js           Status polling loop; logs print jobs + accumulates runtime_s
 └── middleware/
     └── upload.js           Multer config for G-code uploads
 ```
@@ -120,6 +130,15 @@ All routes are prefixed with `/api`.
 | GET | `/themes` | List community themes |
 | POST | `/themes` | Install community themes from GitHub |
 | DELETE | `/themes/:name` | Remove a community theme |
+| GET | `/stats/fleet` | Aggregate fleet print statistics |
+| GET | `/stats/files` | Per-file print statistics |
+| GET | `/spoolman/spools` | List spools from Spoolman |
+| POST | `/spoolman/active/:printerId` | Set active spool on a printer |
+| GET | `/maintenance` | All tasks, printers (full row), intervals, last-done history |
+| POST | `/maintenance/tasks` | Create a maintenance task |
+| DELETE | `/maintenance/tasks/:id` | Delete a task and all its history |
+| PUT | `/maintenance/intervals/:taskId/:printerId` | Set interval (hours) for a task+printer |
+| POST | `/maintenance/done/:taskId/:printerId` | Record task completion at current runtime |
 
 ---
 
@@ -128,9 +147,27 @@ All routes are prefixed with `/api`.
 SQLite database at `backend/data/marathon.db`. Schema is auto-created on first run.
 
 ### Key tables:
-- `printers` — id, name, host, port, theme_mode, custom_css, etc.
+- `printers` — id, name, host, port, theme_mode, custom_css, runtime_s (cumulative print seconds), etc.
 - `queue_items` — printer_id, filename, position, status
 - `presets` — name, hotend_temp, bed_temp
+- `gcode_files` — uploaded G-code file metadata
+- `gcode_print_jobs` — completed print log (duration, filament, spool info, status)
+- `maintenance_tasks` — global named tasks (e.g. "Lubricate rails")
+- `maintenance_intervals` — task_id + printer_id + interval_hours (PK: task_id, printer_id)
+- `maintenance_history` — when each task was done on each printer, runtime_s at that time
+
+### Runtime tracking
+`printers.runtime_s` accumulates when the poller detects a print transition from
+`printing` to any terminal state (`complete`, `cancelled`, `error`). It is used by
+the maintenance system to calculate how much print-time has elapsed since a task was
+last performed.
+
+### Maintenance status calculation
+`hours_used = (printer.runtime_s - last_done.runtime_s_at_performance) / 3600`
+`hours_remaining = interval_hours - hours_used`
+- `< 0` → OVERDUE (red)
+- `>= 0` and within 20% of interval → DUE (yellow)
+- otherwise → OK (green)
 
 ---
 
@@ -182,8 +219,15 @@ These exist so Mainsail CSS can target card interior elements:
 ```
 
 ### CSS caching
-Module-level `scrapedCssCache` Map, keyed by `host:port`. Persists across
-page navigations within the SPA session. Clears on full page reload.
+`scrapedCssCache` is a shared Map in `frontend/src/services/scrapedCssCache.js`,
+imported by both `PrinterCard` and `MaintenancePrinterCard`. Keyed by `host:port`.
+Persists across page navigations within the SPA session. Clears on full page reload.
+
+### MaintenancePrinterCard
+Direct copy of the PrinterCard shell (scopeCSS, cardDefaults, cardPolyfill, isolation
+wrapper) with the body replaced by maintenance task progress bars + Done buttons.
+The `/api/maintenance` endpoint returns full printer rows (including `host`, `port`,
+`theme_mode`, `custom_css`) so the card has everything it needs for theming.
 
 ---
 
