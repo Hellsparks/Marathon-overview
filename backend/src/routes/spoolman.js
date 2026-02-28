@@ -62,6 +62,56 @@ router.post('/set-active', async (req, res) => {
     }
 });
 
+// PUT /api/spoolman/spool/:id/use — consume filament by length (mm) or weight (g)
+// body: { use_length: number } OR { use_weight: number }
+router.put('/spool/:id/use', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    const { use_length, use_weight } = req.body;
+    if (use_length === undefined && use_weight === undefined)
+        return res.status(400).json({ error: 'use_length or use_weight required' });
+    try {
+        const body = use_length !== undefined ? { use_length } : { use_weight };
+        const r = await fetch(`${url}/api/v1/spool/${req.params.id}/use`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// PUT /api/spoolman/spool/:id/measure — set filament amount by current measured gross weight (g)
+// body: { weight: number }  — total weight of spool on a scale
+router.put('/spool/:id/measure', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    const { weight } = req.body;
+    if (weight === undefined) return res.status(400).json({ error: 'weight required' });
+    try {
+        const r = await fetch(`${url}/api/v1/spool/${req.params.id}/measure`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ weight }),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
 // GET /api/spoolman/test — test connection to Spoolman
 router.get('/test', async (_req, res) => {
     const url = getSpoolmanUrl();

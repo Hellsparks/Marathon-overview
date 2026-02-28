@@ -1667,6 +1667,7 @@ code {
 }
 
 .spoolman-spool-card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -2015,4 +2016,163 @@ code {
   padding: 48px;
   text-align: center;
   color: var(--text-muted);
+}
+
+/* ─── Spool Adjust Button & Dialog ─────────────────────────────── */
+.spool-adjust-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+  line-height: 1;
+}
+
+.spool-adjust-btn:hover {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--primary);
+}
+
+.spool-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.spool-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .5);
+  padding: 24px;
+  width: 420px;
+  max-width: 95vw;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.spool-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.spool-dialog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.spool-dialog-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.spool-dialog-close:hover { color: var(--text); }
+
+.spool-dialog-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: -8px 0 0;
+}
+
+.spool-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.spool-dialog-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.spool-type-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.spool-type-tab {
+  flex: 1;
+  padding: 6px 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.spool-type-tab.active,
+.spool-type-tab:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.spool-dialog-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spool-dialog-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.spool-dialog-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.spool-dialog-unit {
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 24px;
+}
+
+.spool-dialog-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: -4px;
+}
+
+.spool-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }

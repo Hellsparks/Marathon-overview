@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePrinters } from '../hooks/usePrinters';
-import { getSpools, setActiveSpool } from '../api/spoolman';
+import { getSpools, setActiveSpool, useFilament, measureFilament } from '../api/spoolman';
 import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
 
 const COLOR_NAMES = {
@@ -61,6 +61,12 @@ export default function SpoolmanPage() {
 
     const [materialFilter, setMaterialFilter] = useState('');
     const [vendorFilter, setVendorFilter] = useState('');
+
+    // Adjust spool dialog
+    const [adjustSpool, setAdjustSpool] = useState(null); // spool object or null
+    const [adjustType, setAdjustType] = useState('length'); // 'length' | 'weight' | 'measured'
+    const [adjustAmount, setAdjustAmount] = useState('');
+    const [adjustBusy, setAdjustBusy] = useState(false);
 
     const fetchSpools = useCallback(async () => {
         try {
@@ -171,6 +177,26 @@ export default function SpoolmanPage() {
         }
     }
 
+    async function handleAdjustSubmit() {
+        const amount = parseFloat(adjustAmount);
+        if (isNaN(amount)) return;
+        setAdjustBusy(true);
+        try {
+            if (adjustType === 'measured') {
+                await measureFilament(adjustSpool.id, amount);
+            } else {
+                await useFilament(adjustSpool.id, adjustType, amount);
+            }
+            setAdjustSpool(null);
+            setAdjustAmount('');
+            await fetchSpools();
+        } catch (e) {
+            alert(e.message);
+        } finally {
+            setAdjustBusy(false);
+        }
+    }
+
     function getActiveSpool(printerId) {
         if (statuses?.printers && statuses.printers[printerId]) {
             return statuses.printers[printerId]._active_spool || null;
@@ -278,6 +304,13 @@ export default function SpoolmanPage() {
                                                 style={{ width: `${pct}%`, backgroundColor: color }}
                                             />
                                         </div>
+                                        <button
+                                            className="spool-adjust-btn"
+                                            onClick={e => { e.stopPropagation(); setAdjustSpool(spool); setAdjustType('length'); setAdjustAmount(''); }}
+                                            title="Adjust filament amount"
+                                        >
+                                            ⚙
+                                        </button>
                                     </div>
                                 );
                             })}
@@ -307,6 +340,66 @@ export default function SpoolmanPage() {
                     })}
                 </div>
             </div>
+
+            {/* ── Adjust Spool Dialog ─────────────────────────────── */}
+            {adjustSpool && (
+                <div className="spool-dialog-overlay" onClick={() => setAdjustSpool(null)}>
+                    <div className="spool-dialog" onClick={e => e.stopPropagation()}>
+                        <div className="spool-dialog-header">
+                            <h3 className="spool-dialog-title">Adjust Spool Filament</h3>
+                            <button className="spool-dialog-close" onClick={() => setAdjustSpool(null)}>✕</button>
+                        </div>
+                        <p className="spool-dialog-desc">
+                            Directly add or subtract filament from the spool. A positive value consumes filament, a negative value adds it.
+                        </p>
+                        <div className="spool-dialog-field">
+                            <label className="spool-dialog-label">Measurement Type</label>
+                            <div className="spool-type-tabs">
+                                {[['length', 'Length'], ['weight', 'Weight'], ['measured', 'Measured Weight']].map(([val, label]) => (
+                                    <button
+                                        key={val}
+                                        className={`spool-type-tab${adjustType === val ? ' active' : ''}`}
+                                        onClick={() => { setAdjustType(val); setAdjustAmount(''); }}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="spool-dialog-field">
+                            <label className="spool-dialog-label">
+                                {adjustType === 'measured' ? 'Current Spool Weight (on scale)' : 'Consume Amount'}
+                            </label>
+                            <div className="spool-dialog-input-row">
+                                <input
+                                    className="spool-dialog-input"
+                                    type="number"
+                                    step="any"
+                                    placeholder={adjustType === 'measured' ? 'gross weight' : adjustType === 'length' ? 'e.g. 500' : 'e.g. 5.3'}
+                                    value={adjustAmount}
+                                    onChange={e => setAdjustAmount(e.target.value)}
+                                    autoFocus
+                                    onKeyDown={e => e.key === 'Enter' && handleAdjustSubmit()}
+                                />
+                                <span className="spool-dialog-unit">{adjustType === 'length' ? 'mm' : 'g'}</span>
+                            </div>
+                            {adjustType === 'measured' && (
+                                <p className="spool-dialog-hint">Enter the total weight of the spool as read on a scale. Spoolman will calculate remaining filament.</p>
+                            )}
+                        </div>
+                        <div className="spool-dialog-actions">
+                            <button className="btn v-btn" onClick={() => setAdjustSpool(null)} disabled={adjustBusy}>Cancel</button>
+                            <button
+                                className="btn btn-primary v-btn"
+                                onClick={handleAdjustSubmit}
+                                disabled={adjustBusy || adjustAmount === ''}
+                            >
+                                {adjustBusy ? 'Saving…' : 'OK'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

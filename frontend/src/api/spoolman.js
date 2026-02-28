@@ -11,6 +11,35 @@ export async function testConnection() {
     return r.json();
 }
 
+/** Consume filament from a spool by length (mm) or weight (g). Amount may be negative to add. */
+export async function useFilament(spoolId, type, amount) {
+    const body = type === 'length' ? { use_length: amount } : { use_weight: amount };
+    const r = await fetch(`${API}/spool/${spoolId}/use`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+/** Set filament amount by measured gross weight of spool on a scale (g). */
+export async function measureFilament(spoolId, weight) {
+    const r = await fetch(`${API}/spool/${spoolId}/measure`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weight }),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
 export async function setActiveSpool(printerId, spoolId) {
     const r = await fetch(`${API}/set-active`, {
         method: 'POST',
