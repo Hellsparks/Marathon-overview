@@ -172,7 +172,14 @@ export default function SpoolmanPage() {
     }
 
     function getActiveSpool(printerId) {
-        return statuses[printerId]?._active_spool || null;
+        if (statuses?.printers && statuses.printers[printerId]) {
+            return statuses.printers[printerId]._active_spool || null;
+        }
+
+        // Fallback to initial printer object array, which holds status when loaded
+        const printer = printers.find(p => p.id === printerId);
+        if (!printer || !printer.status || !printer.status._active_spool) return null;
+        return printer.status._active_spool;
     }
 
     function getSpoolPercentage(spool) {
