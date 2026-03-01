@@ -9,6 +9,11 @@ function countStock(spools, filamentId) {
     ).length;
 }
 
+function toAbsUrl(url) {
+    if (!url) return url;
+    return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 function sizeLabel(weight) {
     if (!weight) return '—';
     return weight >= 1000 ? `${weight / 1000}kg` : `${weight}g`;
@@ -233,7 +238,7 @@ export default function InventoryPage() {
                     <div className="inv-shopping-list">
                         {shoppingList.map(({ filament: f, current, buyCount }) => {
                             const color = `#${f.color_hex || '888888'}`;
-                            const storeUrl = f.extra?.url;
+                            const storeUrl = toAbsUrl(f.extra?.url);
                             const price = f.price;
                             return (
                                 <div key={f.id} className="inv-shopping-item">
