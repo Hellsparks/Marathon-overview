@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import TemplateCard from '../components/templates/TemplateCard';
 import CreateTemplateModal from '../components/templates/CreateTemplateModal';
+import TemplatePreviewModal from '../components/templates/TemplatePreviewModal';
 import { getFilaments } from '../api/spoolman';
 
 export default function TemplatesPage() {
@@ -11,6 +12,7 @@ export default function TemplatesPage() {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState(null);
+    const [previewTemplate, setPreviewTemplate] = useState(null);
 
     const fetchData = async () => {
         setLoading(true);
@@ -84,6 +86,7 @@ export default function TemplatesPage() {
                                 filaments={filaments}
                                 onEdit={() => handleEdit(t)}
                                 onDelete={() => handleDelete(t.id)}
+                                onClick={() => setPreviewTemplate(t)}
                             />
                         ))}
                     </div>
@@ -96,6 +99,15 @@ export default function TemplatesPage() {
                     onSave={() => closeModal(true)}
                     existingTemplate={editingTemplate}
                     filaments={filaments}
+                />
+            )}
+
+            {previewTemplate && (
+                <TemplatePreviewModal
+                    template={previewTemplate}
+                    filaments={filaments}
+                    onClose={() => setPreviewTemplate(null)}
+                    onEdit={() => handleEdit(previewTemplate)}
                 />
             )}
         </div>
