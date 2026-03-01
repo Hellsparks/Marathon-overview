@@ -2022,7 +2022,7 @@ code {
 .spool-adjust-btn {
   position: absolute;
   top: 8px;
-  right: 8px;
+  right: 38px;
   width: 26px;
   height: 26px;
   padding: 0;
@@ -2048,7 +2048,7 @@ code {
 .spool-delete-btn {
   position: absolute;
   top: 8px;
-  left: 8px;
+  right: 8px;
   width: 26px;
   height: 26px;
   padding: 0;
