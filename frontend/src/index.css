@@ -2953,17 +2953,19 @@ code {
   justify-content: space-between;
   font-size: 13px;
   padding: 4px 8px;
-  background: var(--surface2);
-  border-radius: 5px;
+  background: color-mix(in srgb, var(--badge-color, var(--border)) 15%, var(--surface2));
+  border-left: 3px solid var(--badge-color, var(--border));
+  border-radius: 0 5px 5px 0;
 }
 
 .rp-mat-name {
-  color: var(--text);
+  color: var(--badge-color, var(--text));
   font-weight: 500;
 }
 
 .rp-mat-value {
-  color: var(--text-muted);
+  color: var(--badge-color, var(--text-muted));
+  opacity: .85;
   font-variant-numeric: tabular-nums;
 }
 

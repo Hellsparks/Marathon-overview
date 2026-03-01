@@ -38,12 +38,15 @@ export default function InventoryPanel() {
                 <>
                     <div className="rp-section-title">By Material</div>
                     <div className="rp-mat-list">
-                        {byMaterial.map(([mat, grams]) => (
-                            <div key={mat} className="rp-mat-row">
-                                <span className="rp-mat-name">{mat}</span>
-                                <span className="rp-mat-value">{(grams / 1000).toFixed(2)} kg</span>
-                            </div>
-                        ))}
+                        {byMaterial.map(([mat, grams]) => {
+                            const cls = mat.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                            return (
+                                <div key={mat} className={`rp-mat-row filament-${cls}`}>
+                                    <span className="rp-mat-name">{mat}</span>
+                                    <span className="rp-mat-value">{(grams / 1000).toFixed(2)} kg</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 </>
             )}
