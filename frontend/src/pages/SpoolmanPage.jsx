@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePrinters } from '../hooks/usePrinters';
-import { getSpools, setActiveSpool, useFilament, measureFilament } from '../api/spoolman';
+import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool } from '../api/spoolman';
 import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
-import AddVendorDialog from '../components/spoolman/AddVendorDialog';
-import AddFilamentDialog from '../components/spoolman/AddFilamentDialog';
 import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
 
 const COLOR_NAMES = {
@@ -71,9 +69,6 @@ export default function SpoolmanPage() {
     const [adjustAmount, setAdjustAmount] = useState('');
     const [adjustBusy, setAdjustBusy] = useState(false);
 
-    // Create dialogs
-    const [showAddVendor, setShowAddVendor] = useState(false);
-    const [showAddFilament, setShowAddFilament] = useState(false);
     const [showAddSpool, setShowAddSpool] = useState(false);
 
     const fetchSpools = useCallback(async () => {
@@ -185,6 +180,18 @@ export default function SpoolmanPage() {
         }
     }
 
+    async function handleDeleteSpool(spool) {
+        const f = spool.filament || {};
+        const name = f.name || `Spool #${spool.id}`;
+        if (!confirm(`Delete spool "${name}"? This cannot be undone.`)) return;
+        try {
+            await deleteSpool(spool.id);
+            await fetchSpools();
+        } catch (err) {
+            alert(`Failed to delete spool: ${err.message}`);
+        }
+    }
+
     async function handleAdjustSubmit() {
         const amount = parseFloat(adjustAmount);
         if (isNaN(amount)) return;
@@ -223,8 +230,6 @@ export default function SpoolmanPage() {
 
     return (
         <div className="page spoolman-page">
-            <h1 className="page-title">Spoolman</h1>
-
             <div className="spoolman-layout">
                 {/* Center: Spool inventory */}
                 <div className="spoolman-inventory">
@@ -261,8 +266,6 @@ export default function SpoolmanPage() {
                         </select>
                         <div className="spoolman-add-btns">
                             <button className="btn spoolman-add-btn" onClick={() => setShowAddSpool(true)} title="Add new spool">+ Spool</button>
-                            <button className="btn spoolman-add-btn" onClick={() => setShowAddFilament(true)} title="Add new filament">+ Filament</button>
-                            <button className="btn spoolman-add-btn" onClick={() => setShowAddVendor(true)} title="Add new manufacturer">+ Manufacturer</button>
                         </div>
                     </div>
 
@@ -323,6 +326,13 @@ export default function SpoolmanPage() {
                                             title="Adjust filament amount"
                                         >
                                             ⚙
+                                        </button>
+                                        <button
+                                            className="spool-delete-btn"
+                                            onClick={e => { e.stopPropagation(); handleDeleteSpool(spool); }}
+                                            title="Delete spool"
+                                        >
+                                            🗑
                                         </button>
                                     </div>
                                 );
@@ -414,29 +424,10 @@ export default function SpoolmanPage() {
                 </div>
             )}
 
-            {/* ── Add Vendor Dialog ─────────────────────────────── */}
-            {showAddVendor && (
-                <AddVendorDialog
-                    onClose={() => setShowAddVendor(false)}
-                    onCreated={() => { setShowAddVendor(false); }}
-                />
-            )}
-
-            {/* ── Add Filament Dialog ───────────────────────────── */}
-            {showAddFilament && (
-                <AddFilamentDialog
-                    onClose={() => setShowAddFilament(false)}
-                    onCreated={() => { setShowAddFilament(false); }}
-                    onAddVendor={() => { setShowAddFilament(false); setShowAddVendor(true); }}
-                />
-            )}
-
-            {/* ── Add Spool Dialog ──────────────────────────────── */}
             {showAddSpool && (
                 <AddSpoolDialog
                     onClose={() => setShowAddSpool(false)}
                     onCreated={() => { setShowAddSpool(false); fetchSpools(); }}
-                    onAddFilament={() => { setShowAddSpool(false); setShowAddFilament(true); }}
                 />
             )}
         </div>

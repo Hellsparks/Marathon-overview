@@ -201,6 +201,25 @@ router.post('/spools', async (req, res) => {
     }
 });
 
+// DELETE /api/spoolman/spools/:id — delete a spool
+router.delete('/spools/:id', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/spool/${req.params.id}`, {
+            method: 'DELETE',
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
 // GET /api/spoolman/fields/:entity — get custom field definitions (entity: filament | vendor | spool)
 router.get('/fields/:entity', async (req, res) => {
     const url = getSpoolmanUrl();
@@ -210,6 +229,139 @@ router.get('/fields/:entity', async (req, res) => {
         return res.status(400).json({ error: 'Invalid entity type' });
     try {
         const r = await fetch(`${url}/api/v1/field/${req.params.entity}`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) throw new Error(`Spoolman ${r.status}`);
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// PATCH /api/spoolman/filaments/:id — update a filament
+router.patch('/filaments/:id', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/filament/${req.params.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// DELETE /api/spoolman/filaments/:id — delete a filament
+router.delete('/filaments/:id', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/filament/${req.params.id}`, {
+            method: 'DELETE',
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// PATCH /api/spoolman/vendors/:id — update a vendor
+router.patch('/vendors/:id', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/vendor/${req.params.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// DELETE /api/spoolman/vendors/:id — delete a vendor
+router.delete('/vendors/:id', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/vendor/${req.params.id}`, {
+            method: 'DELETE',
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// ── Inventory (Marathon-local targets only) ──────────────────────────────────
+
+// GET /api/spoolman/inventory — list all tracked filament targets
+router.get('/inventory', (req, res) => {
+    try {
+        const db = getDb();
+        res.json(db.prepare('SELECT * FROM spoolman_inventory').all());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PUT /api/spoolman/inventory/:filamentId — upsert target/min for a filament
+router.put('/inventory/:filamentId', (req, res) => {
+    const { target_qty, min_qty } = req.body;
+    if (target_qty === undefined) return res.status(400).json({ error: 'target_qty required' });
+    try {
+        const db = getDb();
+        db.prepare(`
+            INSERT INTO spoolman_inventory (filament_id, target_qty, min_qty)
+            VALUES (?, ?, ?)
+            ON CONFLICT(filament_id) DO UPDATE SET target_qty = excluded.target_qty, min_qty = excluded.min_qty
+        `).run(parseInt(req.params.filamentId), parseInt(target_qty), parseInt(min_qty ?? 0));
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/spoolman/inventory/:filamentId — stop tracking a filament
+router.delete('/inventory/:filamentId', (req, res) => {
+    try {
+        const db = getDb();
+        db.prepare('DELETE FROM spoolman_inventory WHERE filament_id = ?').run(parseInt(req.params.filamentId));
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/spoolman/settings — fetch Spoolman global settings (currency, etc.)
+router.get('/settings', async (_req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/setting`, { signal: AbortSignal.timeout(5000) });
         if (!r.ok) throw new Error(`Spoolman ${r.status}`);
         res.json(await r.json());
     } catch (err) {
