@@ -353,6 +353,14 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                         <div style={{ fontWeight: 600, color: plate.status === 'done' ? 'var(--text-muted)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                             {plate.display_name}
                                         </div>
+                                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', gap: '8px' }}>
+                                            {plate.estimated_time_s ? (
+                                                <span>⏱️ {Math.floor(plate.estimated_time_s / 3600)}h {Math.floor((plate.estimated_time_s % 3600) / 60)}m</span>
+                                            ) : null}
+                                            {plate.filament_usage_g ? (
+                                                <span>⚖️ {Math.round(plate.filament_usage_g)}g</span>
+                                            ) : null}
+                                        </div>
                                     </div>
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
