@@ -11,11 +11,15 @@ export default function SettingsPage() {
   const [spoolmanSaved, setSpoolmanSaved] = useState('');
   const [spoolmanStatus, setSpoolmanStatus] = useState(null); // 'ok' | 'error' | null
   const [spoolmanMsg, setSpoolmanMsg] = useState('');
+  const [projectWarning, setProjectWarning] = useState('50');
+  const [projectSaved, setProjectSaved] = useState('50');
 
   useEffect(() => {
     getSettings().then(s => {
       setSpoolmanUrl(s.spoolman_url || '');
       setSpoolmanSaved(s.spoolman_url || '');
+      setProjectWarning(s.project_deadline_warning_percent || '50');
+      setProjectSaved(s.project_deadline_warning_percent || '50');
     }).catch(() => { });
   }, []);
 
@@ -51,6 +55,15 @@ export default function SettingsPage() {
     } catch (e) {
       setSpoolmanStatus('error');
       setSpoolmanMsg(e.message);
+    }
+  }
+
+  async function handleProjectSave() {
+    try {
+      await updateSetting('project_deadline_warning_percent', projectWarning);
+      setProjectSaved(projectWarning);
+    } catch (e) {
+      alert(e.message);
     }
   }
 
@@ -97,6 +110,31 @@ export default function SettingsPage() {
             {spoolmanMsg}
           </p>
         )}
+      </section>
+
+      <section className="page-section">
+        <h2 className="section-title">Project Settings</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px' }}>Deadline Warning Threshold (%)</label>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type="number"
+                className="form-input"
+                value={projectWarning}
+                onChange={e => setProjectWarning(e.target.value)}
+                style={{ width: '100px', padding: '8px 12px' }}
+              />
+              <span style={{ fontSize: '14px', opacity: 0.7 }}>% buffer on estimated print time</span>
+              <button className="btn btn-sm btn-primary" onClick={handleProjectSave} disabled={projectWarning === projectSaved}>
+                {projectWarning === projectSaved ? 'Saved' : 'Save'}
+              </button>
+            </div>
+            <p style={{ fontSize: '13px', opacity: 0.6, marginTop: '6px' }}>
+              Example: If set to 50%, you'll get a warning if 1.5x the remaining print time puts you past the deadline.
+            </p>
+          </div>
+        </div>
       </section>
 
       <section className="page-section">

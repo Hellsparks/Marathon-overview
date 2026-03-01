@@ -17,7 +17,16 @@ export default function FilesPanel({ selected }) {
         );
     }
 
-    const { file, stats } = selected;
+    const { file, stats } = selected || {};
+
+    if (!file) {
+        return (
+            <div className="rp-placeholder">
+                <span className="rp-placeholder-icon">📄</span>
+                <span>Select a file to see details</span>
+            </div>
+        );
+    }
 
     function fmt(bytes) {
         if (!bytes) return '—';

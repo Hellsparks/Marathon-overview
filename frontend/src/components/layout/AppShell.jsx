@@ -8,6 +8,7 @@ import SpoolPanel from '../rightpanel/SpoolPanel';
 import FilamentsPanel from '../rightpanel/FilamentsPanel';
 import InventoryPanel from '../rightpanel/InventoryPanel';
 import MaintenancePanel from '../rightpanel/MaintenancePanel';
+import ProjectStatusPanel from '../rightpanel/ProjectStatusPanel';
 import { RightPanelContext } from '../../contexts/RightPanelContext';
 import { PrinterStatusContext } from '../../contexts/PrinterStatusContext';
 import { useStatus } from '../../hooks/useStatus';
@@ -29,10 +30,11 @@ export default function AppShell() {
     const p = location.pathname;
     if (p.startsWith('/printer/')) return null; // full-screen iframe — no sidebar
     if (p === '/') return <FleetInsights />;
+    if (p === '/files/projects' && selected?.type === 'project') return <ProjectStatusPanel project={selected.data} />;
     if (p.startsWith('/files')) return <FilesPanel selected={selected} />;
-    if (p === '/spoolman') return <SpoolPanel selected={selected} />;
     if (p === '/spoolman/filaments') return <FilamentsPanel />;
     if (p === '/spoolman/inventory') return <InventoryPanel />;
+    if (p === '/spoolman') return <SpoolPanel selected={selected} />;
     if (p === '/maintenance') return <MaintenancePanel />;
     return null;
   }
