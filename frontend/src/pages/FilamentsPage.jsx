@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { getFilaments, deleteFilament, getFields } from '../api/spoolman';
 import AddFilamentDialog from '../components/spoolman/AddFilamentDialog';
 
+function toAbsUrl(url) {
+    if (!url) return url;
+    return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 export default function FilamentsPage() {
     const [filaments, setFilaments] = useState([]);
     const [extraFields, setExtraFields] = useState([]);
@@ -102,7 +107,7 @@ export default function FilamentsPage() {
                                         {extraFields.map(ef => (
                                             <td key={ef.key} className="sm-catalogue-muted">
                                                 {ef.key === 'url' && f.extra?.[ef.key]
-                                                    ? <a href={f.extra[ef.key]} target="_blank" rel="noopener noreferrer" className="sm-link">Link</a>
+                                                    ? <a href={toAbsUrl(f.extra[ef.key])} target="_blank" rel="noopener noreferrer" className="sm-link">Link</a>
                                                     : (f.extra?.[ef.key] ?? '—')}
                                             </td>
                                         ))}

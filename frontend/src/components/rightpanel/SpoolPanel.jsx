@@ -1,3 +1,8 @@
+function toAbsUrl(url) {
+    if (!url) return url;
+    return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 export default function SpoolPanel({ selected }) {
     if (!selected) {
         return (
@@ -11,7 +16,7 @@ export default function SpoolPanel({ selected }) {
     const spool = selected.data;
     const f = spool.filament || {};
     const color = `#${f.color_hex || '888888'}`;
-    const storeUrl = f.extra?.url;
+    const storeUrl = toAbsUrl(f.extra?.url);
     const pct = spool.initial_weight
         ? Math.min(100, Math.round((spool.remaining_weight / spool.initial_weight) * 100))
         : 100;
