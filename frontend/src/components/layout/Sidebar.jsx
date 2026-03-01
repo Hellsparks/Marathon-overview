@@ -6,7 +6,6 @@ import SidebarPrinterCard from '../dashboard/SidebarPrinterCard';
 const filesSubLinks = [
   { to: '/files', label: 'Files', end: true },
   { to: '/files/templates', label: 'Templates' },
-  { to: '/files/start', label: 'Start' },
   { to: '/files/projects', label: 'Projects' },
   { to: '/files/archive', label: 'Archive' },
 ];

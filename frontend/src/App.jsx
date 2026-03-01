@@ -11,6 +11,7 @@ import InventoryPage from './pages/InventoryPage';
 import MaintenancePage from './pages/MaintenancePage';
 import PrinterIframePage from './pages/PrinterIframePage';
 import TemplatesPage from './pages/TemplatesPage';
+import ProjectsPage from './pages/ProjectsPage';
 import { ThemeProvider } from './components/layout/ThemeProvider';
 
 export default function App() {
@@ -22,8 +23,8 @@ export default function App() {
             <Route index element={<DashboardPage />} />
             <Route path="files" element={<FilesPage />} />
             <Route path="files/templates" element={<TemplatesPage />} />
-            <Route path="files/start" element={<div className="page" style={{ padding: '24px' }}><h2>Start Template Stub</h2></div>} />
-            <Route path="files/projects" element={<div className="page" style={{ padding: '24px' }}><h2>Projects Stub</h2></div>} />
+            <Route path="files/projects" element={<ProjectsPage />} />
+            <Route path="files/projects" element={<ProjectsPage />} />
             <Route path="files/archive" element={<div className="page" style={{ padding: '24px' }}><h2>Archive Stub</h2></div>} />
             <Route path="queue/:printerId" element={<QueuePage />} />
             <Route path="spoolman" element={<SpoolmanPage />} />
