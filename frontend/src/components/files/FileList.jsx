@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { deleteFile } from '../../api/files';
 import ConfirmDialog from '../common/ConfirmDialog';
 import SendToPrinterModal from './SendToPrinterModal';
+import { useRightPanel } from '../../contexts/RightPanelContext';
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -18,6 +19,11 @@ export default function FileList({ files, onDeleted }) {
   const [sendingFile, setSendingFile] = useState(null);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('marathon_file_view') || 'list');
   const [fileStats, setFileStats] = useState({});
+  const { selected, setSelected } = useRightPanel() || {};
+
+  function selectFile(file) {
+    setSelected?.({ file, stats: fileStats[file.filename] || null });
+  }
 
   useEffect(() => {
     fetch('/api/stats/files')
@@ -78,7 +84,11 @@ export default function FileList({ files, onDeleted }) {
             </thead>
             <tbody>
               {files.map(file => (
-                <tr key={file.id}>
+                <tr
+                  key={file.id}
+                  onClick={() => selectFile(file)}
+                  className={`file-row-clickable${selected?.file?.id === file.id ? ' file-row-selected' : ''}`}
+                >
                   <td>
                     <div className="file-name-cell">
                       {file.has_thumbnail ? (
@@ -155,7 +165,11 @@ export default function FileList({ files, onDeleted }) {
       ) : (
         <div className={`file-grid ${viewMode === 'grid-small' ? 'small' : 'large'}`}>
           {files.map(file => (
-            <div className="file-card" key={file.id}>
+            <div
+              className={`file-card${selected?.file?.id === file.id ? ' file-card-selected' : ''}`}
+              key={file.id}
+              onClick={() => selectFile(file)}
+            >
               <div className="file-card-thumb-wrap">
                 {file.has_thumbnail ? (
                   <img src={`/api/files/thumb/${file.filename}`} alt="preview" className="file-card-thumb" loading="lazy" />
