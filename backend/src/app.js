@@ -13,6 +13,7 @@ const settingsRouter = require('./routes/settings');
 const spoolmanRouter = require('./routes/spoolman');
 const maintenanceRouter = require('./routes/maintenance');
 const foldersRouter = require('./routes/folders');
+const templatesRouter = require('./routes/templates');
 const errorHandler = require('./middleware/errorHandler');
 
 const path = require('path');
@@ -26,6 +27,7 @@ app.use(express.json());
 app.use('/api/printers', printersRouter);
 app.use('/api/files', filesRouter);
 app.use('/api/folders', foldersRouter);
+app.use('/api/templates', templatesRouter);
 app.use('/api/status', statusRouter);
 app.use('/api/printers', queueRouter);   // /api/printers/:id/queue
 app.use('/api/printers', controlRouter); // /api/printers/:id/print/*
