@@ -198,7 +198,7 @@ code {
 }
 
 .sidebar {
-  width: 200px;
+  width: 220px;
   background: var(--surface);
   border-right: 1px solid var(--border);
   padding: 16px 0;
@@ -2574,8 +2574,21 @@ code {
 }
 
 .sidebar-subnav .printer-card {
-  padding: 10px 12px;
+  padding: 8px 12px;
   gap: 0;
+}
+
+/* Keep name on one line — truncate with ellipsis if too long */
+.sidebar-subnav .printer-card-header {
+  min-width: 0;
+}
+
+.sidebar-subnav .printer-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  min-width: 0;
 }
 
 .sidebar-subnav .printer-card.active {
