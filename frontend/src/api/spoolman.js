@@ -91,9 +91,96 @@ export async function createSpool(data) {
     return r.json();
 }
 
+export async function getSpoolmanSettings() {
+    const r = await fetch(`${API}/settings`);
+    if (!r.ok) throw new Error(`Failed to fetch settings: ${r.status}`);
+    return r.json();
+}
+
+export async function deleteSpool(id) {
+    const r = await fetch(`${API}/spools/${id}`, { method: 'DELETE' });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
 export async function getFields(entity) {
     const r = await fetch(`${API}/fields/${entity}`);
     if (!r.ok) throw new Error(`Failed to fetch fields: ${r.status}`);
+    return r.json();
+}
+
+export async function updateFilament(id, data) {
+    const r = await fetch(`${API}/filaments/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+export async function deleteFilament(id) {
+    const r = await fetch(`${API}/filaments/${id}`, { method: 'DELETE' });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+export async function updateVendor(id, data) {
+    const r = await fetch(`${API}/vendors/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+export async function deleteVendor(id) {
+    const r = await fetch(`${API}/vendors/${id}`, { method: 'DELETE' });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+export async function getInventory() {
+    const r = await fetch(`${API}/inventory`);
+    if (!r.ok) throw new Error(`Failed to fetch inventory: ${r.status}`);
+    return r.json();
+}
+
+export async function setInventoryTarget(filamentId, target_qty, min_qty) {
+    const r = await fetch(`${API}/inventory/${filamentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_qty, min_qty }),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+export async function removeInventoryTarget(filamentId) {
+    const r = await fetch(`${API}/inventory/${filamentId}`, { method: 'DELETE' });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
     return r.json();
 }
 

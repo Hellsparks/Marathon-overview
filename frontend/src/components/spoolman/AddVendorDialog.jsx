@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { createVendor, getFields } from '../../api/spoolman';
+import { createVendor, updateVendor, getFields } from '../../api/spoolman';
 
-export default function AddVendorDialog({ onClose, onCreated }) {
-    const [name, setName] = useState('');
-    const [comment, setComment] = useState('');
+// vendor prop = edit mode; undefined = create mode
+export default function AddVendorDialog({ onClose, onCreated, vendor }) {
+    const isEdit = !!vendor;
+    const [name, setName] = useState(vendor?.name ?? '');
+    const [comment, setComment] = useState(vendor?.comment ?? '');
     const [extraFields, setExtraFields] = useState([]);
-    const [extra, setExtra] = useState({});
+    const [extra, setExtra] = useState(vendor?.extra ?? {});
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
@@ -22,8 +24,10 @@ export default function AddVendorDialog({ onClose, onCreated }) {
             const body = { name: name.trim() };
             if (comment.trim()) body.comment = comment.trim();
             if (Object.keys(extra).length) body.extra = extra;
-            const created = await createVendor(body);
-            onCreated(created);
+            const result = isEdit
+                ? await updateVendor(vendor.id, body)
+                : await createVendor(body);
+            onCreated(result);
         } catch (err) {
             alert(err.message);
         } finally {
@@ -39,7 +43,7 @@ export default function AddVendorDialog({ onClose, onCreated }) {
         <div className="spool-dialog-overlay" onClick={onClose}>
             <div className="spool-dialog" onClick={e => e.stopPropagation()}>
                 <div className="spool-dialog-header">
-                    <h3 className="spool-dialog-title">Add Manufacturer</h3>
+                    <h3 className="spool-dialog-title">{isEdit ? 'Edit Manufacturer' : 'Add Manufacturer'}</h3>
                     <button className="spool-dialog-close" onClick={onClose}>✕</button>
                 </div>
 
@@ -86,7 +90,7 @@ export default function AddVendorDialog({ onClose, onCreated }) {
                     <div className="spool-dialog-actions">
                         <button type="button" className="btn v-btn" onClick={onClose} disabled={busy}>Cancel</button>
                         <button type="submit" className="btn btn-primary v-btn" disabled={busy || !name.trim()}>
-                            {busy ? 'Saving…' : 'Create'}
+                            {busy ? 'Saving…' : isEdit ? 'Save' : 'Create'}
                         </button>
                     </div>
                 </form>
