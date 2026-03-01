@@ -29,7 +29,7 @@ export default function AppShell() {
     const p = location.pathname;
     if (p.startsWith('/printer/')) return null; // full-screen iframe — no sidebar
     if (p === '/') return <FleetInsights />;
-    if (p === '/files') return <FilesPanel selected={selected} />;
+    if (p.startsWith('/files')) return <FilesPanel selected={selected} />;
     if (p === '/spoolman') return <SpoolPanel selected={selected} />;
     if (p === '/spoolman/filaments') return <FilamentsPanel />;
     if (p === '/spoolman/inventory') return <InventoryPanel />;
@@ -41,27 +41,27 @@ export default function AppShell() {
 
   return (
     <PrinterStatusContext.Provider value={status}>
-    <RightPanelContext.Provider value={{ selected, setSelected }}>
-      <div className="app-shell">
-        <NavBar onlineCount={onlineCount} totalCount={totalCount} />
-        <div className="app-body">
-          <Sidebar />
-          <main className="app-main v-main">
-            {error && (
-              <div className="error-banner">
-                Backend unreachable: {error}
-              </div>
+      <RightPanelContext.Provider value={{ selected, setSelected }}>
+        <div className="app-shell">
+          <NavBar onlineCount={onlineCount} totalCount={totalCount} />
+          <div className="app-body">
+            <Sidebar />
+            <main className="app-main v-main">
+              {error && (
+                <div className="error-banner">
+                  Backend unreachable: {error}
+                </div>
+              )}
+              <Outlet context={{ status }} />
+            </main>
+            {panel && (
+              <aside className="sidebar-right">
+                {panel}
+              </aside>
             )}
-            <Outlet context={{ status }} />
-          </main>
-          {panel && (
-            <aside className="sidebar-right">
-              {panel}
-            </aside>
-          )}
+          </div>
         </div>
-      </div>
-    </RightPanelContext.Provider>
+      </RightPanelContext.Provider>
     </PrinterStatusContext.Provider>
   );
 }
