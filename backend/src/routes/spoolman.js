@@ -24,6 +24,21 @@ router.get('/spools', async (_req, res) => {
     }
 });
 
+// GET /api/spoolman/spool/:id/qr — proxy Spoolman QR code image (SVG/PNG)
+router.get('/spool/:id/qr', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/spool/${req.params.id}/qr_code`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) throw new Error(`Spoolman ${r.status}`);
+        const contentType = r.headers.get('content-type') || 'image/svg+xml';
+        res.set('Content-Type', contentType);
+        res.send(Buffer.from(await r.arrayBuffer()));
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
 // GET /api/spoolman/spool/:id — single spool details
 router.get('/spool/:id', async (req, res) => {
     const url = getSpoolmanUrl();

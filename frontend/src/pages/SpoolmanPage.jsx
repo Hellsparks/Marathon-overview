@@ -3,6 +3,7 @@ import { usePrinters } from '../hooks/usePrinters';
 import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool } from '../api/spoolman';
 import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
 import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
+import { useRightPanel } from '../contexts/RightPanelContext';
 
 const COLOR_NAMES = {
     red: [255, 0, 0],
@@ -52,6 +53,7 @@ function matchesColor(hex, queryTokens) {
 
 export default function SpoolmanPage() {
     const { printers } = usePrinters();
+    const { selected, setSelected } = useRightPanel() || {};
     const [spools, setSpools] = useState([]);
     const [search, setSearch] = useState('');
     const [statuses, setStatuses] = useState({});
@@ -291,9 +293,10 @@ export default function SpoolmanPage() {
                                 return (
                                     <div
                                         key={spool.id}
-                                        className="spoolman-spool-card"
+                                        className={`spoolman-spool-card${selected?.data?.id === spool.id ? ' spool-card-selected' : ''}`}
                                         draggable
                                         onDragStart={e => onDragStart(e, spool)}
+                                        onClick={() => setSelected?.({ data: spool })}
                                     >
                                         <div className="spool-card-header">
                                             <div className="spool-color-circle" style={{ backgroundColor: color }} />
@@ -324,9 +327,7 @@ export default function SpoolmanPage() {
                                             className="spool-adjust-btn"
                                             onClick={e => { e.stopPropagation(); setAdjustSpool(spool); setAdjustType('length'); setAdjustAmount(''); }}
                                             title="Adjust filament amount"
-                                        >
-                                            ⚙
-                                        </button>
+                                        >⚙</button>
                                         <button
                                             className="spool-delete-btn"
                                             onClick={e => { e.stopPropagation(); handleDeleteSpool(spool); }}
