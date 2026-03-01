@@ -21,6 +21,24 @@ router.get('/', (req, res) => {
   res.json(files);
 });
 
+// PATCH /api/files/:id/folder
+router.patch('/:id/folder', (req, res) => {
+  const { id } = req.params;
+  const { folder_id } = req.body; // null for root
+
+  const db = getDb();
+  try {
+    const info = db.prepare('UPDATE gcode_files SET folder_id = ? WHERE id = ?').run(folder_id || null, id);
+    if (info.changes === 0) return res.status(404).json({ error: 'File not found' });
+
+    const updatedFile = db.prepare('SELECT * FROM gcode_files WHERE id = ?').get(id);
+    res.json(updatedFile);
+  } catch (err) {
+    console.error('[Files API - Move Folder Error]', err.message);
+    res.status(500).json({ error: 'Failed to move file' });
+  }
+});
+
 // POST /api/files/upload
 router.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });

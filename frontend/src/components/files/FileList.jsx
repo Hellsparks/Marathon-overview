@@ -14,10 +14,9 @@ function formatDate(iso) {
   return new Date(iso).toLocaleString();
 }
 
-export default function FileList({ files, onDeleted }) {
+export default function FileList({ files, onDeleted, viewMode = 'list' }) {
   const [deletingId, setDeletingId] = useState(null);
   const [sendingFile, setSendingFile] = useState(null);
-  const [viewMode, setViewMode] = useState(() => localStorage.getItem('marathon_file_view') || 'list');
   const [fileStats, setFileStats] = useState({});
   const { selected, setSelected } = useRightPanel() || {};
 
@@ -31,11 +30,6 @@ export default function FileList({ files, onDeleted }) {
       .then(data => setFileStats(data))
       .catch(err => console.error('Failed to load file stats:', err));
   }, []);
-
-  const updateViewMode = (mode) => {
-    setViewMode(mode);
-    localStorage.setItem('marathon_file_view', mode);
-  };
 
   async function handleDelete(file) {
     try {
@@ -54,19 +48,6 @@ export default function FileList({ files, onDeleted }) {
 
   return (
     <>
-      <div className="file-view-toolbar">
-        <div className="file-view-toggle">
-          <button className={viewMode === 'list' ? 'active' : ''} onClick={() => updateViewMode('list')} title="List View">
-            ☰
-          </button>
-          <button className={viewMode === 'grid-small' ? 'active' : ''} onClick={() => updateViewMode('grid-small')} title="Small Grid">
-            ⚏
-          </button>
-          <button className={viewMode === 'grid-large' ? 'active' : ''} onClick={() => updateViewMode('grid-large')} title="Large Grid">
-            ☷
-          </button>
-        </div>
-      </div>
 
       {viewMode === 'list' ? (
         <div className="file-table-wrap">
@@ -88,6 +69,12 @@ export default function FileList({ files, onDeleted }) {
                   key={file.id}
                   onClick={() => selectFile(file)}
                   className={`file-row-clickable${selected?.file?.id === file.id ? ' file-row-selected' : ''}`}
+                  draggable="true"
+                  onDragStart={(e) => {
+                    const data = { type: 'file', id: file.id };
+                    e.dataTransfer.setData('application/json', JSON.stringify(data));
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
                 >
                   <td>
                     <div className="file-name-cell">
@@ -169,6 +156,12 @@ export default function FileList({ files, onDeleted }) {
               className={`file-card${selected?.file?.id === file.id ? ' file-card-selected' : ''}`}
               key={file.id}
               onClick={() => selectFile(file)}
+              draggable="true"
+              onDragStart={(e) => {
+                const data = { type: 'file', id: file.id };
+                e.dataTransfer.setData('application/json', JSON.stringify(data));
+                e.dataTransfer.effectAllowed = 'move';
+              }}
             >
               <div className="file-card-thumb-wrap">
                 {file.has_thumbnail ? (

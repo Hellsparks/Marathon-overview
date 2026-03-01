@@ -3,6 +3,14 @@ import { usePrinters } from '../../hooks/usePrinters';
 import { usePrinterStatus } from '../../contexts/PrinterStatusContext';
 import SidebarPrinterCard from '../dashboard/SidebarPrinterCard';
 
+const filesSubLinks = [
+  { to: '/files', label: 'Files', end: true },
+  { to: '/files/templates', label: 'Templates' },
+  { to: '/files/start', label: 'Start' },
+  { to: '/files/projects', label: 'Projects' },
+  { to: '/files/archive', label: 'Archive' },
+];
+
 const spoolmanSubLinks = [
   { to: '/spoolman', label: 'Spools', end: true },
   { to: '/spoolman/filaments', label: 'Filaments' },
@@ -20,6 +28,7 @@ export default function Sidebar() {
   const { printers } = usePrinters();
   const status = usePrinterStatus();
 
+  const onFiles = location.pathname.startsWith('/files');
   const onSpoolman = location.pathname.startsWith('/spoolman');
   const onDashboard = location.pathname === '/' || location.pathname.startsWith('/printer/');
 
@@ -62,14 +71,32 @@ export default function Sidebar() {
             )}
           </li>
 
+          {/* Files parent link */}
           <li style={{ width: '100%' }}>
             <NavLink
               to="/files"
-              className={({ isActive }) => `sidebar-link nav-link v-list-item v-list-item--link${isActive ? ' active v-list-item--active router-link-active' : ''}`}
+              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onFiles ? ' active v-list-item--active router-link-active' : ''}`}
             >
               <span className="sidebar-icon">📁</span>
               Files
             </NavLink>
+
+            {/* Sub-links — shown when on any /files route */}
+            {onFiles && (
+              <ul className="sidebar-subnav" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {filesSubLinks.map(({ to, label, end }) => (
+                  <li key={to}>
+                    <NavLink
+                      to={to}
+                      end={end}
+                      className={({ isActive }) => `sidebar-sublink${isActive ? ' active' : ''}`}
+                    >
+                      {label}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
 
           {/* Spoolman parent link */}
