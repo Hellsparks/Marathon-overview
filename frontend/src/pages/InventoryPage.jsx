@@ -10,8 +10,10 @@ function countStock(spools, filamentId) {
 }
 
 function toAbsUrl(url) {
-    if (!url) return url;
-    return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    if (!url) return null;
+    const clean = url.replace(/^["'\s]+|["'\s]+$/g, '');
+    if (!clean) return null;
+    return /^https?:\/\//i.test(clean) ? clean : `https://${clean}`;
 }
 
 function sizeLabel(weight) {
