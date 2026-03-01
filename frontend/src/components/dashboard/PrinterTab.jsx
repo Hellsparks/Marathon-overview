@@ -48,7 +48,7 @@ function scopeCSS(css, scope) {
   return out.join('');
 }
 
-export default function PrinterTab({ printer, status, active, onClick, sidebar }) {
+export default function PrinterTab({ printer, status, active, sidebar }) {
   const [scrapedCss, setScrapedCss] = useState(
     () => scrapedCssCache.get(`${printer.host}:${printer.port}`) || null
   );
@@ -113,19 +113,19 @@ ${cardSel} {
   const vSurface = hasV2 ? 'var(--v-sheet-bg-color)' : hasV3 ? 'rgb(var(--v-theme-surface))' : 'var(--surface)';
   const vText    = hasV2 ? 'var(--v-theme-on-surface)' : hasV3 ? 'rgb(var(--v-theme-on-surface))' : 'var(--text)';
 
-  // Mirror of PrinterCard's cardPolyfill but targeting .printer-tab / .sidebar-printer-link
+  // Mirror of PrinterCard's cardPolyfill, targeting .printer-card (same class as the dashboard card)
   const cardVars = rawCss ? `
 ${cardSel} {
-    --card-primary: ${vPrimary};
-    --card-warning: ${vWarning};
-    --card-danger:  ${vDanger};
-    --card-success: ${vSuccess};
-    --card-surface: ${vSurface};
-    --card-text:    ${vText};
+    --card-primary:  ${vPrimary};
+    --card-warning:  ${vWarning};
+    --card-danger:   ${vDanger};
+    --card-success:  ${vSuccess};
+    --card-surface:  ${vSurface};
+    --card-text:     ${vText};
 }` : null;
 
   const tabPolyfill = rawCss ? `
-${cardSel} .printer-tab {
+${cardSel} .printer-card {
     --primary:    var(--card-primary);
     --primary-d:  color-mix(in srgb, var(--card-primary) 80%, black);
     --warning:    var(--card-warning);
@@ -136,9 +136,12 @@ ${cardSel} .printer-tab {
     --border:     color-mix(in srgb, var(--card-primary) 28%, var(--card-surface));
     --text:       var(--card-text);
     --text-muted: color-mix(in srgb, var(--card-text) 60%, transparent);
+    --bg:         var(--card-surface);
     background:   var(--card-surface) !important;
     border-color: var(--border) !important;
     color:        var(--card-text) !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
 }` : null;
 
   // For sidebar mode: just wire --primary so the border/hover colour matches the printer theme
@@ -152,36 +155,34 @@ ${cardSel} .sidebar-printer-link {
 
   if (sidebar) {
     return (
-      <div data-printer-id={printer.id} style={{ display: 'contents' }}>
+      <div data-printer-id={printer.id} style={{ display: 'block', width: '100%' }}>
         {isIsolated && (
           <style>{cardDefaults}{scopedCss ?? ''}{cardVars}{sidebarPolyfill}</style>
         )}
-        <button
+        <div
           className={`sidebar-printer-link state-${state}${active ? ' active' : ''}`}
-          onClick={onClick}
           title={printer.name}
         >
           {printer.name}
-        </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div data-printer-id={printer.id} style={{ display: 'contents' }}>
+    <div data-printer-id={printer.id} style={{ display: 'block', width: '100%' }}>
       {isIsolated && (
         <style>{cardDefaults}{scopedCss ?? ''}{cardVars}{tabPolyfill}</style>
       )}
-      <button
-        className={`printer-tab state-${state} v-card theme--dark${isIsolated ? ' isolated-theme' : ''}${active ? ' active' : ''}`}
-        onClick={onClick}
+      <div
+        className={`printer-card state-${state}${isIsolated ? ' isolated-theme' : ''}${active ? ' active' : ''}`}
         title={printer.name}
       >
-        <div className="printer-card-header v-card__title">
-          <h3 className="printer-name v-toolbar__title">{printer.name}</h3>
+        <div className="printer-card-header">
+          <h3 className="printer-name">{printer.name}</h3>
           <StatusBadge state={state} />
         </div>
-      </button>
+      </div>
     </div>
   );
 }
