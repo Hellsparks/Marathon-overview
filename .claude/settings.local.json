@@ -9,7 +9,14 @@
       "Bash(git add backend/src/db/migrations/012_maintenance.sql backend/src/routes/maintenance.js backend/src/app.js backend/src/services/poller.js frontend/src/App.jsx frontend/src/components/dashboard/PrinterCard.jsx frontend/src/components/layout/Sidebar.jsx frontend/src/components/maintenance/ frontend/src/api/maintenance.js frontend/src/pages/MaintenancePage.jsx frontend/src/services/ frontend/src/index.css README.md AGENTS.md)",
       "Bash(git push)",
       "Bash(git add backend/src/routes/spoolman.js backend/src/db/migrations/013_spoolman_inventory.sql frontend/src/App.jsx frontend/src/api/spoolman.js frontend/src/components/layout/Sidebar.jsx frontend/src/components/spoolman/AddFilamentDialog.jsx frontend/src/components/spoolman/AddVendorDialog.jsx frontend/src/index.css frontend/src/pages/SpoolmanPage.jsx frontend/src/pages/FilamentsPage.jsx frontend/src/pages/InventoryPage.jsx frontend/src/pages/ManufacturersPage.jsx)",
-      "Bash(git add -A)"
+      "Bash(git add -A)",
+      "Bash(python3 -c \":*)",
+      "Bash(node -e \":*)",
+      "Bash(git -C \"d:/Github/Marathon-overview\" diff HEAD~3 HEAD -- frontend/src/components/dashboard/PrinterCard.jsx)",
+      "Bash(git -C \"d:/Github/Marathon-overview\" log --oneline -6)",
+      "Bash(git -C \"d:/Github/Marathon-overview\" show de80765 -- frontend/src/components/dashboard/PrinterCard.jsx)",
+      "Bash(git -C \"d:/Github/Marathon-overview\" show de80765 -- frontend/src/App.jsx)",
+      "Bash(git -C \"d:/Github/Marathon-overview\" diff HEAD -- frontend/src/components/dashboard/PrinterCard.jsx)"
     ]
   }
 }

@@ -125,7 +125,7 @@ ${cardSel} {
 }` : null;
 
   const tabPolyfill = rawCss ? `
-${cardSel} .printer-card {
+${cardSel} .printer-tab {
     --primary:    var(--card-primary);
     --primary-d:  color-mix(in srgb, var(--card-primary) 80%, black);
     --warning:    var(--card-warning);
@@ -140,8 +140,6 @@ ${cardSel} .printer-card {
     background:   var(--card-surface) !important;
     border-color: var(--border) !important;
     color:        var(--card-text) !important;
-    pointer-events: auto !important;
-    cursor: pointer !important;
 }` : null;
 
   // For sidebar mode: just wire --primary so the border/hover colour matches the printer theme
@@ -175,7 +173,7 @@ ${cardSel} .sidebar-printer-link {
         <style>{cardDefaults}{scopedCss ?? ''}{cardVars}{tabPolyfill}</style>
       )}
       <div
-        className={`printer-card state-${state}${isIsolated ? ' isolated-theme' : ''}${active ? ' active' : ''}`}
+        className={`printer-tab state-${state}${isIsolated ? ' isolated-theme' : ''}${active ? ' active' : ''}`}
         title={printer.name}
       >
         <div className="printer-card-header">
