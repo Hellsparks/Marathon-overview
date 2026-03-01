@@ -132,18 +132,19 @@ Marathon-overview/
 ### High Priority
 - [ ] **WebSocket status updates** — Replace polling with Moonraker WebSocket subscriptions for real-time updates
 - [ ] **Authentication** — Add user login / API key support for multi-user or public-facing deployments
+- [ ] **Print status feedback** — Implement logic to check if assigned print finished or failed for tracking purposes
+- [ ] **Project templates** — Create templates from a series of gcode files with tracking and prefered color per file. (to track and print multiple versions of the same project several time)
 
 ### Features
 - [ ] **Multi-file upload** — Drag-and-drop multiple G-code files at once
-- [ ] **Printer groups** — Organize printers by location, type, or custom tags
 - [ ] **Notifications** — Email/Discord/push alerts for print completion, errors, or temperature warnings
 - [ ] **OctoPrint support** — Extend beyond Klipper/Moonraker to support OctoPrint instances (partially stubbed in `routes/octoprint.js`)
 - [ ] **Mobile-responsive layout** — Optimize the grid and controls for phone/tablet screens
 - [ ] **Timelapse viewer** — Integrate with Moonraker's timelapse plugin to view/download timelapses
+- [ ] **Shopify addin?** — Able to take shopify orders and link an order to project templates with color wishes and put in project queue
 
 ### Theming
 - [ ] **Theme editor** — Visual CSS variable editor in the Settings page
-- [ ] **Per-printer theme preview** — Live preview of Mainsail CSS before applying
 - [ ] **Cache invalidation** — Add a "refresh theme" button to re-scrape Mainsail CSS without full page reload
 
 ### Infrastructure
@@ -151,6 +152,7 @@ Marathon-overview/
 - [ ] **Database backups** — Auto-export DB snapshots to a configurable path
 - [ ] **HTTPS support** — Add TLS termination to the nginx config or a Traefik/Caddy alternative
 - [ ] **CI/CD pipeline** — GitHub Actions for automated builds and Docker image publishing
+- [ ] **OpenPrintTag support** — Ability to take spoolman spools and create RFID tags or reassign tags using a esp32 scanner device.
 
 ---
 
