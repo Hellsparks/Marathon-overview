@@ -437,6 +437,34 @@ code {
   gap: 16px;
 }
 
+/* ─── Sidebar Printer Card ──────────────────────────────────────── */
+.printer-card--sidebar {
+  padding: 8px 12px;
+  gap: 0;
+  cursor: pointer;
+  margin-bottom: 0px;
+  min-height: 44px;
+  border-left: 3px solid transparent;
+  transition: box-shadow .2s, border-color .15s, background .15s;
+  background-color: transparent !important;
+}
+
+.printer-card--sidebar:hover {
+  border-color: var(--primary);
+  background-color: var(--surface2) !important;
+}
+
+.printer-card--sidebar.active {
+  border-color: var(--primary);
+  border-left-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary), var(--card-glow, var(--shadow)) !important;
+  background-color: var(--surface2) !important;
+}
+
+.printer-card--sidebar .printer-name {
+  font-size: 13px;
+}
+
 .printer-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -448,6 +476,11 @@ code {
   gap: 12px;
   box-shadow: var(--card-glow, var(--shadow));
   transition: box-shadow .2s;
+}
+
+/* Ensure isolated themes with cut corners don't show black squares behind them */
+.printer-card.isolated-theme {
+  background-color: transparent !important;
 }
 
 /* Isolate default cards from heavily customized global Mainsail fonts */
@@ -1875,6 +1908,7 @@ code {
   font-weight: 600;
   color: var(--text);
 }
+
 /* ─── Maintenance Page ──────────────────────────────────────────── */
 .maintenance-page {
   padding: 24px;
@@ -2056,7 +2090,7 @@ code {
 }
 
 .maint-row:hover {
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .maint-td {
@@ -2110,7 +2144,9 @@ code {
   font-size: 12px;
 }
 
-.maint-save-btn:hover { background: var(--primary-d); }
+.maint-save-btn:hover {
+  background: var(--primary-d);
+}
 
 .maint-delete-btn {
   background: none;
@@ -2245,7 +2281,9 @@ code {
   line-height: 1;
 }
 
-.spool-dialog-close:hover { color: var(--text); }
+.spool-dialog-close:hover {
+  color: var(--text);
+}
 
 .spool-dialog-desc {
   font-size: 13px;
@@ -2509,7 +2547,7 @@ code {
   height: 14px;
   border-radius: 50%;
   flex-shrink: 0;
-  border: 1px solid rgba(255,255,255,.15);
+  border: 1px solid rgba(255, 255, 255, .15);
 }
 
 .sm-filament-info {
@@ -3013,7 +3051,7 @@ code {
   height: 28px;
   border-radius: 50%;
   flex-shrink: 0;
-  border: 2px solid rgba(255,255,255,.15);
+  border: 2px solid rgba(255, 255, 255, .15);
 }
 
 .rp-spool-name {

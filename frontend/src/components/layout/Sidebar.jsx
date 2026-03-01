@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { usePrinters } from '../../hooks/usePrinters';
 import { usePrinterStatus } from '../../contexts/PrinterStatusContext';
-import PrinterTab from '../dashboard/PrinterTab';
+import SidebarPrinterCard from '../dashboard/SidebarPrinterCard';
 
 const spoolmanSubLinks = [
   { to: '/spoolman', label: 'Spools', end: true },
@@ -33,7 +33,7 @@ export default function Sidebar() {
             <NavLink
               to="/"
               end
-              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onDashboard ? ' active v-list-item--active router-link-active' : ''}`}
+              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onDashboard && location.pathname === '/' ? ' active v-list-item--active router-link-active' : ''}`}
             >
               <span className="sidebar-icon">▦</span>
               Dashboard
@@ -41,15 +41,15 @@ export default function Sidebar() {
 
             {/* Printer sub-tabs — shown when on Dashboard or any /printer/ route */}
             {onDashboard && printers.length > 0 && (
-              <ul className="sidebar-subnav" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <ul className="sidebar-subnav" style={{ listStyle: 'none', padding: '8px', margin: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {printers.map(p => (
-                  <li key={p.id} style={{ padding: '2px 8px' }}>
+                  <li key={p.id} style={{ width: '100%' }}>
                     <NavLink
                       to={`/printer/${p.id}`}
                       style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
                     >
                       {({ isActive }) => (
-                        <PrinterTab
+                        <SidebarPrinterCard
                           printer={p}
                           status={status[p.id]}
                           active={isActive}
