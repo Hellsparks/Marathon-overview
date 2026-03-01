@@ -7,6 +7,7 @@
 ## Features
 
 - **Multi-printer dashboard** — View all your printers at a glance with live status, temperatures, and progress
+- **Mainsail iframe view** — Click any printer in the sidebar to open its full Mainsail UI embedded in a full-screen iframe, maximising workspace
 - **Per-printer theming** — Each card can adopt the CSS from its host Mainsail instance, so your dashboard mirrors each printer's UI
 - **Global themes** — Built-in themes (Dark, Light, Cyberpunk, Ocean, Sunset) plus community Mainsail theme support via GitHub repos
 - **Print control** — Start, pause, resume, cancel prints directly from the dashboard
@@ -101,11 +102,13 @@ Data is persisted in Docker volumes:
 Marathon-overview/
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/          Dashboard, Files, Queue, Spoolman, Maintenance, Settings
-│   │   ├── components/     UI components (PrinterCard, MaintenancePrinterCard, layout, etc.)
+│   │   ├── pages/          Dashboard, PrinterIframePage, Files, Queue, Spoolman, Maintenance, Settings
+│   │   ├── components/     UI components (PrinterCard, PrinterTab, MaintenancePrinterCard, layout, etc.)
+│   │   ├── contexts/       PrinterStatusContext, RightPanelContext
 │   │   ├── api/            API client functions
 │   │   ├── hooks/          Custom React hooks
 │   │   ├── services/       Shared singletons (scrapedCssCache)
+│   │   ├── utils/          scopeCSS.js — shared CSS scoping utility
 │   │   ├── index.css       Base styles + CSS variable system
 │   │   ├── themes.css      Built-in theme definitions (variables only)
 │   │   └── App.jsx         Router + layout

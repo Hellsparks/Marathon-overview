@@ -23,28 +23,35 @@ monitor and control multiple Klipper/Moonraker printers from a single dashboard.
 
 ```
 frontend/src/
-├── App.jsx                 Router: /, /files, /queue/:id, /spoolman, /maintenance, /settings
+├── App.jsx                 Router: /, /printer/:id, /files, /queue/:id, /spoolman, /maintenance, /settings
 ├── main.jsx                React entry point
 ├── index.css               Base styles, CSS variable system, ALL component styles
 ├── themes.css              Built-in theme definitions (VARIABLES ONLY — see Theming)
 ├── pages/
-│   ├── DashboardPage.jsx   Grid of PrinterCards + status polling
-│   ├── FilesPage.jsx       G-code file browser + upload
-│   ├── QueuePage.jsx       Per-printer print queue
-│   ├── SpoolmanPage.jsx    Spool management + drag-to-assign
-│   ├── MaintenancePage.jsx Maintenance tasks/intervals config + printer cards
-│   └── SettingsPage.jsx    Printer CRUD + theme settings
+│   ├── DashboardPage.jsx       Grid of PrinterCards + status polling
+│   ├── PrinterIframePage.jsx   Full-screen Mainsail iframe for a single printer (/printer/:id)
+│   ├── FilesPage.jsx           G-code file browser + upload
+│   ├── QueuePage.jsx           Per-printer print queue
+│   ├── SpoolmanPage.jsx        Spool management + drag-to-assign
+│   ├── MaintenancePage.jsx     Maintenance tasks/intervals config + printer cards
+│   └── SettingsPage.jsx        Printer CRUD + theme settings
 ├── components/
 │   ├── dashboard/
-│   │   └── PrinterCard.jsx ★ Most complex component — per-printer theming, CSS scoping
+│   │   ├── PrinterCard.jsx ★ Most complex component — per-printer theming, CSS scoping
+│   │   └── PrinterTab.jsx  Clone of PrinterCard stripped to name+badge; sidebar subtab
 │   ├── maintenance/
 │   │   └── MaintenancePrinterCard.jsx  Copy of PrinterCard shell with maintenance bars
 │   └── layout/
 │       ├── ThemeProvider.jsx  Global theme switcher + community theme loader
 │       ├── Navbar.jsx
-│       └── Sidebar.jsx
+│       └── Sidebar.jsx        Dynamic: shows PrinterTab subtabs under Dashboard
+├── contexts/
+│   ├── PrinterStatusContext.jsx  Shares AppShell's polled status with Sidebar (no double-poll)
+│   └── RightPanelContext.jsx     Selected-item state for right side panels
 ├── api/                    Fetch wrappers for each backend route group
 ├── hooks/                  usePolling, usePrinters, useStatus, etc.
+├── utils/
+│   └── scopeCSS.js         CSS scoping utility — shared by PrinterTab (PrinterCard keeps its own copy)
 └── services/
     └── scrapedCssCache.js  Shared module-level Map — PrinterCard + MaintenancePrinterCard
                             both import this so scraped CSS is cached across page navigations
@@ -195,6 +202,35 @@ Components reference these with fallback defaults:
 ```css
 .printer-card { box-shadow: var(--card-glow, var(--shadow)); }
 ```
+
+---
+
+## Printer Iframe View
+
+Route `/printer/:id` renders `PrinterIframePage` — a full-screen `<iframe>` pointed at
+`http://<printer.host>` (Mainsail, assumed port 80). The AppShell suppresses the right
+sidebar for these routes and CSS `:has(.printer-iframe-page)` strips padding from
+`.app-main` so the iframe fills wall-to-wall.
+
+### Sidebar printer subtabs
+
+`Sidebar.jsx` renders a `PrinterTab` (card-style button) under the Dashboard nav item
+for each configured printer — expanding whenever the user is on `/` or `/printer/*`,
+mirroring the Spoolman sub-item pattern.
+
+`PrinterTab` is a clone of `PrinterCard` stripped to just the header (name + StatusBadge).
+It carries the full per-printer CSS theming system (cardDefaults → scopedCss → tabPolyfill)
+so each tab adopts its printer's accent colours.
+
+`PrinterStatusContext` is provided by `AppShell` (which already polls `useStatus`) and
+consumed by `Sidebar` — this avoids a second 3-second polling loop.
+
+### scopeCSS — two copies, intentionally
+
+`PrinterCard.jsx` keeps its own inline `scopeCSS()` (unchanged).
+`PrinterTab.jsx` imports from `utils/scopeCSS.js`.
+Do NOT merge them into a single import inside PrinterCard — that file should remain
+self-contained.
 
 ---
 

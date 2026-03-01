@@ -1,9 +1,7 @@
-import { NavLink, useLocation } from 'react-router-dom';
-
-const topLinks = [
-  { to: '/', label: 'Dashboard', icon: '▦' },
-  { to: '/files', label: 'Files', icon: '📁' },
-];
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { usePrinters } from '../../hooks/usePrinters';
+import { usePrinterStatus } from '../../contexts/PrinterStatusContext';
+import PrinterTab from '../dashboard/PrinterTab';
 
 const spoolmanSubLinks = [
   { to: '/spoolman', label: 'Spools', end: true },
@@ -19,25 +17,58 @@ const bottomLinks = [
 
 export default function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { printers } = usePrinters();
+  const status = usePrinterStatus();
+
   const onSpoolman = location.pathname.startsWith('/spoolman');
+  const onDashboard = location.pathname === '/' || location.pathname.startsWith('/printer/');
+  const activePrinterId = location.pathname.startsWith('/printer/')
+    ? location.pathname.split('/')[2]
+    : null;
 
   return (
     <nav className="sidebar v-navigation-drawer v-navigation-drawer--fixed v-navigation-drawer--open">
       <div className="v-navigation-drawer__content" style={{ width: '100%', height: '100%' }}>
         <ul className="navi v-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
 
-          {topLinks.map(({ to, label, icon }) => (
-            <li key={to} style={{ width: '100%' }}>
-              <NavLink
-                to={to}
-                end={to === '/'}
-                className={({ isActive }) => `sidebar-link nav-link v-list-item v-list-item--link${isActive ? ' active v-list-item--active router-link-active' : ''}`}
-              >
-                <span className="sidebar-icon">{icon}</span>
-                {label}
-              </NavLink>
-            </li>
-          ))}
+          {/* Dashboard parent link */}
+          <li style={{ width: '100%' }}>
+            <NavLink
+              to="/"
+              end
+              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onDashboard ? ' active v-list-item--active router-link-active' : ''}`}
+            >
+              <span className="sidebar-icon">▦</span>
+              Dashboard
+            </NavLink>
+
+            {/* Printer sub-tabs — shown when on Dashboard or any /printer/ route */}
+            {onDashboard && printers.length > 0 && (
+              <ul className="sidebar-subnav" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {printers.map(p => (
+                  <li key={p.id} style={{ padding: '2px 8px' }}>
+                    <PrinterTab
+                      printer={p}
+                      status={status[p.id]}
+                      active={String(p.id) === activePrinterId}
+                      onClick={() => navigate(`/printer/${p.id}`)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+
+          <li style={{ width: '100%' }}>
+            <NavLink
+              to="/files"
+              className={({ isActive }) => `sidebar-link nav-link v-list-item v-list-item--link${isActive ? ' active v-list-item--active router-link-active' : ''}`}
+            >
+              <span className="sidebar-icon">📁</span>
+              Files
+            </NavLink>
+          </li>
 
           {/* Spoolman parent link */}
           <li style={{ width: '100%' }}>
