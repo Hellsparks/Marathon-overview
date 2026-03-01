@@ -1,36 +1,67 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useMatch } from 'react-router-dom';
 import { usePrinters } from '../../hooks/usePrinters';
 import { usePrinterStatus } from '../../contexts/PrinterStatusContext';
 import SidebarPrinterCard from '../dashboard/SidebarPrinterCard';
+import { isEmbedded } from '../../utils/embedded';
 
-const filesSubLinks = [
-  { to: '/files', label: 'Files', end: true },
-  { to: '/files/templates', label: 'Templates' },
-  { to: '/files/projects', label: 'Projects' },
-  { to: '/files/archive', label: 'Archive' },
-];
+const activeClass = ' active v-list-item--active router-link-active';
+const linkClass = ({ isActive }) =>
+  `sidebar-link nav-link v-list-item v-list-item--link${isActive ? activeClass : ''}`;
 
-const spoolmanSubLinks = [
-  { to: '/spoolman', label: 'Spools', end: true },
-  { to: '/spoolman/filaments', label: 'Filaments' },
-  { to: '/spoolman/manufacturers', label: 'Manufacturers' },
-  { to: '/spoolman/inventory', label: 'Inventory' },
-];
-
-const bottomLinks = [
-  { to: '/maintenance', label: 'Maintenance', icon: '🔧' },
-  { to: '/settings', label: 'Settings', icon: '⚙' },
+// Flat link list used when running inside a slicer's embedded WebView.
+// Sub-sections are always visible and styled the same as top-level items.
+const embeddedLinks = [
+  { to: '/',                      label: 'Dashboard',    icon: '▦', end: true },
+  { to: '/files',                 label: 'Files',        icon: '📁', end: true },
+  { to: '/files/templates',       label: 'Templates',    icon: null, end: true },
+  { to: '/files/projects',        label: 'Projects',     icon: null, end: true },
+  { to: '/files/archive',         label: 'Archive',      icon: null, end: true },
+  { to: '/spoolman',              label: 'Spoolman',     icon: '🧵', end: true },
+  { to: '/spoolman/filaments',    label: 'Filaments',    icon: null, end: true },
+  { to: '/spoolman/manufacturers',label: 'Manufacturers',icon: null, end: true },
+  { to: '/spoolman/inventory',    label: 'Inventory',    icon: null, end: true },
+  { to: '/maintenance',           label: 'Maintenance',  icon: '🔧', end: true },
+  { to: '/settings',              label: 'Settings',     icon: '⚙',  end: true },
 ];
 
 export default function Sidebar() {
-  const location = useLocation();
   const { printers } = usePrinters();
   const status = usePrinterStatus();
 
-  const onFiles = location.pathname.startsWith('/files');
-  const onSpoolman = location.pathname.startsWith('/spoolman');
-  const onDashboard = location.pathname === '/' || location.pathname.startsWith('/printer/');
+  // useMatch is the idiomatic React Router v6 way to detect active sections.
+  // Each call must be unconditional (Rules of Hooks). end:false = prefix match.
+  const matchRoot     = useMatch({ path: '/', end: true });
+  const matchPrinter  = useMatch({ path: '/printer/:id', end: false });
+  const matchFiles    = useMatch({ path: '/files', end: false });
+  const matchSpoolman = useMatch({ path: '/spoolman', end: false });
 
+  const onDashboardExact = !!matchRoot;
+  const onDashboard = !!(matchRoot || matchPrinter);
+  const onFiles     = !!matchFiles;
+  const onSpoolman  = !!matchSpoolman;
+
+  // ── Embedded / slicer mode ───────────────────────────────────────────────
+  // All links always visible as flat regular items (no collapsible sub-groups).
+  if (isEmbedded) {
+    return (
+      <nav className="sidebar v-navigation-drawer v-navigation-drawer--fixed v-navigation-drawer--open">
+        <div className="v-navigation-drawer__content" style={{ width: '100%' }}>
+          <ul className="navi v-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {embeddedLinks.map(({ to, label, icon, end }) => (
+              <li key={to} style={{ width: '100%' }}>
+                <NavLink to={to} end={end} className={linkClass}>
+                  <span className="sidebar-icon">{icon ?? ''}</span>
+                  {label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </nav>
+    );
+  }
+
+  // ── Normal browser mode ──────────────────────────────────────────────────
   return (
     <nav className="sidebar v-navigation-drawer v-navigation-drawer--fixed v-navigation-drawer--open">
       <div className="v-navigation-drawer__content" style={{ width: '100%' }}>
@@ -41,7 +72,7 @@ export default function Sidebar() {
             <NavLink
               to="/"
               end
-              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onDashboard && location.pathname === '/' ? ' active v-list-item--active router-link-active' : ''}`}
+              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onDashboardExact ? activeClass : ''}`}
             >
               <span className="sidebar-icon">▦</span>
               Dashboard
@@ -74,16 +105,20 @@ export default function Sidebar() {
           <li style={{ width: '100%' }}>
             <NavLink
               to="/files"
-              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onFiles ? ' active v-list-item--active router-link-active' : ''}`}
+              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onFiles ? activeClass : ''}`}
             >
               <span className="sidebar-icon">📁</span>
               Files
             </NavLink>
 
-            {/* Sub-links — shown when on any /files route */}
             {onFiles && (
               <ul className="sidebar-subnav" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {filesSubLinks.map(({ to, label, end }) => (
+                {[
+                  { to: '/files', label: 'Files', end: true },
+                  { to: '/files/templates', label: 'Templates' },
+                  { to: '/files/projects', label: 'Projects' },
+                  { to: '/files/archive', label: 'Archive' },
+                ].map(({ to, label, end }) => (
                   <li key={to}>
                     <NavLink
                       to={to}
@@ -102,16 +137,20 @@ export default function Sidebar() {
           <li style={{ width: '100%' }}>
             <NavLink
               to="/spoolman"
-              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onSpoolman ? ' active v-list-item--active router-link-active' : ''}`}
+              className={() => `sidebar-link nav-link v-list-item v-list-item--link${onSpoolman ? activeClass : ''}`}
             >
               <span className="sidebar-icon">🧵</span>
               Spoolman
             </NavLink>
 
-            {/* Sub-links — shown when on any /spoolman route */}
             {onSpoolman && (
               <ul className="sidebar-subnav" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {spoolmanSubLinks.map(({ to, label, end }) => (
+                {[
+                  { to: '/spoolman', label: 'Spools', end: true },
+                  { to: '/spoolman/filaments', label: 'Filaments' },
+                  { to: '/spoolman/manufacturers', label: 'Manufacturers' },
+                  { to: '/spoolman/inventory', label: 'Inventory' },
+                ].map(({ to, label, end }) => (
                   <li key={to}>
                     <NavLink
                       to={to}
@@ -126,11 +165,14 @@ export default function Sidebar() {
             )}
           </li>
 
-          {bottomLinks.map(({ to, label, icon }) => (
+          {[
+            { to: '/maintenance', label: 'Maintenance', icon: '🔧' },
+            { to: '/settings',    label: 'Settings',    icon: '⚙'  },
+          ].map(({ to, label, icon }) => (
             <li key={to} style={{ width: '100%' }}>
               <NavLink
                 to={to}
-                className={({ isActive }) => `sidebar-link nav-link v-list-item v-list-item--link${isActive ? ' active v-list-item--active router-link-active' : ''}`}
+                className={({ isActive }) => `sidebar-link nav-link v-list-item v-list-item--link${isActive ? activeClass : ''}`}
               >
                 <span className="sidebar-icon">{icon}</span>
                 {label}

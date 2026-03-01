@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 
 const printersRouter = require('./routes/printers');
 const filesRouter = require('./routes/files');
@@ -45,6 +46,15 @@ app.use('/themes', express.static(path.join(__dirname, '../data/themes'), { dotf
 // OctoPrint-compatible routes — slicers hit /api/version, /api/printer, /api/files/local
 // Mounted at /api so paths match OctoPrint exactly
 app.use('/api', octoprintRouter);
+
+// Serve the built frontend for non-Docker / direct deployments.
+// OrcaSlicer's device tab does GET / to show the web UI — this makes it work
+// when hitting the backend directly (port 3000). In Docker, nginx handles it.
+const frontendDist = path.join(__dirname, '../../frontend/dist');
+if (fs.existsSync(path.join(frontendDist, 'index.html'))) {
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res) => res.sendFile(path.join(frontendDist, 'index.html')));
+}
 
 app.use(errorHandler);
 
