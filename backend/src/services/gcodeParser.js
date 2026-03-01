@@ -174,6 +174,15 @@ function parseComments(text, meta) {
             });
         }
 
+        // Filament usage (mm)
+        matchFloat(c, /filament\s*used\s*\[mm\]\s*[:=]\s*([\d.]+)/i, v => { meta.filament_usage_mm = v; });
+        matchFloat(c, /total_filament_usage\s*[:=]\s*([\d.]+)/i, v => { meta.filament_usage_mm = v; }); // Bambu/Orca mm
+
+        // Filament usage (g)
+        matchFloat(c, /filament\s*used\s*\[g\]\s*[:=]\s*([\d.]+)/i, v => { meta.filament_usage_g = v; });
+        matchFloat(c, /filament_weight\s*[:=]\s*([\d.]+)/i, v => { meta.filament_usage_g = v; }); // Bambu/Orca g
+        matchFloat(c, /total\s*weight\s*[:=]\s*([\d.]+)/i, v => { meta.filament_usage_g = v; });
+
         // Target Printer Model
         if (!meta.sliced_for) {
             matchString(c, /^(?:printer_model|machine_type|TargetMachine|FLAVOR)\s*[:=]\s*(.+)/i, v => {

@@ -33,6 +33,17 @@ function copyToTemplates(sourceFileId, prefix) {
     const newFilename = `${prefix}_${sourceFile.filename}`;
     const destPath = path.join(TEMPLATES_DIR, newFilename);
     fs.copyFileSync(sourcePath, destPath);
+
+    // Also copy thumbnail if exists
+    const metadata = db.prepare(`SELECT has_thumbnail FROM gcode_metadata WHERE file_id = ?`).get(sourceFileId);
+    if (metadata && metadata.has_thumbnail) {
+        const sourceThumb = path.join(UPLOADS_DIR, '.thumbnails', `${sourceFile.filename}.png`);
+        const destThumb = path.join(THUMBS_DIR, `${newFilename}.png`);
+        if (fs.existsSync(sourceThumb)) {
+            fs.copyFileSync(sourceThumb, destThumb);
+        }
+    }
+
     return newFilename;
 }
 
@@ -50,7 +61,7 @@ router.get('/', (req, res) => {
 
         // Fetch slots for each
         const slots = db.prepare(`SELECT * FROM template_color_slots`).all();
-        const platesData = db.prepare(`SELECT id, template_id, filename, display_name, sort_order, filament_type FROM template_plates ORDER BY sort_order ASC`).all();
+        const platesData = db.prepare(`SELECT id, template_id, filename, display_name, sort_order, filament_type, estimated_time_s, sliced_for, filament_usage_mm, filament_usage_g, has_thumbnail FROM template_plates ORDER BY sort_order ASC`).all();
         const plateSlots = db.prepare(`SELECT * FROM template_plate_slots`).all();
 
         // Attach slots and simplified plates to output
@@ -62,6 +73,11 @@ router.get('/', (req, res) => {
                 display_name: p.display_name,
                 sort_order: p.sort_order,
                 filament_type: p.filament_type,
+                estimated_time_s: p.estimated_time_s,
+                sliced_for: p.sliced_for,
+                filament_usage_mm: p.filament_usage_mm,
+                filament_usage_g: p.filament_usage_g,
+                has_thumbnail: p.has_thumbnail,
                 slot_keys: plateSlots.filter(ps => ps.plate_id === p.id).map(ps => ps.slot_key)
             }));
         }
@@ -106,7 +122,7 @@ router.post('/', (req, res) => {
 
     try {
         const insertTemplate = db.prepare(`INSERT INTO project_templates (name, description) VALUES (?, ?)`);
-        const insertPlate = db.prepare(`INSERT INTO template_plates (template_id, filename, display_name, sort_order, filament_type) VALUES (?, ?, ?, ?, ?)`);
+        const insertPlate = db.prepare(`INSERT INTO template_plates (template_id, filename, display_name, sort_order, filament_type, estimated_time_s, sliced_for, filament_usage_mm, filament_usage_g, has_thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const insertSlot = db.prepare(`INSERT INTO template_color_slots (template_id, slot_key, label, pref_hex, pref_filament_id) VALUES (?, ?, ?, ?, ?)`);
         const insertPlateSlot = db.prepare(`INSERT INTO template_plate_slots (plate_id, slot_key) VALUES (?, ?)`);
 
@@ -127,8 +143,20 @@ router.post('/', (req, res) => {
             for (const plate of plates) {
                 if (!plate.file_id) throw new Error('Plate is missing source file_id');
                 const filename = copyToTemplates(plate.file_id, prefix);
+                const meta = db.prepare(`SELECT * FROM gcode_metadata WHERE file_id = ?`).get(plate.file_id) || {};
 
-                const prun = insertPlate.run(templateId, filename, plate.display_name || filename, plate.sort_order || 0, plate.filament_type || null);
+                const prun = insertPlate.run(
+                    templateId,
+                    filename,
+                    plate.display_name || filename,
+                    plate.sort_order || 0,
+                    plate.filament_type || meta.filament_type || null,
+                    meta.estimated_time_s || null,
+                    meta.sliced_for || null,
+                    meta.filament_usage_mm || null,
+                    meta.filament_usage_g || null,
+                    meta.has_thumbnail ? 1 : 0
+                );
                 const plateId = prun.lastInsertRowid;
 
                 if (plate.slot_keys && Array.isArray(plate.slot_keys)) {
@@ -160,7 +188,7 @@ router.put('/:id', (req, res) => {
         if (!existing) return res.status(404).json({ error: 'Template not found' });
 
         const updateTemplate = db.prepare(`UPDATE project_templates SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?`);
-        const insertPlate = db.prepare(`INSERT INTO template_plates (template_id, filename, display_name, sort_order, filament_type) VALUES (?, ?, ?, ?, ?)`);
+        const insertPlate = db.prepare(`INSERT INTO template_plates (template_id, filename, display_name, sort_order, filament_type, estimated_time_s, sliced_for, filament_usage_mm, filament_usage_g, has_thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const insertSlot = db.prepare(`INSERT INTO template_color_slots (template_id, slot_key, label, pref_hex, pref_filament_id) VALUES (?, ?, ?, ?, ?)`);
         const insertPlateSlot = db.prepare(`INSERT INTO template_plate_slots (plate_id, slot_key) VALUES (?, ?)`);
 
@@ -190,15 +218,28 @@ router.put('/:id', (req, res) => {
             for (const plate of plates) {
                 let filename = plate.filename; // If it's an existing plate, it already has a filename
 
+                let meta = {};
                 // If it's a newly added plate (has file_id from gcode_files), copy it
                 if (plate.file_id && !filename) {
                     filename = copyToTemplates(plate.file_id, prefix);
+                    meta = db.prepare(`SELECT * FROM gcode_metadata WHERE file_id = ?`).get(plate.file_id) || {};
                 }
 
                 if (!filename) throw new Error('Plate is missing filename or source file_id');
                 newFilenames.add(filename);
 
-                const prun = insertPlate.run(templateId, filename, plate.display_name || filename, plate.sort_order || 0, plate.filament_type || null);
+                const prun = insertPlate.run(
+                    templateId,
+                    filename,
+                    plate.display_name || filename,
+                    plate.sort_order || 0,
+                    plate.filament_type || plate.filament_type || meta.filament_type || null,
+                    plate.estimated_time_s || meta.estimated_time_s || null,
+                    plate.sliced_for || meta.sliced_for || null,
+                    plate.filament_usage_mm || meta.filament_usage_mm || null,
+                    plate.filament_usage_g || meta.filament_usage_g || null,
+                    plate.has_thumbnail !== undefined ? (plate.has_thumbnail ? 1 : 0) : (meta.has_thumbnail ? 1 : 0)
+                );
                 const plateId = prun.lastInsertRowid;
 
                 if (plate.slot_keys && Array.isArray(plate.slot_keys)) {
@@ -263,8 +304,9 @@ router.post('/:id/thumbnail', upload.single('thumbnail'), (req, res) => {
     }
 });
 
-// Serve thumbnails
+// Serve thumbnails (template main or plate thumbs)
 router.get('/thumb/:filename', (req, res) => {
+    // Both template thumbnails and plate thumbnails are in THUMBS_DIR
     const file = path.join(THUMBS_DIR, req.params.filename);
     if (fs.existsSync(file)) {
         res.sendFile(file);

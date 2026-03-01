@@ -1,4 +1,4 @@
-export default function TemplateCard({ template, filaments, onEdit, onDelete }) {
+export default function TemplateCard({ template, filaments, onEdit, onDelete, onClick }) {
     // Badges for what filaments/colors are used
     const renderSlots = () => {
         if (!template.color_slots || template.color_slots.length === 0) return null;
@@ -67,8 +67,11 @@ export default function TemplateCard({ template, filaments, onEdit, onDelete }) 
         );
     };
 
+    // Get unique printer models from plates
+    const printerModels = [...new Set(template.plates?.map(p => p.sliced_for).filter(Boolean))];
+
     return (
-        <div className="file-card">
+        <div className="file-card template-card-clickable" onClick={onClick}>
             <div className="file-card-thumb-wrap" style={{ backgroundColor: 'var(--surface2)' }}>
                 {template.thumbnail_path ? (
                     <img
@@ -77,11 +80,7 @@ export default function TemplateCard({ template, filaments, onEdit, onDelete }) 
                         alt={template.name}
                     />
                 ) : (
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)' }}>
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <path d="M3 9h18"></path>
-                        <path d="M9 21V9"></path>
-                    </svg>
+                    <div className="file-card-icon">📋</div>
                 )}
             </div>
 
@@ -102,15 +101,23 @@ export default function TemplateCard({ template, filaments, onEdit, onDelete }) 
                 🗑
             </button>
 
-            <div className="file-card-body">
-                <div className="file-card-title" title={template.name}>
-                    {template.name}
+            <div className="file-card-info">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', minHeight: '38px' }}>
+                    <div style={{ flex: 1, paddingRight: '8px' }}>
+                        <div className="file-card-name" style={{ fontSize: '15px', fontWeight: 600, lineHeight: 1.2 }}>{template.name}</div>
+                        <div className="file-card-meta" style={{ fontSize: '12px', opacity: 0.8, marginTop: '2px' }}>
+                            {template.plate_count || 0} Plates
+                        </div>
+                    </div>
+                    {printerModels.length > 0 && (
+                        <div className="badge badge-info" style={{ fontSize: '10px', padding: '3px 8px', whiteSpace: 'nowrap' }}>
+                            {printerModels[0]}
+                        </div>
+                    )}
                 </div>
-                <div className="file-card-metrics" style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <span>{template.plate_count} Plate{template.plate_count !== 1 && 's'}</span>
-                    <span>{new Date(template.created_at).toLocaleDateString()}</span>
+                <div style={{ marginTop: '4px' }}>
+                    {renderSlots()}
                 </div>
-                {renderSlots()}
             </div>
         </div>
     );
