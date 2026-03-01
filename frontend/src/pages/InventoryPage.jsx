@@ -37,8 +37,9 @@ export default function InventoryPage() {
             const invMap = {};
             for (const row of (inv || [])) invMap[row.filament_id] = row;
             setInventory(invMap);
-            // Spoolman v0.19+ returns { currency: "NOK", ... }
-            setCurrency(settings?.currency ?? settings?.data?.currency ?? '');
+            // Spoolman returns { currency: { value: "NOK", is_set: true, type: "str" }, ... }
+            const c = settings?.currency;
+            setCurrency(typeof c === 'string' ? c : (c?.value ?? ''));
             setError(null);
         } catch (e) {
             setError(e.message);

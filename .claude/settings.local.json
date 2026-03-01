@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(git add .gitignore backend/ docker-compose.yml frontend/ package.json package-lock.json)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(node -e \"require\\(''./backend/src/routes/maintenance.js''\\); console.log\\(''OK''\\)\")",
+      "Bash(npx vite build --mode development)",
+      "Bash(ls /d/Github/Marathon-overview/*.md /d/Github/Marathon-overview/CLAUDE.md)",
+      "Bash(git add backend/src/db/migrations/012_maintenance.sql backend/src/routes/maintenance.js backend/src/app.js backend/src/services/poller.js frontend/src/App.jsx frontend/src/components/dashboard/PrinterCard.jsx frontend/src/components/layout/Sidebar.jsx frontend/src/components/maintenance/ frontend/src/api/maintenance.js frontend/src/pages/MaintenancePage.jsx frontend/src/services/ frontend/src/index.css README.md AGENTS.md)",
+      "Bash(git push)",
+      "Bash(git add backend/src/routes/spoolman.js backend/src/db/migrations/013_spoolman_inventory.sql frontend/src/App.jsx frontend/src/api/spoolman.js frontend/src/components/layout/Sidebar.jsx frontend/src/components/spoolman/AddFilamentDialog.jsx frontend/src/components/spoolman/AddVendorDialog.jsx frontend/src/index.css frontend/src/pages/SpoolmanPage.jsx frontend/src/pages/FilamentsPage.jsx frontend/src/pages/InventoryPage.jsx frontend/src/pages/ManufacturersPage.jsx)",
+      "Bash(git add -A)"
     ]
   }
 }
