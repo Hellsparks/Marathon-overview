@@ -206,6 +206,7 @@ code {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
 }
 
 .sidebar-right {
@@ -406,20 +407,26 @@ code {
 
 /* ─── Printer Iframe Page ───────────────────────────────────────── */
 
-/* Strip main-area padding + scrollbar when iframe page is mounted */
+/* Strip main-area padding + scrollbar when iframe page is mounted.
+   Use flex so .printer-iframe-page can flex:1 to fill the height reliably. */
 .app-main:has(.printer-iframe-page) {
   padding: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .printer-iframe-page {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .printer-iframe {
-  display: block;
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   border: none;
 }
 
@@ -2559,6 +2566,21 @@ code {
 /* ─── Sidebar sub-navigation ────────────────────────────────────── */
 .sidebar-subnav {
   padding: 2px 0 4px 0;
+}
+
+/* Printer-card inside sidebar NavLink — compact sizing */
+.sidebar-subnav a {
+  cursor: pointer;
+}
+
+.sidebar-subnav .printer-card {
+  padding: 10px 12px;
+  gap: 0;
+}
+
+.sidebar-subnav .printer-card.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary), var(--card-glow, none);
 }
 
 .sidebar-sublink {

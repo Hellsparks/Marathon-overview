@@ -1,4 +1,4 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { usePrinters } from '../../hooks/usePrinters';
 import { usePrinterStatus } from '../../contexts/PrinterStatusContext';
 import PrinterTab from '../dashboard/PrinterTab';
@@ -17,19 +17,15 @@ const bottomLinks = [
 
 export default function Sidebar() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { printers } = usePrinters();
   const status = usePrinterStatus();
 
   const onSpoolman = location.pathname.startsWith('/spoolman');
   const onDashboard = location.pathname === '/' || location.pathname.startsWith('/printer/');
-  const activePrinterId = location.pathname.startsWith('/printer/')
-    ? location.pathname.split('/')[2]
-    : null;
 
   return (
     <nav className="sidebar v-navigation-drawer v-navigation-drawer--fixed v-navigation-drawer--open">
-      <div className="v-navigation-drawer__content" style={{ width: '100%', height: '100%' }}>
+      <div className="v-navigation-drawer__content" style={{ width: '100%' }}>
         <ul className="navi v-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
 
           {/* Dashboard parent link */}
@@ -48,12 +44,18 @@ export default function Sidebar() {
               <ul className="sidebar-subnav" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {printers.map(p => (
                   <li key={p.id} style={{ padding: '2px 8px' }}>
-                    <PrinterTab
-                      printer={p}
-                      status={status[p.id]}
-                      active={String(p.id) === activePrinterId}
-                      onClick={() => navigate(`/printer/${p.id}`)}
-                    />
+                    <NavLink
+                      to={`/printer/${p.id}`}
+                      style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
+                    >
+                      {({ isActive }) => (
+                        <PrinterTab
+                          printer={p}
+                          status={status[p.id]}
+                          active={isActive}
+                        />
+                      )}
+                    </NavLink>
                   </li>
                 ))}
               </ul>
