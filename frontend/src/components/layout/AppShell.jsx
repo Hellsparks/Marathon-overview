@@ -9,6 +9,7 @@ import FilamentsPanel from '../rightpanel/FilamentsPanel';
 import InventoryPanel from '../rightpanel/InventoryPanel';
 import MaintenancePanel from '../rightpanel/MaintenancePanel';
 import { RightPanelContext } from '../../contexts/RightPanelContext';
+import { PrinterStatusContext } from '../../contexts/PrinterStatusContext';
 import { useStatus } from '../../hooks/useStatus';
 
 export default function AppShell() {
@@ -26,6 +27,7 @@ export default function AppShell() {
 
   function getPanel() {
     const p = location.pathname;
+    if (p.startsWith('/printer/')) return null; // full-screen iframe — no sidebar
     if (p === '/') return <FleetInsights />;
     if (p === '/files') return <FilesPanel selected={selected} />;
     if (p === '/spoolman') return <SpoolPanel selected={selected} />;
@@ -38,6 +40,7 @@ export default function AppShell() {
   const panel = getPanel();
 
   return (
+    <PrinterStatusContext.Provider value={status}>
     <RightPanelContext.Provider value={{ selected, setSelected }}>
       <div className="app-shell">
         <NavBar onlineCount={onlineCount} totalCount={totalCount} />
@@ -59,5 +62,6 @@ export default function AppShell() {
         </div>
       </div>
     </RightPanelContext.Provider>
+    </PrinterStatusContext.Provider>
   );
 }

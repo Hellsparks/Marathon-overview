@@ -314,6 +314,115 @@ code {
   font-size: 13px;
 }
 
+/* ─── Printer Tab (card-style subtab used in sidebar) ───────────── */
+.printer-tab {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 0;
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: stretch;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, box-shadow .15s;
+  font-family: 'Inter', system-ui, sans-serif;
+  box-shadow: var(--card-glow, none);
+  overflow: hidden;
+}
+
+.printer-tab:not(.isolated-theme) {
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+
+.printer-tab:hover {
+  background: var(--surface2);
+  border-color: var(--primary);
+}
+
+.printer-tab.active {
+  background: var(--surface2);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary), var(--card-glow, none);
+}
+
+.printer-tab.state-offline {
+  opacity: .6;
+}
+
+.printer-tab .printer-card-header {
+  width: 100%;
+  min-height: unset;
+  padding: 0 10px;
+  border-bottom: none;
+}
+
+.printer-tab .printer-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Sidebar printer sub-links ─────────────────────────────────── */
+.sidebar-printer-link {
+  display: block;
+  width: 100%;
+  padding: 6px 16px 6px 44px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.sidebar-printer-link:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.sidebar-printer-link.active {
+  color: var(--primary);
+  border-left-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.sidebar-printer-link.state-offline {
+  opacity: .55;
+}
+
+/* ─── Printer Iframe Page ───────────────────────────────────────── */
+
+/* Strip main-area padding + scrollbar when iframe page is mounted */
+.app-main:has(.printer-iframe-page) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.printer-iframe-page {
+  height: 100%;
+}
+
+.printer-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
 /* ─── Printer Grid ──────────────────────────────────────────────── */
 .printer-grid {
   display: grid;
