@@ -4,6 +4,8 @@ import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
 import { testConnection } from '../api/spoolman';
+import { checkForUpdate } from '../api/updates';
+import UpdateDialog from '../components/layout/UpdateDialog';
 
 export default function SettingsPage() {
   const { printers, loading, error, refresh } = usePrinters();
@@ -13,6 +15,10 @@ export default function SettingsPage() {
   const [spoolmanMsg, setSpoolmanMsg] = useState('');
   const [projectWarning, setProjectWarning] = useState('50');
   const [projectSaved, setProjectSaved] = useState('50');
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateChecked, setUpdateChecked] = useState(false);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
 
   useEffect(() => {
     getSettings().then(s => {
@@ -55,6 +61,18 @@ export default function SettingsPage() {
     } catch (e) {
       setSpoolmanStatus('error');
       setSpoolmanMsg(e.message);
+    }
+  }
+
+  async function handleCheckUpdate() {
+    setUpdateChecking(true);
+    setUpdateChecked(false);
+    try {
+      const info = await checkForUpdate();
+      setUpdateInfo(info.available ? info : null);
+      setUpdateChecked(true);
+    } catch { /* ignore */ } finally {
+      setUpdateChecking(false);
     }
   }
 
@@ -141,6 +159,41 @@ export default function SettingsPage() {
         <h2 className="section-title">Printer Presets</h2>
         <p>Presets let you quickly configure printers with common build volumes and filament capabilities. Built-in presets cannot be edited or deleted.</p>
         <PresetList />
+      </section>
+
+      <section className="page-section">
+        <h2 className="section-title">About &amp; Updates</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '16px', fontSize: '14px' }}>
+            <span><strong>Version:</strong> {__APP_VERSION__}</span>
+            <span style={{ opacity: 0.6 }}>
+              Deploy mode: {import.meta.env.MODE === 'production' ? 'production' : 'development'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              className="btn btn-sm"
+              onClick={handleCheckUpdate}
+              disabled={updateChecking}
+            >
+              {updateChecking ? 'Checking…' : 'Check for Updates'}
+            </button>
+            {updateChecked && !updateInfo && (
+              <span style={{ fontSize: '13px', color: 'var(--success)' }}>You are up to date ✓</span>
+            )}
+            {updateInfo && (
+              <button className="btn btn-sm btn-primary" onClick={() => setUpdateDialogOpen(true)}>
+                v{updateInfo.latest} available — Update Now
+              </button>
+            )}
+          </div>
+        </div>
+        {updateDialogOpen && updateInfo && (
+          <UpdateDialog
+            updateInfo={updateInfo}
+            onDismiss={() => { setUpdateDialogOpen(false); setUpdateInfo(null); }}
+          />
+        )}
       </section>
 
       <section className="page-section">
