@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    name: Create Release & Publish Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Read current version
+        id: version
+        run: |
+          VERSION=$(jq -r .version package.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if version changed
+        id: changed
+        run: |
+          PREV=$(git show HEAD~1:package.json 2>/dev/null | jq -r .version || echo "none")
+          CURR=${{ steps.version.outputs.version }}
+          if [ "$PREV" != "$CURR" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check tag doesn't already exist
+        id: tag_check
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          if git ls-remote --tags origin | grep -q "refs/tags/${{ steps.version.outputs.tag }}$"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to GitHub Container Registry
+        if: steps.changed.outputs.changed == 'true' && steps.tag_check.outputs.exists == 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        if: steps.changed.outputs.changed == 'true' && steps.tag_check.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image
+        if: steps.changed.outputs.changed == 'true' && steps.tag_check.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/marathon-overview:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/marathon-overview:latest
+
+      - name: Create GitHub Release
+        if: steps.changed.outputs.changed == 'true' && steps.tag_check.outputs.exists == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.version.outputs.tag }} \
+            --title "Marathon ${{ steps.version.outputs.tag }}" \
+            --generate-notes
