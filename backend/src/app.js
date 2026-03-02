@@ -16,6 +16,7 @@ const maintenanceRouter = require('./routes/maintenance');
 const foldersRouter = require('./routes/folders');
 const templatesRouter = require('./routes/templates');
 const projectsRouter = require('./routes/projects');
+const updatesRouter = require('./routes/updates');
 const errorHandler = require('./middleware/errorHandler');
 
 const path = require('path');
@@ -39,6 +40,7 @@ app.use('/api/themes', themesRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/spoolman', spoolmanRouter);
 app.use('/api/maintenance', maintenanceRouter);
+app.use('/api/updates', updatesRouter);
 
 // Statically serve cloned Community Themes — dotfiles: 'allow' exposes .theme/ subdirectories
 app.use('/themes', express.static(path.join(__dirname, '../data/themes'), { dotfiles: 'allow' }));

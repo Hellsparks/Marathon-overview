@@ -5,16 +5,23 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+    container_name: marathon-backend
     restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 3000
       DB_PATH: /app/data/marathon.db
       UPLOADS_DIR: /app/uploads
+      MARATHON_DEPLOY_MODE: docker
+      MARATHON_CONTAINER_NAME: marathon-backend
+      APP_VERSION: ${APP_VERSION:-dev}
       # OCTOPRINT_API_KEY: changeme
     volumes:
       - backend_data:/app/data
       - gcode_uploads:/app/uploads
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     expose:
       - "3000"
     networks:
