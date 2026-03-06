@@ -47,7 +47,7 @@ function scopeCSS(css, scope) {
 const scrapedCssCache = new Map();
 
 export default function SpoolmanPrinterCard({
-    printer, activeSpool, isTarget, onDragOver, onDragLeave, onDrop, onClearSpool,
+    printer, activeSpool, isTarget, onDragOver, onDragLeave, onDrop, onClearSpool, printerStatus,
     // Bambu AMS props
     amsSlots, amsSpools, dropTargetTray, onTrayDragOver, onTrayDragLeave, onTrayDrop, onClearTray,
 }) {
@@ -144,11 +144,16 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                 const spool = spoolId ? amsSpools?.[spoolId] : null;
                                 const f = spool?.filament || {};
                                 const color = f.color_hex ? `#${f.color_hex}` : null;
+
+                                const physicalTray = printerStatus?._bambu?.ams?.ams?.[0]?.tray?.find(t => parseInt(t.id, 10) === trayId);
+                                const hasPhysical = !!(physicalTray && physicalTray.tray_color);
+                                const physicalColor = hasPhysical ? `#${physicalTray.tray_color.slice(0, 6)}` : null;
+
                                 const isTrayTarget = dropTargetTray?.printerId === printer.id && dropTargetTray?.trayId === trayId;
                                 return (
                                     <div
                                         key={trayId}
-                                        className={`ams-drop-slot${isTrayTarget ? ' ams-drop-hover' : ''}${spool ? ' ams-slot-filled' : ''}`}
+                                        className={`ams-drop-slot${isTrayTarget ? ' ams-drop-hover' : ''}${(spool || hasPhysical) ? ' ams-slot-filled' : ''}`}
                                         onDragOver={e => onTrayDragOver?.(e, printer.id, trayId)}
                                         onDragLeave={() => onTrayDragLeave?.()}
                                         onDrop={e => onTrayDrop?.(e, printer, trayId)}
@@ -169,6 +174,16 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                                     onClick={e => { e.stopPropagation(); onClearTray?.(printer.id, trayId); }}
                                                     title="Unload slot"
                                                 >✕</button>
+                                            </>
+                                        ) : hasPhysical ? (
+                                            <>
+                                                <div
+                                                    className="ams-slot-swatch"
+                                                    style={{ backgroundColor: physicalColor || '#888' }}
+                                                />
+                                                <span className="ams-slot-material" style={{ color: 'var(--text-muted)' }}>{physicalTray.tray_type || '—'}</span>
+                                                <span className="ams-slot-name" style={{ fontStyle: 'italic', fontSize: '11px', color: 'var(--text-muted)' }}>MQTT Status</span>
+                                                <span className="ams-slot-empty" style={{ opacity: 0.5, fontSize: '10px', marginTop: '4px' }}>Drop spool to assign</span>
                                             </>
                                         ) : (
                                             <span className="ams-slot-empty">Drop spool</span>
