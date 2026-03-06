@@ -197,6 +197,33 @@ export default function SettingsPage() {
       </section>
 
       <section className="page-section">
+        <h2 className="section-title">Bambu Connect</h2>
+        <div style={{
+          display: 'flex', gap: '16px', alignItems: 'flex-start',
+          padding: '16px', background: 'var(--surface2)', borderRadius: 'var(--radius)',
+          border: '1px solid var(--border)',
+        }}>
+          <div style={{ fontSize: '28px', lineHeight: 1 }}>🐼</div>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontWeight: 600, marginBottom: '4px' }}>Bambu Connect Integration</p>
+            <p style={{ fontSize: '13px', opacity: 0.7, marginBottom: '8px' }}>
+              Cloud-based integration via the Bambu Connect desktop app is planned for a future release.
+              For now, connect your Bambu Lab printers directly using <strong>LAN Developer Mode</strong>
+              — enable it in the printer's settings under <em>Network → LAN Only Mode</em>, then add the
+              printer from the Printers section above and select "Bambu Lab (LAN Developer Mode)".
+            </p>
+            <span style={{
+              display: 'inline-block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em',
+              padding: '2px 8px', borderRadius: '9999px',
+              background: 'var(--warning, #f59e0b)', color: '#fff', opacity: 0.8,
+            }}>
+              Coming soon
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="page-section">
         <h2 className="section-title">Slicer Integration</h2>
         <p>
           Configure your slicer to upload G-code to this server using the OctoPrint preset.

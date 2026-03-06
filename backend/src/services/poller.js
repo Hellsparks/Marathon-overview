@@ -1,5 +1,6 @@
 const { getDb } = require('../db');
 const { getClient } = require('./clientFactory');
+const bambuManager = require('./bambuManager');
 const printerCache = require('./printerCache');
 
 const POLL_INTERVAL_MS = 3000;
@@ -53,6 +54,13 @@ async function pollAll() {
 
   await Promise.allSettled(
     printers.map(async (printer) => {
+      // Bambu printers are managed entirely by bambuManager (MQTT).
+      // The manager writes to printerCache and handles job logging itself.
+      if (printer.firmware_type === 'bambu') {
+        bambuManager.ensureConnected(printer);
+        return;
+      }
+
       const client = getClient(printer);
       try {
         const status = await client.getStatus();
