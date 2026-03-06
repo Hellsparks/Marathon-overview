@@ -1907,15 +1907,16 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 8px 4px 6px;
+  gap: 2px;
+  padding: 4px;
   border: 1px dashed var(--border);
   border-radius: 6px;
   background: var(--surface2);
   transition: border-color .2s, background .2s, box-shadow .2s;
   position: relative;
-  min-height: 80px;
+  min-height: 64px;
   justify-content: center;
+  overflow: hidden;
 }
 
 .ams-drop-slot.ams-drop-hover {
@@ -1944,8 +1945,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .ams-slot-swatch {
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, .15);
   flex-shrink: 0;
@@ -1971,10 +1972,11 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .ams-slot-empty {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-muted);
   font-style: italic;
   text-align: center;
+  line-height: 1.1;
 }
 
 .ams-slot-clear {
