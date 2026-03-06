@@ -12,6 +12,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
     host: printer?.host ?? '',
     port: printer?.port ?? 7125,
     api_key: printer?.api_key ?? '',
+    firmware_type: printer?.firmware_type ?? 'moonraker',
     bed_width: printer?.bed_width ?? '',
     bed_depth: printer?.bed_depth ?? '',
     bed_height: printer?.bed_height ?? '',
@@ -32,6 +33,17 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
 
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }));
+  }
+
+  function setFirmwareType(type) {
+    setForm(f => {
+      // Auto-update port to the default for the new firmware type, but only
+      // when the current port is still a known default (avoid overwriting custom ports).
+      const knownDefaults = [7125, 80];
+      const autoPort = type === 'moonraker' ? 7125 : 80;
+      const port = knownDefaults.includes(f.port) ? autoPort : f.port;
+      return { ...f, firmware_type: type, port };
+    });
   }
 
   function toggleFilament(type) {
@@ -84,6 +96,10 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
         bed_depth: form.bed_depth || null,
         bed_height: form.bed_height || null,
         filament_types: JSON.stringify(form.filament_types || []),
+        // If scrape mode was set but firmware changed away from Moonraker, reset to global
+        theme_mode: form.firmware_type !== 'moonraker' && form.theme_mode === 'scrape'
+          ? 'global'
+          : form.theme_mode,
       };
       if (printer) {
         await updatePrinter(printer.id, data);
@@ -147,6 +163,20 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                 <input className="form-input" value={form.name}
                   onChange={e => set('name', e.target.value)} required placeholder="e.g. Voron 2.4 #1" />
               </label>
+
+              <label className="form-label">
+                Firmware / API Type
+                <select
+                  className="form-select"
+                  value={form.firmware_type}
+                  onChange={e => setFirmwareType(e.target.value)}
+                >
+                  <option value="moonraker">Klipper (Moonraker)</option>
+                  <option value="octoprint">OctoPrint</option>
+                  <option value="duet">Duet / RepRapFirmware</option>
+                </select>
+              </label>
+
               <label className="form-label">
                 Host / IP Address
                 <input className="form-input" value={form.host}
@@ -158,10 +188,19 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                   onChange={e => set('port', Number(e.target.value))} required min={1} max={65535} />
               </label>
               <label className="form-label">
-                API Key <span className="form-optional">(optional)</span>
+                {form.firmware_type === 'duet' ? 'Password' : 'API Key'}{' '}
+                <span className="form-optional">(optional)</span>
                 <input className="form-input" value={form.api_key}
-                  onChange={e => set('api_key', e.target.value)} placeholder="Leave empty if not set" />
+                  onChange={e => set('api_key', e.target.value)}
+                  placeholder={form.firmware_type === 'duet' ? 'Leave empty if no password set' : 'Leave empty if not set'} />
               </label>
+
+              {form.firmware_type !== 'moonraker' && (
+                <p className="text-muted" style={{ fontSize: '12px', marginTop: '4px' }}>
+                  {form.firmware_type === 'octoprint' && 'Job queue, Klipper macros, and Spoolman are not available for OctoPrint printers.'}
+                  {form.firmware_type === 'duet' && 'Job queue, Klipper macros, and Spoolman are not available for Duet printers. The Duet password is used as the API key.'}
+                </p>
+              )}
             </>
           )}
 
@@ -220,12 +259,13 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                   <span className="text-muted" style={{ fontSize: '12px', marginLeft: '6px' }}>— Follows the navbar theme.</span>
                 </label>
 
-                <label className="radio-label">
+                <label className="radio-label" style={{ opacity: form.firmware_type !== 'moonraker' ? 0.4 : 1 }}>
                   <input type="radio" name="theme_mode" value="scrape"
                     checked={form.theme_mode === 'scrape'}
+                    disabled={form.firmware_type !== 'moonraker'}
                     onChange={() => set('theme_mode', 'scrape')} />
                   <strong>Auto-Scrape Klipper</strong>
-                  <span className="text-muted" style={{ fontSize: '12px', marginLeft: '6px' }}>— Automatically synchronizes with Mainsail CSS in the background.</span>
+                  <span className="text-muted" style={{ fontSize: '12px', marginLeft: '6px' }}>— Automatically synchronizes with Mainsail CSS in the background. (Moonraker only)</span>
                 </label>
 
                 <label className="radio-label">

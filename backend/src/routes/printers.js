@@ -13,11 +13,14 @@ router.get('/', (req, res) => {
 // POST /api/printers
 router.post('/', (req, res) => {
   const {
-    name, host, port = 7125, api_key = null,
+    name, host, api_key = null,
     bed_width = null, bed_depth = null, bed_height = null,
     filament_types = '[]', toolhead_count = 1, preset_id = null,
     custom_css = null, theme_mode = 'global',
+    firmware_type = 'moonraker',
   } = req.body;
+
+  const port = req.body.port ?? defaultPort(firmware_type);
 
   if (!name || !host) {
     return res.status(400).json({ error: 'name and host are required' });
@@ -25,13 +28,13 @@ router.post('/', (req, res) => {
 
   const db = getDb();
   const result = db.prepare(
-    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     name, host, port, api_key || null,
     bed_width, bed_depth, bed_height,
     typeof filament_types === 'string' ? filament_types : JSON.stringify(filament_types),
-    toolhead_count, preset_id, custom_css, theme_mode
+    toolhead_count, preset_id, custom_css, theme_mode, firmware_type
   );
 
   const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(result.lastInsertRowid);
@@ -41,14 +44,14 @@ router.post('/', (req, res) => {
 
 // PUT /api/printers/:id
 router.put('/:id', (req, res) => {
-  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode } = req.body;
+  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type } = req.body;
   const db = getDb();
   const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id);
   if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
   db.prepare(
     `UPDATE printers SET name=?, host=?, port=?, api_key=?, enabled=?,
-     bed_width=?, bed_depth=?, bed_height=?, filament_types=?, toolhead_count=?, preset_id=?, custom_css=?, theme_mode=?,
+     bed_width=?, bed_depth=?, bed_height=?, filament_types=?, toolhead_count=?, preset_id=?, custom_css=?, theme_mode=?, firmware_type=?,
      updated_at=datetime('now')
      WHERE id=?`
   ).run(
@@ -67,6 +70,7 @@ router.put('/:id', (req, res) => {
     preset_id !== undefined ? preset_id : printer.preset_id,
     custom_css !== undefined ? custom_css : printer.custom_css,
     theme_mode !== undefined ? theme_mode : printer.theme_mode,
+    firmware_type !== undefined ? firmware_type : (printer.firmware_type || 'moonraker'),
     req.params.id
   );
 
@@ -104,12 +108,23 @@ router.delete('/:id', (req, res) => {
 function normalizePrinter(p) {
   return {
     ...p,
+    firmware_type: p.firmware_type || 'moonraker',
     filament_types: safeJsonParse(p.filament_types),
   };
 }
 
 function safeJsonParse(str) {
   try { return JSON.parse(str); } catch { return []; }
+}
+
+function defaultPort(firmwareType) {
+  switch (firmwareType) {
+    case 'octoprint':
+    case 'duet':
+      return 80;
+    default:
+      return 7125;
+  }
 }
 
 module.exports = router;

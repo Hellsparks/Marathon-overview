@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const { getDb } = require('../db');
-const MoonrakerClient = require('../services/moonraker');
+const { getClient } = require('../services/clientFactory');
 
 function getPrinter(id) {
   return getDb().prepare('SELECT * FROM printers WHERE id = ?').get(id);
@@ -13,7 +13,7 @@ router.get('/:id/queue', async (req, res) => {
   if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
   try {
-    const queue = await new MoonrakerClient(printer).getQueue();
+    const queue = await getClient(printer).getQueue();
     res.json(queue);
   } catch (err) {
     res.status(502).json({ error: err.message });
@@ -31,7 +31,7 @@ router.post('/:id/queue', async (req, res) => {
   }
 
   try {
-    const result = await new MoonrakerClient(printer).addToQueue(filenames);
+    const result = await getClient(printer).addToQueue(filenames);
     res.json(result);
   } catch (err) {
     res.status(502).json({ error: err.message });
@@ -44,7 +44,7 @@ router.delete('/:id/queue/:jobId', async (req, res) => {
   if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
   try {
-    const result = await new MoonrakerClient(printer).removeFromQueue([req.params.jobId]);
+    const result = await getClient(printer).removeFromQueue([req.params.jobId]);
     res.json(result);
   } catch (err) {
     res.status(502).json({ error: err.message });
@@ -57,7 +57,7 @@ router.post('/:id/queue/start', async (req, res) => {
   if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
   try {
-    const result = await new MoonrakerClient(printer).startQueue();
+    const result = await getClient(printer).startQueue();
     res.json(result);
   } catch (err) {
     res.status(502).json({ error: err.message });
