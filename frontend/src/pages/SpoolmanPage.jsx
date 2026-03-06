@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePrinters } from '../hooks/usePrinters';
-import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool } from '../api/spoolman';
+import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool, getAmsSlots, getBambuWarnings, dismissBambuWarning } from '../api/spoolman';
+import { useFilamentGuard } from '../hooks/useFilamentGuard';
 import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
 import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
 import { useRightPanel } from '../contexts/RightPanelContext';
@@ -66,12 +67,47 @@ export default function SpoolmanPage() {
     const [vendorFilter, setVendorFilter] = useState('');
 
     // Adjust spool dialog
-    const [adjustSpool, setAdjustSpool] = useState(null); // spool object or null
-    const [adjustType, setAdjustType] = useState('length'); // 'length' | 'weight' | 'measured'
+    const [adjustSpool, setAdjustSpool] = useState(null);
+    const [adjustType, setAdjustType] = useState('length');
     const [adjustAmount, setAdjustAmount] = useState('');
     const [adjustBusy, setAdjustBusy] = useState(false);
 
     const [showAddSpool, setShowAddSpool] = useState(false);
+
+    // AMS state for Bambu printers
+    const [amsSlots, setAmsSlots] = useState({});       // { printerId: { 0: spoolId, 1: spoolId, ... } }
+    const [amsSpools, setAmsSpools] = useState({});     // { spoolId: spoolObject } — resolved spool data
+    const [dropTargetTray, setDropTargetTray] = useState(null); // { printerId, trayId }
+
+    // Extracted shared guard hook for compatibility & 'in use' warnings
+    const { startGuard, renderGuardDialog, bambuWarnings, fetchWarningsIfNeeded } = useFilamentGuard({
+        onWeighSpool: (spool) => {
+            setAdjustSpool(spool);
+            setAdjustType('measured');
+            setAdjustAmount('');
+        },
+        onClearBambuWarning: (spoolId) => {
+            dismissBambuWarning(spoolId).then(fetchWarningsIfNeeded).catch(() => { });
+        },
+        onConfirm: async (spool, printer, trayId) => {
+            try {
+                if (trayId !== undefined) {
+                    await setActiveSpool(printer.id, spool.id, trayId);
+                    setAmsSlots(prev => ({
+                        ...prev,
+                        [printer.id]: { ...(prev[printer.id] || {}), [trayId]: spool.id },
+                    }));
+                    setAmsSpools(prev => ({ ...prev, [spool.id]: spool }));
+                } else {
+                    await setActiveSpool(printer.id, spool.id);
+                    const r = await fetch('/api/status');
+                    if (r.ok) setStatuses(await r.json());
+                }
+            } catch (err) {
+                alert(`Failed to assign spool: ${err.message}`);
+            }
+        }
+    });
 
     const fetchSpools = useCallback(async () => {
         try {
@@ -85,8 +121,15 @@ export default function SpoolmanPage() {
         }
     }, []);
 
-    // Fetch spools
-    useEffect(() => { fetchSpools(); }, [fetchSpools]);
+    // Fetch spools initially and then every 10 seconds
+    useEffect(() => {
+        fetchSpools();
+        const interval = setInterval(fetchSpools, 10000);
+        return () => clearInterval(interval);
+    }, [fetchSpools]);
+
+    // Fetch bambu warnings once on load
+    useEffect(() => { fetchWarningsIfNeeded(); }, [fetchWarningsIfNeeded]);
 
     // Fetch printer statuses for active spool display
     useEffect(() => {
@@ -100,6 +143,34 @@ export default function SpoolmanPage() {
         const interval = setInterval(fetchStatuses, 5000);
         return () => clearInterval(interval);
     }, []);
+
+    // Fetch AMS slot mappings for Bambu printers + resolve spool details
+    const bambuPrinters = printers.filter(p => p.firmware_type === 'bambu');
+    useEffect(() => {
+        if (bambuPrinters.length === 0) return;
+        async function fetchAms() {
+            const slotMap = {};
+            const spoolMap = { ...amsSpools };
+            for (const p of bambuPrinters) {
+                try {
+                    const slots = await getAmsSlots(p.id);
+                    slotMap[p.id] = slots;
+                    // Resolve spool data for any assigned spoolIds we don't have yet
+                    for (const spoolId of Object.values(slots)) {
+                        if (spoolId && !spoolMap[spoolId]) {
+                            const found = spools.find(s => s.id === spoolId);
+                            if (found) spoolMap[spoolId] = found;
+                        }
+                    }
+                } catch { }
+            }
+            setAmsSlots(slotMap);
+            setAmsSpools(spoolMap);
+        }
+        fetchAms();
+    }, [bambuPrinters.length, spools]);
+
+
 
     const uniqueMaterials = Array.from(new Set(spools.map(s => s.filament?.material).filter(Boolean))).sort();
     const uniqueVendors = Array.from(new Set(spools.map(s => s.filament?.vendor?.name).filter(Boolean))).sort();
@@ -148,27 +219,42 @@ export default function SpoolmanPage() {
         setDragSpool(null);
         if (!spool) return;
 
-        // Check filament compatibility
-        const material = (spool.filament?.material || '').toUpperCase();
-        let supported = [];
-        try { supported = JSON.parse(printer.filament_types || '[]'); } catch { }
-        const supportedUpper = supported.map(s => s.toUpperCase());
+        // Use global guard to handle all warnings and assignments
+        startGuard(spool, printer.id);
+    }
 
-        if (material && supportedUpper.length > 0 && !supportedUpper.includes(material)) {
-            const proceed = confirm(
-                `⚠️ ${printer.name} does not list "${spool.filament?.material}" as a supported filament.\n\n` +
-                `Supported: ${supported.join(', ')}\n\n` +
-                `Assign anyway?`
-            );
-            if (!proceed) return;
-        }
+    // Bambu AMS tray drag-drop handlers
+    function onTrayDragOver(e, printerId, trayId) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setDropTargetTray({ printerId, trayId });
+    }
 
+    function onTrayDragLeave() {
+        setDropTargetTray(null);
+    }
+
+    async function onTrayDrop(e, printer, trayId) {
+        e.preventDefault();
+        setDropTargetTray(null);
+        const spool = dragSpool;
+        setDragSpool(null);
+        if (!spool) return;
+
+        // Use global guard for tray assignments too
+        startGuard(spool, printer.id, trayId);
+    }
+
+    async function handleClearTray(printerId, trayId) {
         try {
-            await setActiveSpool(printer.id, spool.id);
-            const r = await fetch('/api/status');
-            if (r.ok) setStatuses(await r.json());
+            await setActiveSpool(printerId, null, trayId);
+            setAmsSlots(prev => {
+                const slots = { ...(prev[printerId] || {}) };
+                delete slots[trayId];
+                return { ...prev, [printerId]: slots };
+            });
         } catch (err) {
-            alert(`Failed to set spool: ${err.message}`);
+            alert(`Failed to clear AMS tray: ${err.message}`);
         }
     }
 
@@ -181,6 +267,8 @@ export default function SpoolmanPage() {
             alert(`Failed to clear spool: ${err.message}`);
         }
     }
+
+
 
     async function handleDeleteSpool(spool) {
         const f = spool.filament || {};
@@ -195,20 +283,19 @@ export default function SpoolmanPage() {
     }
 
     async function handleAdjustSubmit() {
-        const amount = parseFloat(adjustAmount);
-        if (isNaN(amount)) return;
+        if (!adjustAmount || !adjustSpool) return;
         setAdjustBusy(true);
         try {
-            if (adjustType === 'measured') {
-                await measureFilament(adjustSpool.id, amount);
-            } else {
-                await useFilament(adjustSpool.id, adjustType, amount);
-            }
+            await measureFilament(adjustSpool.id, parseFloat(adjustAmount), adjustType);
+            await fetchSpools();
+
+            // Auto-clear bambu warning if we just weighed it
+            dismissBambuWarning(adjustSpool.id).then(fetchWarningsIfNeeded).catch(() => { });
+
             setAdjustSpool(null);
             setAdjustAmount('');
-            await fetchSpools();
-        } catch (e) {
-            alert(e.message);
+        } catch (err) {
+            alert(err.message);
         } finally {
             setAdjustBusy(false);
         }
@@ -301,7 +388,21 @@ export default function SpoolmanPage() {
                                         <div className="spool-card-header">
                                             <div className="spool-color-circle" style={{ backgroundColor: color }} />
                                             <div className="spool-card-info">
-                                                <span className="spool-card-name">{f.name || `Spool #${spool.id}`}</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                    <span className="spool-card-name">{f.name || `Spool #${spool.id}`}</span>
+                                                    {bambuWarnings?.some(w => w.spool_id === spool.id) && (
+                                                        <div
+                                                            className="spool-card-bambu-mark"
+                                                            title="Used on Bambu recently. Needs checking/measuring. Click to dismiss."
+                                                            onClick={e => {
+                                                                e.stopPropagation();
+                                                                dismissBambuWarning(spool.id).then(fetchWarningsIfNeeded).catch(() => { });
+                                                            }}
+                                                        >
+                                                            📦
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <span className="spool-card-material">
                                                     {f.material || '—'}
                                                     {f.color_hex && (
@@ -359,6 +460,14 @@ export default function SpoolmanPage() {
                                 onDragLeave={onDragLeave}
                                 onDrop={e => onDrop(e, p)}
                                 onClearSpool={() => handleClearSpool(p.id)}
+                                // Bambu AMS props
+                                amsSlots={amsSlots[p.id] || {}}
+                                amsSpools={amsSpools}
+                                dropTargetTray={dropTargetTray}
+                                onTrayDragOver={onTrayDragOver}
+                                onTrayDragLeave={onTrayDragLeave}
+                                onTrayDrop={onTrayDrop}
+                                onClearTray={handleClearTray}
                             />
                         );
                     })}
@@ -424,6 +533,8 @@ export default function SpoolmanPage() {
                     </div>
                 </div>
             )}
+
+            {renderGuardDialog()}
 
             {showAddSpool && (
                 <AddSpoolDialog

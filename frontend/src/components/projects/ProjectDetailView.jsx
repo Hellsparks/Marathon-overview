@@ -211,21 +211,48 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
         }
     };
 
+    // To use the guard effectively here, we need to know WHICH printer this spool is intended for.
+    // In ProjectDetailView, the spool is applied to a "slot", not directly to a printer yet.
+    // However, the guard expects a printer to check compatibility against.
+    // Since we don't know the exact printer until print time, we'll run a slightly modified check,
+    // OR we can pass a null printer and the guard will just check "is this spool in use?".
+    // Let's modify the onDrop handler to trigger a guard check just for "spool in use" and "bambu used" warnings.
+
+    // Wait, the user specifically mentioned "this filament guard logic shgould also apply ANYWHERE on the website"
+    // In ProjectDetailView, you assign a spool *to the project*, not to a printer directly.
+    // So let's wrap `handleChangeSpool` inside the guard hook, passing `null` for printerId to skip material checks but trigger the "in use" warnings.
+
+    const { startGuard, renderGuardDialog } = useFilamentGuard({
+        onConfirm: async (spool, _printer, slotKey) => {
+            try {
+                setLoading(true);
+                const res = await fetch(`/api/projects/${projectId}/filament`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slot_key: slotKey, spool_id: spool.id })
+                });
+                if (!res.ok) throw new Error('Failed to update spool');
+                setShowSpoolPicker(null);
+                await fetchData();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+    });
+
     const handleChangeSpool = async (slotKey, spoolId) => {
-        try {
-            setLoading(true);
-            const res = await fetch(`/api/projects/${projectId}/filament`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ slot_key: slotKey, spool_id: spoolId })
-            });
-            if (!res.ok) throw new Error('Failed to update spool');
-            setShowSpoolPicker(null);
-            await fetchData();
-        } catch (err) {
-            alert(err.message);
-        } finally {
-            setLoading(false);
+        if (spoolId === null) {
+            // Clearing spool bypasses guard
+            startGuard({ id: null }, null, slotKey);
+            return;
+        }
+
+        const spool = spools.find(s => s.id === spoolId);
+        if (spool) {
+            // Pass null for printerId since we're assigning to a project slot, not a specific printer yet
+            startGuard(spool, null, slotKey);
         }
     };
 

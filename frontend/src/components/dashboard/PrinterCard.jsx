@@ -73,6 +73,7 @@ export default function PrinterCard({ printer, status }) {
   const [busy, setBusy] = useState(false);
   const [webcamOpen, setWebcamOpen] = useState(false);
   const [macrosOpen, setMacrosOpen] = useState(false);
+  const [lightOn, setLightOn] = useState(false);
   const [macros, setMacros] = useState([]);
   const [scrapedCss, setScrapedCss] = useState(
     () => scrapedCssCache.get(`${printer.host}:${printer.port}`) || null
@@ -226,9 +227,27 @@ ${cardSel} .printer-card {
   }
 
   async function handleSetTemp(heater, temp) {
+    let script;
+    if (printer.firmware_type === 'bambu') {
+      // Bambu uses standard G-code; extruder=M104, bed=M140
+      script = heater === 'extruder' ? `M104 S${temp}` : `M140 S${temp}`;
+    } else {
+      script = `SET_HEATER_TEMPERATURE HEATER=${heater} TARGET=${temp}`;
+    }
     try {
-      await sendGcode(printer.id, `SET_HEATER_TEMPERATURE HEATER=${heater} TARGET=${temp}`);
+      await sendGcode(printer.id, script);
     } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function handleToggleLight() {
+    const next = !lightOn;
+    setLightOn(next);
+    try {
+      await sendGcode(printer.id, `M960 S5 P${next ? 1 : 0}`);
+    } catch (e) {
+      setLightOn(lightOn); // revert on error
       alert(e.message);
     }
   }
@@ -279,14 +298,25 @@ ${cardSel} .printer-card {
               >
                 Home
               </button>
-              <button
-                className="btn btn-sm v-btn"
-                onClick={() => run(() => sendGcode(printer.id, 'QUAD_GANTRY_LEVEL'))}
-                disabled={busy || isPrinting}
-                title="Quad Gantry Level"
-              >
-                QGL
-              </button>
+              {printer.firmware_type === 'bambu' ? (
+                <button
+                  className={`btn btn-sm v-btn${lightOn ? ' btn-primary' : ''}`}
+                  onClick={handleToggleLight}
+                  disabled={busy}
+                  title="Toggle chamber light"
+                >
+                  {lightOn ? '💡 Light On' : '💡 Light Off'}
+                </button>
+              ) : (
+                <button
+                  className="btn btn-sm v-btn"
+                  onClick={() => run(() => sendGcode(printer.id, 'QUAD_GANTRY_LEVEL'))}
+                  disabled={busy || isPrinting}
+                  title="Quad Gantry Level"
+                >
+                  QGL
+                </button>
+              )}
               {isPrinting && (
                 <button className="btn btn-sm v-btn" onClick={() => run(() => pausePrint(printer.id))} disabled={busy}>
                   Pause
@@ -338,6 +368,54 @@ ${cardSel} .printer-card {
                 </div>
               </div>
             )}
+            {/* AMS Filament Trays (Bambu only) */}
+            {printer.firmware_type === 'bambu' && status?._bambu?.ams?.ams?.length > 0 && (() => {
+              const amsUnit = status._bambu.ams.ams[0];
+              const trays = amsUnit?.tray || [];
+              const activeIdx = parseInt(status._bambu.ams.tray_now ?? '255', 10);
+              return (
+                <div className="ams-strip">
+                  <div className="ams-label">AMS</div>
+                  <div className="ams-trays">
+                    {[0, 1, 2, 3].map(i => {
+                      const tray = trays.find(t => parseInt(t.id, 10) === i);
+                      const hasFilament = tray && tray.tray_color;
+                      const color = hasFilament ? `#${tray.tray_color.slice(0, 6)}` : null;
+                      const material = tray?.tray_type || '';
+                      const remain = tray?.remain ?? -1;
+                      const isActive = i === activeIdx;
+                      return (
+                        <div
+                          key={i}
+                          className={`ams-tray${isActive ? ' ams-tray--active' : ''}${!hasFilament ? ' ams-tray--empty' : ''}`}
+                          title={hasFilament ? `${material}${remain >= 0 ? ` — ${remain}%` : ''}` : `Slot ${i + 1}: Empty`}
+                        >
+                          <div
+                            className="ams-tray-swatch"
+                            style={{
+                              backgroundColor: color || 'transparent',
+                              borderColor: color
+                                ? `color-mix(in srgb, ${color} 60%, black)`
+                                : 'var(--border)',
+                            }}
+                          />
+                          <span className="ams-tray-material">{material || '—'}</span>
+                          {hasFilament && remain >= 0 && (
+                            <div className="ams-tray-remain-track">
+                              <div
+                                className="ams-tray-remain-fill"
+                                style={{ width: `${remain}%`, backgroundColor: color }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="card-collapsibles">
               {/* Webcam */}
               <div className="collapsible-section">
@@ -357,36 +435,38 @@ ${cardSel} .printer-card {
                 )}
               </div>
 
-              {/* Macros */}
-              <div className="collapsible-section">
-                <div
-                  className="printer-card-header collapsible-toggle"
-                  onClick={() => setMacrosOpen(!macrosOpen)}
-                  style={{ cursor: 'pointer', minHeight: '36px', padding: '0 12px' }}
-                >
-                  <h3 className="printer-name v-toolbar__title" style={{ fontSize: '13px' }}>
-                    {macrosOpen ? '▼ Macros' : '▶ Macros'}
-                  </h3>
-                </div>
-                {macrosOpen && (
-                  <div className="collapsible-content macro-grid">
-                    {macros.length > 0 ? (
-                      macros.map(m => (
-                        <button
-                          key={m}
-                          className="btn btn-sm v-btn"
-                          onClick={() => run(() => sendGcode(printer.id, m))}
-                          disabled={busy}
-                        >
-                          {m}
-                        </button>
-                      ))
-                    ) : (
-                      <em className="text-muted">Loading macros...</em>
-                    )}
+              {/* Macros — hidden for Bambu printers (no macro support) */}
+              {printer.firmware_type !== 'bambu' && (
+                <div className="collapsible-section">
+                  <div
+                    className="printer-card-header collapsible-toggle"
+                    onClick={() => setMacrosOpen(!macrosOpen)}
+                    style={{ cursor: 'pointer', minHeight: '36px', padding: '0 12px' }}
+                  >
+                    <h3 className="printer-name v-toolbar__title" style={{ fontSize: '13px' }}>
+                      {macrosOpen ? '▼ Macros' : '▶ Macros'}
+                    </h3>
                   </div>
-                )}
-              </div>
+                  {macrosOpen && (
+                    <div className="collapsible-content macro-grid">
+                      {macros.length > 0 ? (
+                        macros.map(m => (
+                          <button
+                            key={m}
+                            className="btn btn-sm v-btn"
+                            onClick={() => run(() => sendGcode(printer.id, m))}
+                            disabled={busy}
+                          >
+                            {m}
+                          </button>
+                        ))
+                      ) : (
+                        <em className="text-muted">Loading macros...</em>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Footer */}
