@@ -450,7 +450,7 @@ export default function SpoolmanPage() {
                     {printers.map(p => {
                         const active = getActiveSpool(p.id);
                         const isTarget = dropTarget === p.id;
-                        const pStatus = statuses[p.id] || p.status || {};
+                        const pStatus = statuses?.printers?.[p.id] || p.status || {};
                         return (
                             <SpoolmanPrinterCard
                                 key={p.id}
