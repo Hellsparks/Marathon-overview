@@ -73,20 +73,30 @@ class BambuClient {
   async removeFromQueue() { throw new Error('Job queue not supported on Bambu printers'); }
   async startQueue() { throw new Error('Job queue not supported on Bambu printers'); }
 
-  async setAmsTray(trayId, { tray_type, tray_color, nozzle_temp_min, nozzle_temp_max }) {
-    bambuManager.publishCommand(this.printer, {
+  async setAmsTray(trayId, { tray_color, tray_type, nozzle_temp_min, nozzle_temp_max }) {
+    // The A1 uses AMS Lite (id: 255) whilst P1/X1 use standard AMS (id: 0).
+    // We broadcast to both to guarantee compatibility without requiring device model mapping.
+    const payloadA1 = {
       print: {
+        sequence_id: '0',
         command: 'ams_filament_setting',
-        ams_id: 0,
+        ams_id: 255,
+        target: 255,
         tray_id: trayId,
-        tray_type: tray_type || 'PLA',
         tray_color: tray_color || 'FFFFFFFF',
+        tray_info_idx: 'GFL99',
+        setting_id: tray_type || 'PLA',
+        tray_type: tray_type || 'PLA',
         nozzle_temp_min: nozzle_temp_min ?? 190,
         nozzle_temp_max: nozzle_temp_max ?? 230,
-        tray_info_idx: '',
-        sequence_id: '0',
-      },
-    });
+      }
+    };
+    const payloadX1 = {
+      print: { ...payloadA1.print, ams_id: 0, target: 0 }
+    };
+
+    await bambuManager.publishCommand(this.printer, payloadA1);
+    await bambuManager.publishCommand(this.printer, payloadX1);
     return { success: true };
   }
 
