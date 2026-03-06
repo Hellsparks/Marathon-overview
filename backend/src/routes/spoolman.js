@@ -13,6 +13,51 @@ function getSpoolmanUrl() {
     return row?.value || '';
 }
 
+const BAMBU_COLORS = [
+    { name: 'Black', hex: '000000' },
+    { name: 'White', hex: 'FFFFFF' },
+    { name: 'Red', hex: 'C12E1F' },
+    { name: 'Blue', hex: '0A2989' },
+    { name: 'Gray', hex: '8E9089' },
+    { name: 'Green', hex: '00AE42' },
+    { name: 'Yellow', hex: 'FEC600' },
+    { name: 'Orange', hex: 'FF9016' },
+    { name: 'Pink', hex: 'F5547C' },
+    { name: 'Cyan', hex: '489FDF' },
+    { name: 'Purple', hex: 'AF1685' },
+    { name: 'Brown', hex: '5C4738' }
+];
+
+function getNearestBambuColor(hexStr) {
+    if (!hexStr) return 'FFFFFFFF';
+
+    // Convert a hex string to an array [r, g, b]
+    const hexToRgb = (h) => {
+        h = h.replace(/^#/, '');
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        const arr = [...h.matchAll(/[a-f0-9]{2}/gi)].map(m => parseInt(m[0], 16));
+        return arr.length >= 3 ? arr.slice(0, 3) : [255, 255, 255];
+    };
+
+    const targetRgb = hexToRgb(hexStr);
+    let bestDist = Infinity;
+    let bestHex = 'FFFFFF';
+
+    for (const bc of BAMBU_COLORS) {
+        const cRgb = hexToRgb(bc.hex);
+        const dist = Math.sqrt(
+            Math.pow(targetRgb[0] - cRgb[0], 2) +
+            Math.pow(targetRgb[1] - cRgb[1], 2) +
+            Math.pow(targetRgb[2] - cRgb[2], 2)
+        );
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestHex = bc.hex;
+        }
+    }
+    return bestHex.toUpperCase() + 'FF';
+}
+
 /** Helper: fetch a single spool from Spoolman */
 async function fetchSpool(spoolId) {
     const url = getSpoolmanUrl();
@@ -91,7 +136,7 @@ router.post('/set-active', async (req, res) => {
                 if (!spool) return res.status(404).json({ error: 'Spool not found in Spoolman' });
 
                 const filament = spool.filament || {};
-                const colorHex = (filament.color_hex || 'FFFFFF').toUpperCase() + 'FF'; // RRGGBBAA
+                const colorHex = getNearestBambuColor(filament.color_hex);
                 const material = (filament.material || 'PLA').toUpperCase();
                 const nozzleTempMin = filament.settings_nozzle_temperature
                     ? Math.max(150, filament.settings_nozzle_temperature - 20)
