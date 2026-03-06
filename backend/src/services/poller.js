@@ -1,5 +1,5 @@
 const { getDb } = require('../db');
-const MoonrakerClient = require('./moonraker');
+const { getClient } = require('./clientFactory');
 const printerCache = require('./printerCache');
 
 const POLL_INTERVAL_MS = 3000;
@@ -53,34 +53,36 @@ async function pollAll() {
 
   await Promise.allSettled(
     printers.map(async (printer) => {
-      const client = new MoonrakerClient(printer);
+      const client = getClient(printer);
       try {
         const status = await client.getStatus();
 
-        // Auto-scrape logic
-        if (printer.theme_mode === 'scrape') {
-          const lastScrape = scrapeCache.get(printer.id) || 0;
-          if (!printer.custom_css || Date.now() - lastScrape > SCRAPE_COOLDOWN_MS) {
-            try {
-              const url = `http://${printer.host}:${printer.port || 7125}/server/files/config/.theme/custom.css`;
-              const res = await fetch(url);
-              if (res.ok) {
-                const css = await res.text();
-                if (css !== printer.custom_css) {
-                  db.prepare('UPDATE printers SET custom_css = ? WHERE id = ?').run(css, printer.id);
-                  printer.custom_css = css; // update local object for context
+        // Auto-scrape Mainsail CSS — Moonraker-only feature
+        if (printer.firmware_type === 'moonraker' || !printer.firmware_type) {
+          if (printer.theme_mode === 'scrape') {
+            const lastScrape = scrapeCache.get(printer.id) || 0;
+            if (!printer.custom_css || Date.now() - lastScrape > SCRAPE_COOLDOWN_MS) {
+              try {
+                const url = `http://${printer.host}:${printer.port || 7125}/server/files/config/.theme/custom.css`;
+                const res = await fetch(url);
+                if (res.ok) {
+                  const css = await res.text();
+                  if (css !== printer.custom_css) {
+                    db.prepare('UPDATE printers SET custom_css = ? WHERE id = ?').run(css, printer.id);
+                    printer.custom_css = css;
+                  }
+                  scrapeCache.set(printer.id, Date.now());
                 }
-                scrapeCache.set(printer.id, Date.now());
+              } catch (scrapeErr) {
+                console.error(`[Poller] Failed to auto-scrape theme for printer ${printer.id}:`, scrapeErr.message);
               }
-            } catch (scrapeErr) {
-              console.error(`[Poller] Failed to auto-scrape theme for printer ${printer.id}:`, scrapeErr.message);
             }
           }
         }
 
-        // Fetch active spool from Moonraker → Spoolman
+        // Fetch active spool from Moonraker → Spoolman (Moonraker-only)
         let activeSpool = null;
-        if (spoolmanUrl) {
+        if (spoolmanUrl && (!printer.firmware_type || printer.firmware_type === 'moonraker')) {
           const spoolId = await client.getActiveSpoolId();
           if (spoolId) {
             activeSpool = await getSpoolDetails(spoolId, spoolmanUrl);
@@ -93,12 +95,36 @@ async function pollAll() {
         const prevStateObj = previousStates.get(printer.id);
 
         if (prevStateObj) {
-          // Detect transition FROM printing TO a terminal state
-          if (prevStateObj.state === 'printing' && ['complete', 'cancelled', 'error'].includes(currentState)) {
+          const prevState = prevStateObj.state;
+
+          // Detect terminal transition and determine logged status.
+          // Handles all firmware types:
+          //   Moonraker:   printing → complete | cancelled | error
+          //   OctoPrint:   printing → complete (via "Finishing" mapping)
+          //                cancelling → standby (cancel completed)
+          //   Duet:        printing → standby (print completed naturally)
+          //                cancelling → standby (cancel completed)
+          let terminalStatus = null;
+
+          if (prevState === 'printing') {
+            if (['complete', 'cancelled', 'error'].includes(currentState)) {
+              terminalStatus = currentState;
+            } else if (currentState === 'standby') {
+              // Duet (and any firmware without an explicit 'complete' state) arrives
+              // here after a successful print. Treat as complete.
+              terminalStatus = 'complete';
+            }
+          } else if (prevState === 'cancelling') {
+            if (currentState === 'standby') {
+              terminalStatus = 'cancelled';
+            } else if (currentState === 'error') {
+              terminalStatus = 'error';
+            }
+          }
+
+          if (terminalStatus) {
             const duration = status.print_stats?.total_duration || status.print_stats?.print_duration || 0;
             const filamentUsed = status.print_stats?.filament_used || 0;
-
-            // Re-acquire the spool data that was active during the print
             const spoolUsed = prevStateObj.activeSpool || activeSpool;
 
             try {
@@ -116,10 +142,9 @@ async function pollAll() {
                 spoolUsed?.material || null,
                 spoolUsed?.color_hex || null,
                 spoolUsed?.vendor || null,
-                currentState
+                terminalStatus
               );
-              console.log(`[Poller] Logged print job (${currentState}): ${prevStateObj.filename} on Printer ${printer.id}`);
-              // Accumulate runtime for maintenance tracking
+              console.log(`[Poller] Logged print job (${terminalStatus}): ${prevStateObj.filename} on Printer ${printer.id}`);
               if (duration > 0) {
                 db.prepare('UPDATE printers SET runtime_s = runtime_s + ? WHERE id = ?').run(Math.round(duration), printer.id);
               }

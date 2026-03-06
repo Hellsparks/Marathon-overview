@@ -5,7 +5,7 @@ const fs = require('fs');
 const { getDb } = require('../db');
 const upload = require('../middleware/upload');
 const fileStorage = require('../services/fileStorage');
-const MoonrakerClient = require('../services/moonraker');
+const { getClient } = require('../services/clientFactory');
 const { parseGcodeFile } = require('../services/gcodeParser');
 
 // GET /api/files
@@ -161,9 +161,9 @@ router.post('/:id/send', async (req, res) => {
 
   try {
     const fileBuffer = fileStorage.readFile(file.filename);
-    const client = new MoonrakerClient(printer);
+    const client = getClient(printer);
 
-    // Upload the file to the printer's Moonraker
+    // Upload the file to the printer
     await client.uploadFile(file.display_name, fileBuffer);
 
     if (addToQueue) {

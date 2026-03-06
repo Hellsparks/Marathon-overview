@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db');
-const MoonrakerClient = require('../services/moonraker');
+const { getClient } = require('../services/clientFactory');
 
 function getPrinter(id) {
   return getDb().prepare('SELECT * FROM printers WHERE id = ?').get(id);
@@ -11,7 +11,7 @@ async function proxyPrint(action, req, res) {
   const printer = getPrinter(req.params.id);
   if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
-  const client = new MoonrakerClient(printer);
+  const client = getClient(printer);
   try {
     let result;
     switch (action) {
@@ -48,7 +48,7 @@ router.post('/:id/gcode', async (req, res) => {
   if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
   try {
-    await new MoonrakerClient(printer).sendGcode(script);
+    await getClient(printer).sendGcode(script);
     res.json({ success: true });
   } catch (err) {
     res.status(502).json({ error: err.message });
@@ -66,9 +66,9 @@ router.get('/:id/webcams', async (req, res) => {
     return res.json([{ name: 'webcam', stream_url: printer.webcam_url, snapshot_url: null }]);
   }
 
-  // 2. Try Moonraker webcam API
+  // 2. Try firmware webcam API (Moonraker only; OctoPrint/Duet return [])
   try {
-    const webcams = await new MoonrakerClient(printer).getWebcams();
+    const webcams = await getClient(printer).getWebcams();
     const resolved = webcams
       .filter(w => w.enabled !== false && w.stream_url)
       .map(w => ({
@@ -98,7 +98,7 @@ router.get('/:id/macros', async (req, res) => {
   if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
   try {
-    const macros = await new MoonrakerClient(printer).getMacros();
+    const macros = await getClient(printer).getMacros();
     res.json(macros);
   } catch (err) {
     res.status(502).json({ error: err.message });
