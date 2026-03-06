@@ -185,13 +185,13 @@ function ensureConnected(printer) {
   const topicReport = `device/${printer.serial_number}/report`;
   const topicRequest = `device/${printer.serial_number}/request`;
 
-  const client = mqtt.connect({
-    host: printer.host,
-    port: printer.port || 8883,
-    protocol: 'mqtts',
+  // Use URL-based connect — more reliable for TLS option propagation across
+  // mqtt package versions. rejectUnauthorized:false bypasses the self-signed cert.
+  const brokerUrl = `mqtts://${printer.host}:${printer.port || 8883}`;
+  const client = mqtt.connect(brokerUrl, {
     username: 'bblp',
     password: printer.api_key || '',
-    rejectUnauthorized: false, // Bambu printers use self-signed TLS certificates
+    rejectUnauthorized: false,
     clientId: `marathon_${printer.id}_${Math.floor(Math.random() * 0xffff).toString(16)}`,
     reconnectPeriod: 5000,
     connectTimeout: 10000,
@@ -199,8 +199,18 @@ function ensureConnected(printer) {
 
   connections.set(printer.id, client);
 
+  // Track the last real error so the 'offline' event doesn't overwrite it
+  let lastError = null;
+
   client.on('connect', () => {
+    lastError = null;
     console.log(`[Bambu] Connected to printer ${printer.id} (${printer.name})`);
+    // Clear any previous offline error now that we're connected
+    printerCache.set(printer.id, {
+      _online: false, // stays false until first MQTT message arrives
+      _error: 'Connected — waiting for first status message',
+      _polled_at: Date.now(),
+    });
     client.subscribe(topicReport, { qos: 0 });
     // Request a full status push so we don't wait for the next change event
     client.publish(topicRequest, JSON.stringify({
@@ -220,6 +230,7 @@ function ensureConnected(printer) {
   });
 
   client.on('error', (err) => {
+    lastError = err.message;
     console.error(`[Bambu] MQTT error for printer ${printer.id}:`, err.message);
     printerCache.set(printer.id, {
       _online: false,
@@ -228,10 +239,11 @@ function ensureConnected(printer) {
     });
   });
 
+  // 'offline' fires after 'error' during reconnect cycles — preserve the real error
   client.on('offline', () => {
     printerCache.set(printer.id, {
       _online: false,
-      _error: 'MQTT offline / reconnecting',
+      _error: lastError || 'MQTT offline / reconnecting',
       _polled_at: Date.now(),
     });
   });

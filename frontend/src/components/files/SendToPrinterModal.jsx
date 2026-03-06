@@ -4,6 +4,7 @@ import { useStatus } from '../../hooks/useStatus';
 import { sendFile } from '../../api/files';
 import { checkCompatibility } from '../../api/presets';
 import { getSpools, setActiveSpool } from '../../api/spoolman';
+import { useFilamentGuard } from '../../hooks/useFilamentGuard';
 
 export default function SendToPrinterModal({ file, onClose }) {
   const { printers } = usePrinters();
@@ -18,6 +19,31 @@ export default function SendToPrinterModal({ file, onClose }) {
   const [spools, setSpools] = useState([]);
   const [spoolsLoaded, setSpoolsLoaded] = useState(false);
   const [spoolAction, setSpoolAction] = useState('ignore'); // 'ignore', 'clear', 'active', or spool.id
+
+  const { startGuard, renderGuardDialog } = useFilamentGuard({
+    onConfirm: async (spool, printer, _trayId, act) => {
+      setBusy(true);
+      setError(null);
+      try {
+        // Pre-print spool Hook (using the confirmed spoolAction)
+        if (act === 'clear') {
+          await setActiveSpool(printer.id, null);
+        } else if (typeof act === 'number') {
+          await setActiveSpool(printer.id, spool.id);
+        }
+
+        await sendFile(file.id, printer.id, {
+          autoStart: action === 'start',
+          addToQueue: action === 'queue',
+        });
+        onClose?.();
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setBusy(false);
+      }
+    }
+  });
 
   // Run compatibility check when printer is selected
   useEffect(() => {
@@ -44,14 +70,22 @@ export default function SendToPrinterModal({ file, onClose }) {
 
   async function handleSend() {
     if (!printerId) return;
+
+    // If we're setting a new spool, pass it through the guard
+    if (typeof spoolAction === 'number') {
+      const spool = spools.find(s => s.id === spoolAction);
+      if (spool) {
+        startGuard(spool, printerId, undefined, spoolAction);
+        return;
+      }
+    }
+
+    // If no spool is being explicitly assigned (ignore, clear, active), proceed directly
     setBusy(true);
     setError(null);
     try {
-      // Pre-print spool Hook
       if (spoolAction === 'clear') {
         await setActiveSpool(printerId, null);
-      } else if (typeof spoolAction === 'number') {
-        await setActiveSpool(printerId, spoolAction);
       }
 
       await sendFile(file.id, printerId, {
@@ -232,7 +266,7 @@ export default function SendToPrinterModal({ file, onClose }) {
           )}
 
         </div> {/* end of split-pane wrapper */}
-
+        {renderGuardDialog()}
       </div>
     </div>
   );

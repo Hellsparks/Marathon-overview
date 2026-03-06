@@ -128,6 +128,8 @@ function defaultPort(firmwareType) {
     case 'octoprint':
     case 'duet':
       return 80;
+    case 'bambu':
+      return 8883;
     default:
       return 7125;
   }

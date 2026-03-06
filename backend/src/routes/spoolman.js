@@ -1,6 +1,8 @@
 const express = require('express');
 const { getDb } = require('../db');
 const MoonrakerClient = require('../services/moonraker');
+const BambuClient = require('../services/bambu');
+const printerCache = require('../services/printerCache');
 
 const router = express.Router();
 
@@ -9,6 +11,15 @@ function getSpoolmanUrl() {
     const db = getDb();
     const row = db.prepare("SELECT value FROM settings WHERE key = 'spoolman_url'").get();
     return row?.value || '';
+}
+
+/** Helper: fetch a single spool from Spoolman */
+async function fetchSpool(spoolId) {
+    const url = getSpoolmanUrl();
+    if (!url) return null;
+    const r = await fetch(`${url}/api/v1/spool/${spoolId}`, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    return r.json();
 }
 
 // GET /api/spoolman/spools — list all spools from Spoolman
@@ -52,28 +63,158 @@ router.get('/spool/:id', async (req, res) => {
     }
 });
 
-// POST /api/spoolman/set-active — set active spool on a printer (via Moonraker)
+// POST /api/spoolman/set-active — set active spool on a printer
+// For Moonraker printers: sets via Moonraker API
+// For Bambu printers: requires trayId (0-3), updates AMS via MQTT
 router.post('/set-active', async (req, res) => {
-    const { printerId, spoolId } = req.body;
+    const { printerId, spoolId, trayId } = req.body;
     if (!printerId) return res.status(400).json({ error: 'printerId required' });
     const db = getDb();
     const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(printerId);
     if (!printer) return res.status(404).json({ error: 'Printer not found' });
+
     try {
-        const client = new MoonrakerClient(printer);
-        const r = await fetch(
-            `${client.baseUrl}/server/spoolman/spool_id`,
-            {
-                method: 'POST',
-                headers: client._headers(),
-                body: JSON.stringify({ spool_id: spoolId ?? null }),
-                signal: AbortSignal.timeout(5000),
+        if (printer.firmware_type === 'bambu') {
+            // Bambu AMS spool assignment
+            if (trayId === undefined || trayId === null)
+                return res.status(400).json({ error: 'trayId (0-3) required for Bambu printers' });
+
+            const tray = parseInt(trayId, 10);
+            if (tray < 0 || tray > 3)
+                return res.status(400).json({ error: 'trayId must be 0-3' });
+
+            const client = new BambuClient(printer);
+
+            if (spoolId) {
+                // Fetch spool details from Spoolman for color/material/nozzle temps
+                const spool = await fetchSpool(spoolId);
+                if (!spool) return res.status(404).json({ error: 'Spool not found in Spoolman' });
+
+                const filament = spool.filament || {};
+                const colorHex = (filament.color_hex || 'FFFFFF').toUpperCase() + 'FF'; // RRGGBBAA
+                const material = (filament.material || 'PLA').toUpperCase();
+                const nozzleTempMin = filament.settings_nozzle_temperature
+                    ? Math.max(150, filament.settings_nozzle_temperature - 20)
+                    : 190;
+                const nozzleTempMax = filament.settings_nozzle_temperature
+                    ? Math.min(300, filament.settings_nozzle_temperature + 20)
+                    : 230;
+
+                await client.setAmsTray(tray, {
+                    tray_type: material,
+                    tray_color: colorHex,
+                    nozzle_temp_min: nozzleTempMin,
+                    nozzle_temp_max: nozzleTempMax,
+                });
+
+                // Save slot mapping
+                db.prepare(`
+                    INSERT INTO ams_slots (printer_id, tray_id, spool_id)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(printer_id, tray_id) DO UPDATE SET spool_id = excluded.spool_id
+                `).run(printer.id, tray, spoolId);
+
+                // Flag spool as Bambu-used (untracked)
+                db.prepare(`
+                    INSERT INTO bambu_used_spools (spool_id, printer_id)
+                    VALUES (?, ?)
+                    ON CONFLICT(spool_id) DO UPDATE SET printer_id = excluded.printer_id, assigned_at = datetime('now')
+                `).run(spoolId, printer.id);
+            } else {
+                // Clear the slot
+                await client.clearAmsTray(tray);
+                db.prepare('DELETE FROM ams_slots WHERE printer_id = ? AND tray_id = ?').run(printer.id, tray);
             }
-        );
-        if (!r.ok) throw new Error(`Moonraker ${r.status}`);
-        res.json(await r.json());
+
+            res.json({ ok: true });
+        } else {
+            // Moonraker printer — original behavior
+            const client = new MoonrakerClient(printer);
+            let r;
+            if (spoolId) {
+                // Assign a spool
+                r = await fetch(
+                    `${client.baseUrl}/server/spoolman/spool_id`,
+                    {
+                        method: 'POST',
+                        headers: client._headers(),
+                        body: JSON.stringify({ spool_id: spoolId }),
+                        signal: AbortSignal.timeout(5000),
+                    }
+                );
+            } else {
+                // Clear the active spool by passing an empty body
+                // (Older Moonraker versions lack DELETE and crash if passing null for spool_id)
+                r = await fetch(
+                    `${client.baseUrl}/server/spoolman/spool_id`,
+                    {
+                        method: 'POST',
+                        headers: client._headers(),
+                        body: JSON.stringify({}),
+                        signal: AbortSignal.timeout(5000),
+                    }
+                );
+            }
+            if (!r.ok) {
+                const text = await r.text().catch(() => '');
+                console.error(`Moonraker set-spool failed (${r.status}): ${text}`);
+                throw new Error(`Moonraker ${r.status}`);
+            }
+
+            // If this spool was previously used on Bambu, clear the warning
+            // (user is now putting it on a tracked printer)
+            if (spoolId) {
+                db.prepare('DELETE FROM bambu_used_spools WHERE spool_id = ?').run(spoolId);
+            }
+
+            res.json(await r.json());
+        }
     } catch (err) {
         res.status(502).json({ error: err.message });
+    }
+});
+
+// GET /api/spoolman/ams-slots/:printerId — current spool→slot mapping for a Bambu printer
+router.get('/ams-slots/:printerId', (req, res) => {
+    try {
+        const db = getDb();
+        const slots = db.prepare('SELECT tray_id, spool_id FROM ams_slots WHERE printer_id = ?')
+            .all(parseInt(req.params.printerId, 10));
+        // Return as object: { 0: spoolId, 1: spoolId, ... }
+        const map = {};
+        for (const s of slots) {
+            map[s.tray_id] = s.spool_id;
+        }
+        res.json(map);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/spoolman/bambu-warnings — spools with untracked Bambu usage
+// Returns spool IDs + printer name for displaying warnings
+router.get('/bambu-warnings', (req, res) => {
+    try {
+        const db = getDb();
+        const rows = db.prepare(`
+            SELECT b.spool_id, b.printer_id, b.assigned_at, p.name as printer_name
+            FROM bambu_used_spools b
+            JOIN printers p ON p.id = b.printer_id
+        `).all();
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/spoolman/bambu-warnings/:spoolId — dismiss a Bambu usage warning
+router.delete('/bambu-warnings/:spoolId', (req, res) => {
+    try {
+        const db = getDb();
+        db.prepare('DELETE FROM bambu_used_spools WHERE spool_id = ?').run(parseInt(req.params.spoolId, 10));
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

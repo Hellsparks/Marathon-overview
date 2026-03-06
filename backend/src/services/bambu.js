@@ -47,8 +47,16 @@ class BambuClient {
     return { success: true };
   }
 
-  async sendGcode() {
-    throw new Error('Arbitrary G-code commands are not supported on Bambu printers in LAN mode');
+  async sendGcode(script) {
+    // Bambu supports sending G-code via MQTT gcode_line command.
+    // Each line is sent as a separate command; multi-line scripts are joined with \n.
+    const lines = script.split('\n').map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      bambuManager.publishCommand(this.printer, {
+        print: { command: 'gcode_line', param: line + ' \n', sequence_id: '0' },
+      });
+    }
+    return { success: true };
   }
 
   // File upload requires FTPS (port 990) — not yet implemented
@@ -64,6 +72,40 @@ class BambuClient {
   async addToQueue() { throw new Error('Job queue not supported on Bambu printers'); }
   async removeFromQueue() { throw new Error('Job queue not supported on Bambu printers'); }
   async startQueue() { throw new Error('Job queue not supported on Bambu printers'); }
+
+  async setAmsTray(trayId, { tray_type, tray_color, nozzle_temp_min, nozzle_temp_max }) {
+    bambuManager.publishCommand(this.printer, {
+      print: {
+        command: 'ams_filament_setting',
+        ams_id: 0,
+        tray_id: trayId,
+        tray_type: tray_type || 'PLA',
+        tray_color: tray_color || 'FFFFFFFF',
+        nozzle_temp_min: nozzle_temp_min ?? 190,
+        nozzle_temp_max: nozzle_temp_max ?? 230,
+        tray_info_idx: '',
+        sequence_id: '0',
+      },
+    });
+    return { success: true };
+  }
+
+  async clearAmsTray(trayId) {
+    bambuManager.publishCommand(this.printer, {
+      print: {
+        command: 'ams_filament_setting',
+        ams_id: 0,
+        tray_id: trayId,
+        tray_type: '',
+        tray_color: '',
+        nozzle_temp_min: 0,
+        nozzle_temp_max: 0,
+        tray_info_idx: '',
+        sequence_id: '0',
+      },
+    });
+    return { success: true };
+  }
 
   async getMacros() { return []; }
   async getWebcams() { return []; }
