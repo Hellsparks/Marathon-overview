@@ -56,6 +56,7 @@ export default function PrinterList({ printers, onRefresh }) {
                 <td>
                   {p.firmware_type === 'octoprint' && 'OctoPrint'}
                   {p.firmware_type === 'duet' && 'Duet/RRF'}
+                  {p.firmware_type === 'bambu' && 'Bambu Lab'}
                   {(!p.firmware_type || p.firmware_type === 'moonraker') && 'Klipper'}
                 </td>
                 <td>

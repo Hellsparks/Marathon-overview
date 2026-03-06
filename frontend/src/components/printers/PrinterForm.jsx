@@ -13,6 +13,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
     port: printer?.port ?? 7125,
     api_key: printer?.api_key ?? '',
     firmware_type: printer?.firmware_type ?? 'moonraker',
+    serial_number: printer?.serial_number ?? '',
     bed_width: printer?.bed_width ?? '',
     bed_depth: printer?.bed_depth ?? '',
     bed_height: printer?.bed_height ?? '',
@@ -37,10 +38,8 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
 
   function setFirmwareType(type) {
     setForm(f => {
-      // Auto-update port to the default for the new firmware type, but only
-      // when the current port is still a known default (avoid overwriting custom ports).
-      const knownDefaults = [7125, 80];
-      const autoPort = type === 'moonraker' ? 7125 : 80;
+      const knownDefaults = [7125, 80, 8883];
+      const autoPort = type === 'moonraker' ? 7125 : type === 'bambu' ? 8883 : 80;
       const port = knownDefaults.includes(f.port) ? autoPort : f.port;
       return { ...f, firmware_type: type, port };
     });
@@ -92,6 +91,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
       const data = {
         ...form,
         api_key: form.api_key || null,
+        serial_number: form.serial_number || null,
         bed_width: form.bed_width || null,
         bed_depth: form.bed_depth || null,
         bed_height: form.bed_height || null,
@@ -174,6 +174,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                   <option value="moonraker">Klipper (Moonraker)</option>
                   <option value="octoprint">OctoPrint</option>
                   <option value="duet">Duet / RepRapFirmware</option>
+                  <option value="bambu">Bambu Lab (LAN Developer Mode)</option>
                 </select>
               </label>
 
@@ -187,18 +188,32 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                 <input className="form-input" type="number" value={form.port}
                   onChange={e => set('port', Number(e.target.value))} required min={1} max={65535} />
               </label>
+              {form.firmware_type === 'bambu' && (
+                <label className="form-label">
+                  Serial Number
+                  <input className="form-input" value={form.serial_number}
+                    onChange={e => set('serial_number', e.target.value)}
+                    placeholder="e.g. 01P00A…  (shown in printer settings)" />
+                </label>
+              )}
+
               <label className="form-label">
-                {form.firmware_type === 'duet' ? 'Password' : 'API Key'}{' '}
+                {form.firmware_type === 'duet' ? 'Password' : form.firmware_type === 'bambu' ? 'LAN Access Code' : 'API Key'}{' '}
                 <span className="form-optional">(optional)</span>
                 <input className="form-input" value={form.api_key}
                   onChange={e => set('api_key', e.target.value)}
-                  placeholder={form.firmware_type === 'duet' ? 'Leave empty if no password set' : 'Leave empty if not set'} />
+                  placeholder={
+                    form.firmware_type === 'duet' ? 'Leave empty if no password set' :
+                    form.firmware_type === 'bambu' ? 'Access code shown in printer network settings' :
+                    'Leave empty if not set'
+                  } />
               </label>
 
               {form.firmware_type !== 'moonraker' && (
                 <p className="text-muted" style={{ fontSize: '12px', marginTop: '4px' }}>
                   {form.firmware_type === 'octoprint' && 'Job queue, Klipper macros, and Spoolman are not available for OctoPrint printers.'}
-                  {form.firmware_type === 'duet' && 'Job queue, Klipper macros, and Spoolman are not available for Duet printers. The Duet password is used as the API key.'}
+                  {form.firmware_type === 'duet' && 'Job queue, Klipper macros, and Spoolman are not available for Duet printers.'}
+                  {form.firmware_type === 'bambu' && 'Connects via MQTT (LAN Developer Mode). Enable it in the printer\'s settings under Network → LAN Only Mode. Job queue, macros, file push, and Spoolman are not available. Pause/resume/cancel are supported.'}
                 </p>
               )}
             </>

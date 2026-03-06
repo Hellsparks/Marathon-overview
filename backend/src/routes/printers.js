@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db');
 const { pollAll } = require('../services/poller');
+const bambuManager = require('../services/bambuManager');
 
 // GET /api/printers
 router.get('/', (req, res) => {
@@ -18,6 +19,7 @@ router.post('/', (req, res) => {
     filament_types = '[]', toolhead_count = 1, preset_id = null,
     custom_css = null, theme_mode = 'global',
     firmware_type = 'moonraker',
+    serial_number = null,
   } = req.body;
 
   const port = req.body.port ?? defaultPort(firmware_type);
@@ -28,13 +30,13 @@ router.post('/', (req, res) => {
 
   const db = getDb();
   const result = db.prepare(
-    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     name, host, port, api_key || null,
     bed_width, bed_depth, bed_height,
     typeof filament_types === 'string' ? filament_types : JSON.stringify(filament_types),
-    toolhead_count, preset_id, custom_css, theme_mode, firmware_type
+    toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number || null
   );
 
   const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(result.lastInsertRowid);
@@ -44,14 +46,14 @@ router.post('/', (req, res) => {
 
 // PUT /api/printers/:id
 router.put('/:id', (req, res) => {
-  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type } = req.body;
+  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number } = req.body;
   const db = getDb();
   const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id);
   if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
   db.prepare(
     `UPDATE printers SET name=?, host=?, port=?, api_key=?, enabled=?,
-     bed_width=?, bed_depth=?, bed_height=?, filament_types=?, toolhead_count=?, preset_id=?, custom_css=?, theme_mode=?, firmware_type=?,
+     bed_width=?, bed_depth=?, bed_height=?, filament_types=?, toolhead_count=?, preset_id=?, custom_css=?, theme_mode=?, firmware_type=?, serial_number=?,
      updated_at=datetime('now')
      WHERE id=?`
   ).run(
@@ -71,6 +73,7 @@ router.put('/:id', (req, res) => {
     custom_css !== undefined ? custom_css : printer.custom_css,
     theme_mode !== undefined ? theme_mode : printer.theme_mode,
     firmware_type !== undefined ? firmware_type : (printer.firmware_type || 'moonraker'),
+    serial_number !== undefined ? serial_number : printer.serial_number,
     req.params.id
   );
 
@@ -100,8 +103,11 @@ router.post('/scrape-theme', async (req, res) => {
 // DELETE /api/printers/:id
 router.delete('/:id', (req, res) => {
   const db = getDb();
+  const printer = db.prepare('SELECT firmware_type FROM printers WHERE id = ?').get(req.params.id);
   const result = db.prepare('DELETE FROM printers WHERE id = ?').run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Printer not found' });
+  // Clean up Bambu MQTT connection if applicable
+  if (printer?.firmware_type === 'bambu') bambuManager.disconnect(req.params.id);
   res.json({ success: true });
 });
 
