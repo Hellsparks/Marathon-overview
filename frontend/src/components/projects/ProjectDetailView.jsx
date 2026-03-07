@@ -4,6 +4,8 @@ import { setActiveSpool, getSpools } from '../../api/spoolman';
 import { getSettings } from '../../api/settings';
 import { useRightPanel } from '../../contexts/RightPanelContext';
 import { usePrinterStatus } from '../../contexts/PrinterStatusContext';
+import { useFilamentGuard } from '../../hooks/useFilamentGuard';
+import { useToast } from '../../contexts/ToastContext';
 import StatusBadge from '../common/StatusBadge';
 
 function PrinterSelector({ printers, status, plate, selectedId, onSelect, disabled }) {
@@ -91,6 +93,7 @@ function PrinterSelector({ printers, status, plate, selectedId, onSelect, disabl
 export default function ProjectDetailView({ projectId, onBack, filaments = [] }) {
     const { setSelected } = useRightPanel() || {};
     const status = usePrinterStatus() || {};
+    const toast = useToast();
     const [project, setProject] = useState(null);
     const [spools, setSpools] = useState([]);
     const [showSpoolPicker, setShowSpoolPicker] = useState(null); // { slotKey, currentSpoolId }
@@ -134,6 +137,20 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
         fetchData();
     }, [projectId]);
 
+    // Auto-refresh while any plate is actively printing
+    useEffect(() => {
+        if (!project) return;
+        const hasActivePlate = project.plates?.some(p => p.status === 'printing');
+        if (!hasActivePlate) return;
+        const interval = setInterval(() => {
+            fetch(`/api/projects/${projectId}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => { if (data) setProject(data); })
+                .catch(() => {});
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [project?.plates?.map(p => p.status).join(',')]);
+
     const handlePrint = async (plate) => {
         const printerId = selectedPrinters[plate.id];
         if (!printerId) return alert('Please select a printer first.');
@@ -144,27 +161,19 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
         try {
             setLoading(true);
 
-            // 1. Find assigned spool if any
-            // Plates can have multiple slots, but usually one main one. 
-            // For now, let's look for any assignment for this project.
-            // In a better version, we'd know WHICH slot this plate uses.
-            // Templates have plate_slots which map to slot_key.
-            // Let's check if we have slot_keys for this plate.
-
+            // Set active spool if assigned to this project
             if (project.color_assignments?.length > 0) {
-                // If plate has slot_keys, pick the first one's assignment
                 const assignedSpoolId = project.color_assignments[0].spool_id;
                 if (assignedSpoolId) {
-                    console.log(`Setting active spool ${assignedSpoolId} for printer ${printer.name}`);
                     await setActiveSpool(printer.id, assignedSpoolId);
                 }
             }
 
-            // 2. Start Print
-            const res = await fetch(`/api/printers/${printer.id}/print/start`, {
+            // Upload file to printer and start print (backend handles upload + active job tracking)
+            const res = await fetch(`/api/projects/${project.id}/plates/${plate.id}/print`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename: plate.filename })
+                body: JSON.stringify({ printer_id: printer.id })
             });
 
             if (!res.ok) {
@@ -172,11 +181,10 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                 throw new Error(err.error || 'Failed to start print');
             }
 
-            // 3. Update plate status
-            await updatePlateStatus(plate.id, 'printing');
-            alert(`Print started on ${printer.name}`);
+            await fetchData();
+            toast?.(`Print started on ${printer.name}`, 'success');
         } catch (err) {
-            alert(err.message);
+            toast?.(err.message, 'error') || alert(err.message);
         } finally {
             setLoading(false);
         }

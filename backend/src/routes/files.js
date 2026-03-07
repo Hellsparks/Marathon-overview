@@ -148,8 +148,10 @@ router.get('/:id/compatibility/:printerId', (req, res) => {
 });
 
 // POST /api/files/:id/send  — upload to a specific printer's Moonraker
+// Optional body fields: plate_id (integer) — associates this print with a project plate
+// so the poller can auto-update the plate's status when the job completes.
 router.post('/:id/send', async (req, res) => {
-  const { printerId, autoStart = false, addToQueue = false } = req.body;
+  const { printerId, autoStart = false, addToQueue = false, plate_id = null } = req.body;
   if (!printerId) return res.status(400).json({ error: 'printerId is required' });
 
   const db = getDb();
@@ -173,10 +175,19 @@ router.post('/:id/send', async (req, res) => {
 
     if (autoStart) {
       await client.startPrint(file.display_name);
-      // Log to history
+
+      // Record the active job so the poller can link it to a project plate on completion
       db.prepare(
-        `INSERT INTO print_history (printer_id, file_id, filename) VALUES (?, ?, ?)`
-      ).run(printer.id, file.id, file.display_name);
+        `INSERT OR REPLACE INTO printer_active_jobs (printer_id, plate_id, filename) VALUES (?, ?, ?)`
+      ).run(printer.id, plate_id || null, file.display_name);
+
+      // Mark the project plate as printing if provided
+      if (plate_id) {
+        db.prepare(
+          `UPDATE project_plates SET status = 'printing', printer_id = ? WHERE id = ?`
+        ).run(printer.id, plate_id);
+      }
+
       return res.json({ success: true, action: 'started' });
     }
 

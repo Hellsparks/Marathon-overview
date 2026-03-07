@@ -11,6 +11,7 @@ import MaintenancePanel from '../rightpanel/MaintenancePanel';
 import ProjectStatusPanel from '../rightpanel/ProjectStatusPanel';
 import { RightPanelContext } from '../../contexts/RightPanelContext';
 import { PrinterStatusContext } from '../../contexts/PrinterStatusContext';
+import { ToastProvider } from '../../contexts/ToastContext';
 import { useStatus } from '../../hooks/useStatus';
 
 export default function AppShell() {
@@ -36,34 +37,37 @@ export default function AppShell() {
     if (p === '/spoolman/inventory') return <InventoryPanel />;
     if (p === '/spoolman') return <SpoolPanel selected={selected} />;
     if (p === '/maintenance') return <MaintenancePanel />;
+    if (p === '/history') return null; // full width
     return null;
   }
 
   const panel = getPanel();
 
   return (
-    <PrinterStatusContext.Provider value={status}>
-      <RightPanelContext.Provider value={{ selected, setSelected }}>
-        <div className="app-shell">
-          <NavBar onlineCount={onlineCount} totalCount={totalCount} />
-          <div className="app-body">
-            <Sidebar />
-            <main className="app-main v-main">
-              {error && (
-                <div className="error-banner">
-                  Backend unreachable: {error}
-                </div>
+    <ToastProvider>
+      <PrinterStatusContext.Provider value={status}>
+        <RightPanelContext.Provider value={{ selected, setSelected }}>
+          <div className="app-shell">
+            <NavBar onlineCount={onlineCount} totalCount={totalCount} />
+            <div className="app-body">
+              <Sidebar />
+              <main className="app-main v-main">
+                {error && (
+                  <div className="error-banner">
+                    Backend unreachable: {error}
+                  </div>
+                )}
+                <Outlet context={{ status }} />
+              </main>
+              {panel && (
+                <aside className="sidebar-right">
+                  {panel}
+                </aside>
               )}
-              <Outlet context={{ status }} />
-            </main>
-            {panel && (
-              <aside className="sidebar-right">
-                {panel}
-              </aside>
-            )}
+            </div>
           </div>
-        </div>
-      </RightPanelContext.Provider>
-    </PrinterStatusContext.Provider>
+        </RightPanelContext.Provider>
+      </PrinterStatusContext.Provider>
+    </ToastProvider>
   );
 }
