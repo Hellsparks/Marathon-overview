@@ -5,7 +5,7 @@ import TempControl from '../common/TempControl';
 import ProgressBar from '../common/ProgressBar';
 import ConfirmDialog from '../common/ConfirmDialog';
 import WebcamStream from './WebcamStream';
-import { pausePrint, resumePrint, cancelPrint, sendGcode, getMacros } from '../../api/control';
+import { pausePrint, resumePrint, cancelPrint, sendGcode, getMacros, controlLight } from '../../api/control';
 import { scrapedCssCache } from '../../services/scrapedCssCache';
 
 /**
@@ -245,7 +245,13 @@ ${cardSel} .printer-card {
     const next = !lightOn;
     setLightOn(next);
     try {
-      await sendGcode(printer.id, `M960 S5 P${next ? 1 : 0}`);
+      if (printer.firmware_type === 'bambu') {
+        // Use Bambu MQTT ledctrl command (chamber_light)
+        await controlLight(printer.id, next, 'chamber_light');
+      } else {
+        // Klipper: SET_LED or M960 depending on setup
+        await sendGcode(printer.id, `SET_LED LED="chamber" RED=${next ? 1 : 0} GREEN=${next ? 1 : 0} BLUE=${next ? 1 : 0}`);
+      }
     } catch (e) {
       setLightOn(lightOn); // revert on error
       alert(e.message);
