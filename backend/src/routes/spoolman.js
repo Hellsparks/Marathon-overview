@@ -28,6 +28,31 @@ const BAMBU_COLORS = [
     { name: 'Brown', hex: '5C4738' }
 ];
 
+// Bambu filament profile IDs sourced from OrcaSlicer BBL profile JSONs +
+// live MQTT sniff. tray_info_idx = setting_id with 'S' removed (GFS_L99 → GFL99).
+// PETG uses GFG02/GFSG02_03 confirmed from live MQTT sniff on A1 with dev mode.
+const MATERIAL_PROFILES = {
+    'PLA': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PLA+': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PLA-CF': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PLA SILK': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'MATTE PLA': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PETG': { tray_info_idx: 'GFG02', setting_id: 'GFSG02_03' },
+    'PETG-CF': { tray_info_idx: 'GFG02', setting_id: 'GFSG02_03' },
+    'PETG-HF': { tray_info_idx: 'GFG02', setting_id: 'GFSG02_03' },
+    'ABS': { tray_info_idx: 'GFB99', setting_id: 'GFSB99' },
+    'ASA': { tray_info_idx: 'GFB98', setting_id: 'GFSB98' },
+    'TPU': { tray_info_idx: 'GFR99', setting_id: 'GFSR99' },
+    'TPE': { tray_info_idx: 'GFR99', setting_id: 'GFSR99' },
+    'NYLON': { tray_info_idx: 'GFN98', setting_id: 'GFSN98' },
+    'PA': { tray_info_idx: 'GFN98', setting_id: 'GFSN98' },
+    'PA-CF': { tray_info_idx: 'GFN98', setting_id: 'GFSN98' },
+    'PC': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PVA': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'HIPS': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+};
+const DEFAULT_PROFILE = { tray_info_idx: 'GFL99', setting_id: 'GFSL99' };
+
 function getNearestBambuColor(hexStr) {
     if (!hexStr) return 'FFFFFFFF';
 
@@ -138,6 +163,7 @@ router.post('/set-active', async (req, res) => {
                 const filament = spool.filament || {};
                 const colorHex = getNearestBambuColor(filament.color_hex);
                 const material = (filament.material || 'PLA').toUpperCase();
+                const profile = MATERIAL_PROFILES[material] || DEFAULT_PROFILE;
                 const nozzleTempMin = filament.settings_nozzle_temperature
                     ? Math.max(150, filament.settings_nozzle_temperature - 20)
                     : 190;
@@ -145,12 +171,16 @@ router.post('/set-active', async (req, res) => {
                     ? Math.min(300, filament.settings_nozzle_temperature + 20)
                     : 230;
 
+                console.log(`[Bambu] set-active: printerId=${printerId} spoolId=${spoolId} trayId=${tray} color=${colorHex} material=${material} idx=${profile.tray_info_idx}`);
                 await client.setAmsTray(tray, {
                     tray_type: material,
                     tray_color: colorHex,
+                    tray_info_idx: profile.tray_info_idx,
+                    setting_id: profile.setting_id,
                     nozzle_temp_min: nozzleTempMin,
                     nozzle_temp_max: nozzleTempMax,
                 });
+                console.log(`[Bambu] setAmsTray completed for printer ${printerId} tray ${tray}`);
 
                 // Save slot mapping
                 db.prepare(`

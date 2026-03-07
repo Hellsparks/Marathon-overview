@@ -148,7 +148,7 @@ router.get('/:id/bambu-stream', (req, res) => {
     }
   });
 
-  const cleanup = () => { try { socket.destroy(); } catch (_) {} };
+  const cleanup = () => { try { socket.destroy(); } catch (_) { } };
   socket.on('error', (err) => {
     console.error(`[Bambu] Camera stream error for printer ${printer.id}:`, err.message);
     cleanup();
@@ -173,6 +173,42 @@ router.get('/:id/macros', async (req, res) => {
   try {
     const macros = await getClient(printer).getMacros();
     res.json(macros);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// POST /api/printers/:id/light
+// Body: { on: boolean, node?: 'chamber_light' | 'work_light' }
+router.post('/:id/light', async (req, res) => {
+  const printer = getPrinter(req.params.id);
+  if (!printer) return res.status(404).json({ error: 'Printer not found' });
+  if (printer.firmware_type !== 'bambu') return res.status(400).json({ error: 'Light control only supported on Bambu printers' });
+
+  const { on, node = 'chamber_light' } = req.body;
+  if (on === undefined) return res.status(400).json({ error: 'on (boolean) is required' });
+
+  try {
+    await getClient(printer).controlLight(!!on, node);
+    res.json({ success: true, on: !!on, node });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// POST /api/printers/:id/temperature
+// Body: { type: 'bed' | 'nozzle', temp: number }
+router.post('/:id/temperature', async (req, res) => {
+  const printer = getPrinter(req.params.id);
+  if (!printer) return res.status(404).json({ error: 'Printer not found' });
+
+  const { type, temp } = req.body;
+  if (!type || temp === undefined) return res.status(400).json({ error: 'type and temp are required' });
+  if (!['bed', 'nozzle'].includes(type)) return res.status(400).json({ error: "type must be 'bed' or 'nozzle'" });
+
+  try {
+    await getClient(printer).setTemperature(type, temp);
+    res.json({ success: true, type, temp });
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
