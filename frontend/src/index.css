@@ -3867,20 +3867,24 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* ========================================================================= */
 
 .movement-panel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "rose z"
+    "extruder z";
+  gap: 16px 24px;
   padding: 16px;
   background-color: var(--surface2);
   border-radius: var(--radius);
   margin-top: 8px;
+  align-items: center;
 }
 
 .movement-rose-container {
+  grid-area: rose;
   width: 180px;
   height: 180px;
-  position: relative;
+  justify-self: center;
 }
 
 .movement-rose-svg {
@@ -3934,6 +3938,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .movement-z-container {
+  grid-area: z;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3941,17 +3946,22 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .movement-e-container {
+  grid-area: extruder;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
   gap: 6px;
-  height: 100%;
 }
 
 .e-btn-row {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.e-arrows {
+  display: flex;
   gap: 4px;
 }
 
@@ -4005,13 +4015,16 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border: 1px solid var(--border);
   color: var(--text-muted);
   border-radius: 4px;
-  width: 26px;
-  height: 20px;
-  font-size: 10px;
+  width: 32px;
+  height: 28px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .e-step-btn:hover {
