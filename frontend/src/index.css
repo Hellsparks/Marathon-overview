@@ -608,9 +608,11 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .printer-card-header.bambu-header {
-  background: linear-gradient(90deg, #028e36 0%, #016b28 100%);
-  color: #ffffff;
+  background: #028e36;
   border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  margin: -16px -16px 0 -16px;
+  padding: 12px 16px;
+  border-radius: var(--radius) var(--radius) 0 0;
 }
 
 .printer-card-header.bambu-header .printer-name {

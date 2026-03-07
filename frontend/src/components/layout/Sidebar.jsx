@@ -11,17 +11,17 @@ const linkClass = ({ isActive }) =>
 // Flat link list used when running inside a slicer's embedded WebView.
 // Sub-sections are always visible and styled the same as top-level items.
 const embeddedLinks = [
-  { to: '/',                      label: 'Dashboard',    icon: '▦', end: true },
-  { to: '/files',                 label: 'Files',        icon: '📁', end: true },
-  { to: '/files/templates',       label: 'Templates',    icon: null, end: true },
-  { to: '/files/projects',        label: 'Projects',     icon: null, end: true },
-  { to: '/files/archive',         label: 'Archive',      icon: null, end: true },
-  { to: '/spoolman',              label: 'Spoolman',     icon: '🧵', end: true },
-  { to: '/spoolman/filaments',    label: 'Filaments',    icon: null, end: true },
-  { to: '/spoolman/manufacturers',label: 'Manufacturers',icon: null, end: true },
-  { to: '/spoolman/inventory',    label: 'Inventory',    icon: null, end: true },
-  { to: '/maintenance',           label: 'Maintenance',  icon: '🔧', end: true },
-  { to: '/settings',              label: 'Settings',     icon: '⚙',  end: true },
+  { to: '/', label: 'Dashboard', icon: '▦', end: true },
+  { to: '/files', label: 'Files', icon: '📁', end: true },
+  { to: '/files/templates', label: 'Templates', icon: null, end: true },
+  { to: '/files/projects', label: 'Projects', icon: null, end: true },
+  { to: '/files/archive', label: 'Archive', icon: null, end: true },
+  { to: '/spoolman', label: 'Spoolman', icon: '🧵', end: true },
+  { to: '/spoolman/filaments', label: 'Filaments', icon: null, end: true },
+  { to: '/spoolman/manufacturers', label: 'Manufacturers', icon: null, end: true },
+  { to: '/spoolman/inventory', label: 'Inventory', icon: null, end: true },
+  { to: '/maintenance', label: 'Maintenance', icon: '🔧', end: true },
+  { to: '/settings', label: 'Settings', icon: '⚙', end: true },
 ];
 
 export default function Sidebar() {
@@ -30,15 +30,15 @@ export default function Sidebar() {
 
   // useMatch is the idiomatic React Router v6 way to detect active sections.
   // Each call must be unconditional (Rules of Hooks). end:false = prefix match.
-  const matchRoot     = useMatch({ path: '/', end: true });
-  const matchPrinter  = useMatch({ path: '/printer/:id', end: false });
-  const matchFiles    = useMatch({ path: '/files', end: false });
+  const matchRoot = useMatch({ path: '/', end: true });
+  const matchPrinter = useMatch({ path: '/printer/:id', end: false });
+  const matchFiles = useMatch({ path: '/files', end: false });
   const matchSpoolman = useMatch({ path: '/spoolman', end: false });
 
   const onDashboardExact = !!matchRoot;
   const onDashboard = !!(matchRoot || matchPrinter);
-  const onFiles     = !!matchFiles;
-  const onSpoolman  = !!matchSpoolman;
+  const onFiles = !!matchFiles;
+  const onSpoolman = !!matchSpoolman;
 
   // ── Embedded / slicer mode ───────────────────────────────────────────────
   // All links always visible as flat regular items (no collapsible sub-groups).
@@ -81,7 +81,7 @@ export default function Sidebar() {
             {/* Printer sub-tabs — shown when on Dashboard or any /printer/ route */}
             {onDashboard && printers.length > 0 && (
               <ul className="sidebar-subnav" style={{ listStyle: 'none', padding: '8px', margin: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {printers.map(p => (
+                {printers.filter(p => p.firmware_type !== 'bambu').map(p => (
                   <li key={p.id} style={{ width: '100%' }}>
                     <NavLink
                       to={`/printer/${p.id}`}
@@ -167,7 +167,7 @@ export default function Sidebar() {
 
           {[
             { to: '/maintenance', label: 'Maintenance', icon: '🔧' },
-            { to: '/settings',    label: 'Settings',    icon: '⚙'  },
+            { to: '/settings', label: 'Settings', icon: '⚙' },
           ].map(({ to, label, icon }) => (
             <li key={to} style={{ width: '100%' }}>
               <NavLink
