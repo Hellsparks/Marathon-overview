@@ -89,12 +89,12 @@ export default function MaintenancePrinterCard({ printer, tasks, intervals, hist
           setScrapedCss(d.css);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [printer.id, printer.host, printer.port, printer.theme_mode]);
 
   const rawCss = printer.theme_mode === 'custom' ? printer.custom_css
     : printer.theme_mode === 'scrape' ? scrapedCss
-    : null;
+      : null;
 
   const cardSel = `[data-printer-id="${printer.id}"]`;
   const scopedCss = rawCss ? scopeCSS(rawCss, cardSel) : null;
@@ -111,10 +111,10 @@ ${cardSel} {
   const hasV3 = rawCss && /--v-theme-primary\s*:/i.test(rawCss);
   const vPrimary = hasV2 ? 'var(--v-primary-base)' : hasV3 ? 'rgb(var(--v-theme-primary))' : 'var(--primary)';
   const vWarning = hasV2 ? 'var(--v-warning-base)' : hasV3 ? 'rgb(var(--v-theme-warning))' : 'var(--warning)';
-  const vDanger  = hasV2 ? 'var(--v-error-base)'   : hasV3 ? 'rgb(var(--v-theme-error))'   : 'var(--danger)';
+  const vDanger = hasV2 ? 'var(--v-error-base)' : hasV3 ? 'rgb(var(--v-theme-error))' : 'var(--danger)';
   const vSuccess = hasV2 ? 'var(--v-success-base)' : hasV3 ? 'rgb(var(--v-theme-success))' : 'var(--success)';
   const vSurface = hasV2 ? 'var(--v-sheet-bg-color)' : hasV3 ? 'rgb(var(--v-theme-surface))' : 'var(--surface)';
-  const vText    = hasV2 ? 'var(--v-theme-on-surface)' : hasV3 ? 'rgb(var(--v-theme-on-surface))' : 'var(--text)';
+  const vText = hasV2 ? 'var(--v-theme-on-surface)' : hasV3 ? 'rgb(var(--v-theme-on-surface))' : 'var(--text)';
 
   const cardPolyfill = rawCss ? `
 ${cardSel} {
@@ -149,7 +149,7 @@ ${cardSel} .printer-card {
       )}
       <div className={`printer-card v-card theme--dark${isIsolated ? ' isolated-theme' : ''}`}>
         {/* Header — identical structure to dashboard card */}
-        <div className="printer-card-header v-card__title">
+        <div className={`printer-card-header v-card__title${printer.firmware_type === 'bambu' ? ' bambu-header' : ''}`}>
           <h3 className="printer-name v-toolbar__title">{printer.name}</h3>
           <span className="maint-card-runtime">
             {fmtHours((printer.runtime_s || 0) / 3600)} runtime

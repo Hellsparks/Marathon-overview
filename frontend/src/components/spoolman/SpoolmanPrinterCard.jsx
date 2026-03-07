@@ -130,7 +130,7 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                 onDrop={!isBambu ? onDrop : undefined}
                 style={{ cursor: isBambu ? 'default' : 'pointer', marginBottom: '12px' }}
             >
-                <div className="printer-card-header v-card__title">
+                <div className={`printer-card-header v-card__title${isBambu ? ' bambu-header' : ''}`}>
                     <h3 className="printer-name v-toolbar__title">{printer.name}</h3>
                     {isBambu && <span className="ams-badge">AMS</span>}
                 </div>

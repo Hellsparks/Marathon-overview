@@ -607,6 +607,16 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   justify-content: space-between;
 }
 
+.printer-card-header.bambu-header {
+  background: linear-gradient(90deg, #028e36 0%, #016b28 100%);
+  color: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.printer-card-header.bambu-header .printer-name {
+  color: #ffffff;
+}
+
 .printer-name {
   font-size: 15px;
   font-weight: 600;
