@@ -55,7 +55,7 @@ export function useFilamentGuard({ onConfirm, onWeighSpool, onClearBambuWarning 
         // 2. Check if the printer is currently printing (and stealing an active spool)
         // This is a bit complex: if the spool is actively assigned to *another* printer that is currently printing.
         // For now, let's just check if the TARGET printer is printing to warn them about changing spool mid-print.
-        const printerStatus = statuses[printer.id];
+        const printerStatus = statuses?.printers?.[printer.id];
         const isPrinting = printerStatus?.print_stats?.state === 'printing';
         if (isPrinting) {
             warnings.push({
@@ -65,9 +65,10 @@ export function useFilamentGuard({ onConfirm, onWeighSpool, onClearBambuWarning 
         }
 
         // 2b. Check if the spool *itself* is already in use by another actively printing printer.
-        for (const pid in statuses) {
+        const printerStatuses = statuses?.printers || {};
+        for (const pid in printerStatuses) {
             if (parseInt(pid) === printer.id) continue;
-            const pStatus = statuses[pid];
+            const pStatus = printerStatuses[pid];
             if (pStatus?._active_spool?.id === spool.id && pStatus?.print_stats?.state === 'printing') {
                 const otherPrinter = printers.find(p => p.id === parseInt(pid));
                 warnings.push({
