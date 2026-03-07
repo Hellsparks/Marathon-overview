@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - 2026-03-07
+## [1.1.0] - 2026-03-07
 
 ### 🚀 Features & Enhancements
 - **History & Analytics**: New `/history` page with Farm-wide and Printer-specific scopes, responsive SVG Timelines for printer uptime with day/week/month/custom filtering, interactive hover tooltips conveying print details/status, local ISO-styled date tables (`yyyy.mm.dd HH:MM`), and robust UI fallback states.
