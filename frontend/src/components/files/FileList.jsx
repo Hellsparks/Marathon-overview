@@ -21,14 +21,19 @@ export default function FileList({ files, onDeleted, viewMode = 'list' }) {
   const { selected, setSelected } = useRightPanel() || {};
 
   function selectFile(file) {
-    setSelected?.({ file, stats: fileStats[file.filename] || null });
+    setSelected?.({ file, stats: fileStats[file.display_name] || null });
   }
 
   useEffect(() => {
-    fetch('/api/stats/files')
-      .then(r => r.json())
-      .then(data => setFileStats(data))
-      .catch(err => console.error('Failed to load file stats:', err));
+    function loadStats() {
+      fetch('/api/stats/files')
+        .then(r => r.json())
+        .then(data => setFileStats(data))
+        .catch(err => console.error('Failed to load file stats:', err));
+    }
+    loadStats();
+    const interval = setInterval(loadStats, 10_000);
+    return () => clearInterval(interval);
   }, []);
 
   async function handleDelete(file) {
@@ -96,9 +101,9 @@ export default function FileList({ files, onDeleted, viewMode = 'list' }) {
                     ) : (
                       <span className="text-muted">—</span>
                     )}
-                    {fileStats[file.filename] && (
-                      <span className="badge badge-success" style={{ marginLeft: '4px' }} title={`Completed ${fileStats[file.filename].print_count} times`}>
-                        ★ {fileStats[file.filename].print_count}
+                    {fileStats[file.display_name] && (
+                      <span className="badge badge-success" style={{ marginLeft: '4px' }} title={`Completed ${fileStats[file.display_name].print_count} times`}>
+                        ★ {fileStats[file.display_name].print_count}
                       </span>
                     )}
                   </td>

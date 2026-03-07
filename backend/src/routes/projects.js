@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db').getDb();
 const path = require('path');
 const fs = require('fs');
+const { getClient } = require('../services/clientFactory');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '../../uploads');
 const TEMPLATES_DIR = process.env.TEMPLATES_DIR || path.join(UPLOADS_DIR, 'templates');
@@ -141,12 +142,12 @@ router.post('/', (req, res) => {
                 for (const fid of file_ids) {
                     const filename = facilitateFile(fid, prefix);
                     const meta = db.prepare(`SELECT * FROM gcode_metadata WHERE file_id = ?`).get(fid) || {};
-                    const gfile = db.prepare(`SELECT filename FROM gcode_files WHERE id = ?`).get(fid);
+                    const gfile = db.prepare(`SELECT filename, display_name FROM gcode_files WHERE id = ?`).get(fid);
 
                     insertPlate.run(
                         projectId,
                         filename,
-                        gfile?.filename || filename,
+                        gfile?.display_name || filename,
                         meta.estimated_time_s || null,
                         meta.filament_usage_mm || null,
                         meta.filament_usage_g || null,
@@ -296,6 +297,51 @@ router.delete('/:id', (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/projects/:id/plates/:plateId/print
+// Upload the plate file to a printer and start the print, tracking the active job.
+router.post('/:id/plates/:plateId/print', async (req, res) => {
+    const { printer_id } = req.body;
+    if (!printer_id) return res.status(400).json({ error: 'printer_id is required' });
+
+    try {
+        const plate = db.prepare('SELECT * FROM project_plates WHERE id = ? AND project_id = ?')
+            .get(req.params.plateId, req.params.id);
+        if (!plate) return res.status(404).json({ error: 'Plate not found' });
+
+        const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(printer_id);
+        if (!printer) return res.status(404).json({ error: 'Printer not found' });
+
+        // Plate files live in TEMPLATES_DIR
+        const filePath = path.join(TEMPLATES_DIR, plate.filename);
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: `File not found on disk: ${plate.filename}` });
+
+        const fileBuffer = fs.readFileSync(filePath);
+
+        // Resolve a clean upload name: strip the prjXXX_ or tplXXX_ prefix,
+        // then look up the original gcode_files record to get its human-readable display_name.
+        const strippedName = plate.filename.replace(/^(?:prj|tpl)\d+_/, '');
+        const origFile = db.prepare('SELECT display_name FROM gcode_files WHERE filename = ?').get(strippedName);
+        const uploadName = origFile?.display_name || plate.display_name || strippedName;
+        console.log(`[Projects] plate="${plate.filename}" stripped="${strippedName}" origFile="${origFile?.display_name}" uploadName="${uploadName}"`);
+
+        const client = getClient(printer);
+        await client.uploadFile(uploadName, fileBuffer);
+        await client.startPrint(uploadName);
+
+        // Record active job so poller can link completion to this plate
+        db.prepare(`INSERT OR REPLACE INTO printer_active_jobs (printer_id, plate_id, filename) VALUES (?, ?, ?)`)
+            .run(printer.id, plate.id, uploadName);
+
+        // Mark plate as printing
+        db.prepare(`UPDATE project_plates SET status = 'printing', printer_id = ? WHERE id = ?`)
+            .run(printer.id, plate.id);
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
     }
 });
 

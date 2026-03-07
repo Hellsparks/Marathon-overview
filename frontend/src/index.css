@@ -4066,3 +4066,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .rose-home:hover .home-icon-text {
   fill: #fff;
 }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}

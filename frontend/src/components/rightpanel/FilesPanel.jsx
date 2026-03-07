@@ -1,6 +1,30 @@
+import { useState, useEffect } from 'react';
 import FileUpload from '../files/FileUpload';
 
 export default function FilesPanel({ selected }) {
+    const [stats, setStats] = useState(null);
+
+    // Fetch stats for the selected file; re-fetch whenever selection changes or every 10s
+    useEffect(() => {
+        if (!selected?.file) { setStats(null); return; }
+        let cancelled = false;
+        function load() {
+            fetch('/api/stats/files')
+                .then(r => r.json())
+                .then(data => {
+                if (!cancelled) {
+                    const s = data[selected.file.display_name];
+                    // Only show stats if there's at least one job (success, cancelled, or error)
+                    setStats((s && (s.print_count > 0 || s.cancelled_count > 0 || s.error_count > 0)) ? s : null);
+                }
+            })
+                .catch(() => {});
+        }
+        load();
+        const interval = setInterval(load, 10_000);
+        return () => { cancelled = true; clearInterval(interval); };
+    }, [selected?.file?.id]);
+
     if (!selected) {
         return (
             <div className="rp-placeholder" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -17,7 +41,7 @@ export default function FilesPanel({ selected }) {
         );
     }
 
-    const { file, stats } = selected || {};
+    const { file } = selected || {};
 
     if (!file) {
         return (
@@ -96,17 +120,33 @@ export default function FilesPanel({ selected }) {
                         <div className="rp-section-title">Print History</div>
                         <div className="rp-stats-grid">
                             <div className="rp-stat-row">
-                                <span className="rp-stat-label">Times printed</span>
+                                <span className="rp-stat-label">Completed</span>
                                 <span className="rp-stat-value rp-stat-highlight">{stats.print_count}</span>
                             </div>
-                            <div className="rp-stat-row">
-                                <span className="rp-stat-label">Total print time</span>
-                                <span className="rp-stat-value">{fmtDuration(stats.total_duration_s)}</span>
-                            </div>
-                            <div className="rp-stat-row">
-                                <span className="rp-stat-label">Filament used</span>
-                                <span className="rp-stat-value">{fmtFilament(stats.total_filament_mm)}</span>
-                            </div>
+                            {stats.cancelled_count > 0 && (
+                                <div className="rp-stat-row">
+                                    <span className="rp-stat-label">Cancelled</span>
+                                    <span className="rp-stat-value" style={{ color: 'var(--text-muted)' }}>{stats.cancelled_count}</span>
+                                </div>
+                            )}
+                            {stats.error_count > 0 && (
+                                <div className="rp-stat-row">
+                                    <span className="rp-stat-label">Failed</span>
+                                    <span className="rp-stat-value" style={{ color: '#e53935' }}>{stats.error_count}</span>
+                                </div>
+                            )}
+                            {stats.print_count > 0 && (
+                                <>
+                                    <div className="rp-stat-row">
+                                        <span className="rp-stat-label">Total print time</span>
+                                        <span className="rp-stat-value">{fmtDuration(stats.total_duration_s)}</span>
+                                    </div>
+                                    <div className="rp-stat-row">
+                                        <span className="rp-stat-label">Filament used</span>
+                                        <span className="rp-stat-value">{fmtFilament(stats.total_filament_mm)}</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </>
                 ) : (

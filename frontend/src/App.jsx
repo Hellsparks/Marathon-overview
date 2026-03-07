@@ -12,6 +12,7 @@ import MaintenancePage from './pages/MaintenancePage';
 import PrinterIframePage from './pages/PrinterIframePage';
 import TemplatesPage from './pages/TemplatesPage';
 import ProjectsPage from './pages/ProjectsPage';
+import HistoryPage from './pages/HistoryPage';
 import { ThemeProvider } from './components/layout/ThemeProvider';
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="spoolman/inventory" element={<InventoryPage />} />
             <Route path="printer/:printerId" element={<PrinterIframePage />} />
             <Route path="maintenance" element={<MaintenancePage />} />
+            <Route path="history" element={<HistoryPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

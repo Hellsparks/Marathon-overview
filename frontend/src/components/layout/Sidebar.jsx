@@ -20,6 +20,7 @@ const embeddedLinks = [
   { to: '/spoolman/filaments', label: 'Filaments', icon: null, end: true },
   { to: '/spoolman/manufacturers', label: 'Manufacturers', icon: null, end: true },
   { to: '/spoolman/inventory', label: 'Inventory', icon: null, end: true },
+  { to: '/history', label: 'History', icon: '🕒', end: true },
   { to: '/maintenance', label: 'Maintenance', icon: '🔧', end: true },
   { to: '/settings', label: 'Settings', icon: '⚙', end: true },
 ];
@@ -166,6 +167,7 @@ export default function Sidebar() {
           </li>
 
           {[
+            { to: '/history', label: 'History', icon: '🕒' },
             { to: '/maintenance', label: 'Maintenance', icon: '🔧' },
             { to: '/settings', label: 'Settings', icon: '⚙' },
           ].map(({ to, label, icon }) => (
