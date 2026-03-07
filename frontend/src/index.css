@@ -3861,3 +3861,180 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   justify-content: flex-end;
   flex-wrap: wrap;
 }
+
+/* ========================================================================= */
+/* Movement Rose Controls */
+/* ========================================================================= */
+
+.movement-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 16px;
+  background-color: var(--surface2);
+  border-radius: var(--radius);
+  margin-top: 8px;
+}
+
+.movement-rose-container {
+  width: 180px;
+  height: 180px;
+  position: relative;
+}
+
+.movement-rose-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.rose-wedge path {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 2px;
+  transition: fill 0.2s, filter 0.2s;
+  cursor: pointer;
+}
+
+.rose-wedge:hover path {
+  fill: var(--primary);
+  filter: brightness(1.2);
+}
+
+.rose-wedge text {
+  pointer-events: none;
+  fill: var(--text-muted);
+  transition: fill 0.2s;
+}
+
+.rose-wedge:hover text {
+  fill: #fff;
+}
+
+.rose-home {
+  cursor: pointer;
+}
+
+.rose-home circle {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 2px;
+  transition: fill 0.2s;
+}
+
+.rose-home:hover circle {
+  fill: var(--primary);
+}
+
+.rose-home:hover path,
+.rose-home:hover text {
+  fill: #fff;
+}
+
+.movement-z-container,
+.movement-e-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.z-label,
+.e-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  letter-spacing: 0.05em;
+}
+
+.z-btn,
+.e-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  width: 48px;
+  height: 28px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.z-btn:hover:not(:disabled),
+.e-btn:hover:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.z-btn:disabled,
+.e-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-home-z {
+  height: 36px;
+  border-radius: 6px;
+  background: var(--surface2);
+}
+
+.e-step-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  width: 26px;
+  height: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.e-step-btn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.e-step-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+
+/* Orca Theme Overrides for Bambu Printers */
+.movement-panel.orca-theme {
+  --primary: #028e36;
+  --primary-d: #016b28;
+  --surface2: #1e1e24;
+  /* Darker background like bottom half of Orca */
+  --surface: #2b2d36;
+  /* Base wedge color */
+  --border: #14151a;
+  /* Darker borders */
+}
+
+/* Ensure the home icon path inherits color */
+.home-icon-path {
+  fill: var(--primary);
+  transition: fill 0.2s;
+}
+
+.home-icon-text {
+  fill: var(--primary);
+  transition: fill 0.2s;
+}
+
+.rose-home:hover .home-icon-path,
+.rose-home:hover .home-icon-text {
+  fill: #fff;
+}

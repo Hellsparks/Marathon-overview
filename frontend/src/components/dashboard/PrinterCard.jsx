@@ -5,6 +5,7 @@ import TempControl from '../common/TempControl';
 import ProgressBar from '../common/ProgressBar';
 import ConfirmDialog from '../common/ConfirmDialog';
 import WebcamStream from './WebcamStream';
+import MovementRose from './MovementRose';
 import { pausePrint, resumePrint, cancelPrint, sendGcode, getMacros, controlLight } from '../../api/control';
 import { scrapedCssCache } from '../../services/scrapedCssCache';
 
@@ -72,6 +73,7 @@ export default function PrinterCard({ printer, status }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [webcamOpen, setWebcamOpen] = useState(false);
+  const [movementOpen, setMovementOpen] = useState(false);
   const [macrosOpen, setMacrosOpen] = useState(false);
   const [lightOn, setLightOn] = useState(false);
   const [macros, setMacros] = useState([]);
@@ -437,6 +439,24 @@ ${cardSel} .printer-card {
                 {webcamOpen && (
                   <div className="collapsible-content">
                     <WebcamStream printerId={printer.id} />
+                  </div>
+                )}
+              </div>
+
+              {/* Movement */}
+              <div className="collapsible-section">
+                <div
+                  className="printer-card-header collapsible-toggle"
+                  onClick={() => setMovementOpen(!movementOpen)}
+                  style={{ cursor: 'pointer', minHeight: '36px', padding: '0 12px' }}
+                >
+                  <h3 className="printer-name v-toolbar__title" style={{ fontSize: '13px' }}>
+                    {movementOpen ? '▼ Movement' : '▶ Movement'}
+                  </h3>
+                </div>
+                {movementOpen && (
+                  <div className="collapsible-content">
+                    <MovementRose printerId={printer.id} printerType={printer.firmware_type} />
                   </div>
                 )}
               </div>
