@@ -149,7 +149,7 @@ ${cardSel} .printer-card {
             <div
                 className={`printer-card printer-card--sidebar state-${state} v-card theme--dark${isIsolated ? ' isolated-theme' : ''}${active ? ' active' : ''}`}
             >
-                <div className="printer-card-header v-card__title">
+                <div className={`printer-card-header v-card__title${printer.firmware_type === 'bambu' ? ' bambu-header' : ''}`}>
                     <h3 className="printer-name v-toolbar__title">{printer.name}</h3>
                     <StatusBadge state={state} />
                 </div>
