@@ -141,9 +141,11 @@ export default function MovementRose({ printerId, printerType }) {
             {/* Extruder Controls */}
             <div className="movement-e-container">
                 <div className="e-label">Extruder</div>
-                <button className="e-btn" onClick={() => jog('E', -eDist, 300)} disabled={busy} title="Retract">▲</button>
-                <button className="e-btn" onClick={() => jog('E', eDist, 300)} disabled={busy} title="Extrude">▼</button>
-                <div className="e-step-group" style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                <div className="e-btn-row" style={{ display: 'flex', gap: '4px' }}>
+                    <button className="e-btn" onClick={() => jog('E', -eDist, 300)} disabled={busy} title="Retract">▲</button>
+                    <button className="e-btn" onClick={() => jog('E', eDist, 300)} disabled={busy} title="Extrude">▼</button>
+                </div>
+                <div className="e-step-group" style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
                     {[5, 10, 50].map(val => (
                         <button
                             key={val}
