@@ -1,6 +1,8 @@
 const express = require('express');
 const { getDb } = require('../db');
 const MoonrakerClient = require('../services/moonraker');
+const BambuClient = require('../services/bambu');
+const printerCache = require('../services/printerCache');
 
 const router = express.Router();
 
@@ -9,6 +11,85 @@ function getSpoolmanUrl() {
     const db = getDb();
     const row = db.prepare("SELECT value FROM settings WHERE key = 'spoolman_url'").get();
     return row?.value || '';
+}
+
+const BAMBU_COLORS = [
+    { name: 'Black', hex: '000000' },
+    { name: 'White', hex: 'FFFFFF' },
+    { name: 'Red', hex: 'C12E1F' },
+    { name: 'Blue', hex: '0A2989' },
+    { name: 'Gray', hex: '8E9089' },
+    { name: 'Green', hex: '00AE42' },
+    { name: 'Yellow', hex: 'FEC600' },
+    { name: 'Orange', hex: 'FF9016' },
+    { name: 'Pink', hex: 'F5547C' },
+    { name: 'Cyan', hex: '489FDF' },
+    { name: 'Purple', hex: 'AF1685' },
+    { name: 'Brown', hex: '5C4738' }
+];
+
+// Bambu filament profile IDs sourced from OrcaSlicer BBL profile JSONs +
+// live MQTT sniff. tray_info_idx = setting_id with 'S' removed (GFS_L99 → GFL99).
+// PETG uses GFG02/GFSG02_03 confirmed from live MQTT sniff on A1 with dev mode.
+const MATERIAL_PROFILES = {
+    'PLA': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PLA+': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PLA-CF': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PLA SILK': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'MATTE PLA': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PETG': { tray_info_idx: 'GFG02', setting_id: 'GFSG02_03' },
+    'PETG-CF': { tray_info_idx: 'GFG02', setting_id: 'GFSG02_03' },
+    'PETG-HF': { tray_info_idx: 'GFG02', setting_id: 'GFSG02_03' },
+    'ABS': { tray_info_idx: 'GFB99', setting_id: 'GFSB99' },
+    'ASA': { tray_info_idx: 'GFB98', setting_id: 'GFSB98' },
+    'TPU': { tray_info_idx: 'GFR99', setting_id: 'GFSR99' },
+    'TPE': { tray_info_idx: 'GFR99', setting_id: 'GFSR99' },
+    'NYLON': { tray_info_idx: 'GFN98', setting_id: 'GFSN98' },
+    'PA': { tray_info_idx: 'GFN98', setting_id: 'GFSN98' },
+    'PA-CF': { tray_info_idx: 'GFN98', setting_id: 'GFSN98' },
+    'PC': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'PVA': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+    'HIPS': { tray_info_idx: 'GFL99', setting_id: 'GFSL99' },
+};
+const DEFAULT_PROFILE = { tray_info_idx: 'GFL99', setting_id: 'GFSL99' };
+
+function getNearestBambuColor(hexStr) {
+    if (!hexStr) return 'FFFFFFFF';
+
+    // Convert a hex string to an array [r, g, b]
+    const hexToRgb = (h) => {
+        h = h.replace(/^#/, '');
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        const arr = [...h.matchAll(/[a-f0-9]{2}/gi)].map(m => parseInt(m[0], 16));
+        return arr.length >= 3 ? arr.slice(0, 3) : [255, 255, 255];
+    };
+
+    const targetRgb = hexToRgb(hexStr);
+    let bestDist = Infinity;
+    let bestHex = 'FFFFFF';
+
+    for (const bc of BAMBU_COLORS) {
+        const cRgb = hexToRgb(bc.hex);
+        const dist = Math.sqrt(
+            Math.pow(targetRgb[0] - cRgb[0], 2) +
+            Math.pow(targetRgb[1] - cRgb[1], 2) +
+            Math.pow(targetRgb[2] - cRgb[2], 2)
+        );
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestHex = bc.hex;
+        }
+    }
+    return bestHex.toUpperCase() + 'FF';
+}
+
+/** Helper: fetch a single spool from Spoolman */
+async function fetchSpool(spoolId) {
+    const url = getSpoolmanUrl();
+    if (!url) return null;
+    const r = await fetch(`${url}/api/v1/spool/${spoolId}`, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    return r.json();
 }
 
 // GET /api/spoolman/spools — list all spools from Spoolman
@@ -52,28 +133,163 @@ router.get('/spool/:id', async (req, res) => {
     }
 });
 
-// POST /api/spoolman/set-active — set active spool on a printer (via Moonraker)
+// POST /api/spoolman/set-active — set active spool on a printer
+// For Moonraker printers: sets via Moonraker API
+// For Bambu printers: requires trayId (0-3), updates AMS via MQTT
 router.post('/set-active', async (req, res) => {
-    const { printerId, spoolId } = req.body;
+    const { printerId, spoolId, trayId } = req.body;
     if (!printerId) return res.status(400).json({ error: 'printerId required' });
     const db = getDb();
     const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(printerId);
     if (!printer) return res.status(404).json({ error: 'Printer not found' });
+
     try {
-        const client = new MoonrakerClient(printer);
-        const r = await fetch(
-            `${client.baseUrl}/server/spoolman/spool_id`,
-            {
-                method: 'POST',
-                headers: client._headers(),
-                body: JSON.stringify({ spool_id: spoolId ?? null }),
-                signal: AbortSignal.timeout(5000),
+        if (printer.firmware_type === 'bambu') {
+            // Bambu AMS spool assignment
+            if (trayId === undefined || trayId === null)
+                return res.status(400).json({ error: 'trayId (0-3) required for Bambu printers' });
+
+            const tray = parseInt(trayId, 10);
+            if (tray < 0 || tray > 3)
+                return res.status(400).json({ error: 'trayId must be 0-3' });
+
+            const client = new BambuClient(printer);
+
+            if (spoolId) {
+                // Fetch spool details from Spoolman for color/material/nozzle temps
+                const spool = await fetchSpool(spoolId);
+                if (!spool) return res.status(404).json({ error: 'Spool not found in Spoolman' });
+
+                const filament = spool.filament || {};
+                const colorHex = getNearestBambuColor(filament.color_hex);
+                const material = (filament.material || 'PLA').toUpperCase();
+                const profile = MATERIAL_PROFILES[material] || DEFAULT_PROFILE;
+                const nozzleTempMin = filament.settings_nozzle_temperature
+                    ? Math.max(150, filament.settings_nozzle_temperature - 20)
+                    : 190;
+                const nozzleTempMax = filament.settings_nozzle_temperature
+                    ? Math.min(300, filament.settings_nozzle_temperature + 20)
+                    : 230;
+
+                console.log(`[Bambu] set-active: printerId=${printerId} spoolId=${spoolId} trayId=${tray} color=${colorHex} material=${material} idx=${profile.tray_info_idx}`);
+                await client.setAmsTray(tray, {
+                    tray_type: material,
+                    tray_color: colorHex,
+                    tray_info_idx: profile.tray_info_idx,
+                    setting_id: profile.setting_id,
+                    nozzle_temp_min: nozzleTempMin,
+                    nozzle_temp_max: nozzleTempMax,
+                });
+                console.log(`[Bambu] setAmsTray completed for printer ${printerId} tray ${tray}`);
+
+                // Save slot mapping
+                db.prepare(`
+                    INSERT INTO ams_slots (printer_id, tray_id, spool_id)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(printer_id, tray_id) DO UPDATE SET spool_id = excluded.spool_id
+                `).run(printer.id, tray, spoolId);
+
+                // Flag spool as Bambu-used (untracked)
+                db.prepare(`
+                    INSERT INTO bambu_used_spools (spool_id, printer_id)
+                    VALUES (?, ?)
+                    ON CONFLICT(spool_id) DO UPDATE SET printer_id = excluded.printer_id, assigned_at = datetime('now')
+                `).run(spoolId, printer.id);
+            } else {
+                // Clear the slot
+                await client.clearAmsTray(tray);
+                db.prepare('DELETE FROM ams_slots WHERE printer_id = ? AND tray_id = ?').run(printer.id, tray);
             }
-        );
-        if (!r.ok) throw new Error(`Moonraker ${r.status}`);
-        res.json(await r.json());
+
+            res.json({ ok: true });
+        } else {
+            // Moonraker printer — original behavior
+            const client = new MoonrakerClient(printer);
+            let r;
+            if (spoolId) {
+                // Assign a spool
+                r = await fetch(
+                    `${client.baseUrl}/server/spoolman/spool_id`,
+                    {
+                        method: 'POST',
+                        headers: client._headers(),
+                        body: JSON.stringify({ spool_id: spoolId }),
+                        signal: AbortSignal.timeout(5000),
+                    }
+                );
+            } else {
+                // Clear the active spool by passing an empty body
+                // (Older Moonraker versions lack DELETE and crash if passing null for spool_id)
+                r = await fetch(
+                    `${client.baseUrl}/server/spoolman/spool_id`,
+                    {
+                        method: 'POST',
+                        headers: client._headers(),
+                        body: JSON.stringify({}),
+                        signal: AbortSignal.timeout(5000),
+                    }
+                );
+            }
+            if (!r.ok) {
+                const text = await r.text().catch(() => '');
+                console.error(`Moonraker set-spool failed (${r.status}): ${text}`);
+                throw new Error(`Moonraker ${r.status}`);
+            }
+
+            // If this spool was previously used on Bambu, clear the warning
+            // (user is now putting it on a tracked printer)
+            if (spoolId) {
+                db.prepare('DELETE FROM bambu_used_spools WHERE spool_id = ?').run(spoolId);
+            }
+
+            res.json(await r.json());
+        }
     } catch (err) {
         res.status(502).json({ error: err.message });
+    }
+});
+
+// GET /api/spoolman/ams-slots/:printerId — current spool→slot mapping for a Bambu printer
+router.get('/ams-slots/:printerId', (req, res) => {
+    try {
+        const db = getDb();
+        const slots = db.prepare('SELECT tray_id, spool_id FROM ams_slots WHERE printer_id = ?')
+            .all(parseInt(req.params.printerId, 10));
+        // Return as object: { 0: spoolId, 1: spoolId, ... }
+        const map = {};
+        for (const s of slots) {
+            map[s.tray_id] = s.spool_id;
+        }
+        res.json(map);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/spoolman/bambu-warnings — spools with untracked Bambu usage
+// Returns spool IDs + printer name for displaying warnings
+router.get('/bambu-warnings', (req, res) => {
+    try {
+        const db = getDb();
+        const rows = db.prepare(`
+            SELECT b.spool_id, b.printer_id, b.assigned_at, p.name as printer_name
+            FROM bambu_used_spools b
+            JOIN printers p ON p.id = b.printer_id
+        `).all();
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/spoolman/bambu-warnings/:spoolId — dismiss a Bambu usage warning
+router.delete('/bambu-warnings/:spoolId', (req, res) => {
+    try {
+        const db = getDb();
+        db.prepare('DELETE FROM bambu_used_spools WHERE spool_id = ?').run(parseInt(req.params.spoolId, 10));
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -245,6 +461,30 @@ router.get('/fields/:entity', async (req, res) => {
     try {
         const r = await fetch(`${url}/api/v1/field/${req.params.entity}`, { signal: AbortSignal.timeout(5000) });
         if (!r.ok) throw new Error(`Spoolman ${r.status}`);
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// POST /api/spoolman/fields/:entity — create a custom field definition
+router.post('/fields/:entity', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    const allowed = ['filament', 'vendor', 'spool'];
+    if (!allowed.includes(req.params.entity))
+        return res.status(400).json({ error: 'Invalid entity type' });
+    try {
+        const r = await fetch(`${url}/api/v1/field/${req.params.entity}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
         res.json(await r.json());
     } catch (err) {
         res.status(502).json({ error: err.message });

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install three)",
+      "Bash(npm install three-bvh-csg)",
+      "Bash(python3 -c \":*)",
+      "Bash(node -e \":*)",
+      "Bash(python -c \"import cadquery; print\\(cadquery.__version__\\); import inspect; print\\(inspect.signature\\(cadquery.Workplane.text\\)\\)\")"
+    ]
+  }
+}

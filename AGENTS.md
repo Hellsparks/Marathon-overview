@@ -71,11 +71,18 @@ backend/src/
 │   ├── stats.js            Fleet + per-file print statistics
 │   ├── spoolman.js         Spoolman proxy (spool list, active spool assignment)
 │   ├── maintenance.js      Maintenance tasks, intervals, history, mark-done
+│   ├── extras.js           Extras: POST /api/extras/swatch → generates STL via Python/CadQuery
 │   └── octoprint.js        OctoPrint stub (partial implementation)
 ├── services/
-│   └── poller.js           Status polling loop; logs print jobs + accumulates runtime_s
+│   ├── poller.js           Status polling loop; logs print jobs + accumulates runtime_s
+│   └── swatch_generator.py Python/CadQuery script: loads swatch.step, debosses text, exports STL
+├── swatch.step             STEP file for the swatch base shape (Autodesk, mm, Z-up)
 └── middleware/
     └── upload.js           Multer config for G-code uploads
+
+**Python dependency:** The swatch generator requires Python 3 + CadQuery (`pip install cadquery`).
+In Docker this is installed automatically. For direct installs, set `PYTHON_BIN` env var if
+`python3` is not on PATH (e.g. `PYTHON_BIN=python` on Windows).
 ```
 
 ---

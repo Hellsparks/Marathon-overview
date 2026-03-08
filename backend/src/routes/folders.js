@@ -5,19 +5,34 @@ const { getDb } = require('../db');
 // GET /api/folders
 router.get('/', (req, res) => {
     const db = getDb();
-    // Get all folders and count of files in each
+    const type = req.query.type || 'gcode';
+
+    // Choose the right subquery for file_count based on type
+    let countSubquery = '(SELECT COUNT(*) FROM gcode_files g WHERE g.folder_id = f.id)';
+    if (type === 'project') {
+        countSubquery = "(SELECT COUNT(*) FROM projects p WHERE p.folder_id = f.id AND p.status = 'active')";
+    } else if (type === 'template') {
+        countSubquery = '(SELECT COUNT(*) FROM project_templates t WHERE t.folder_id = f.id)';
+    } else if (type === 'archive') {
+        countSubquery = "(SELECT COUNT(*) FROM projects p WHERE p.folder_id = f.id AND p.status = 'archived')";
+    }
+
+    // Get all folders of this type and count of files in each
     const folders = db.prepare(`
     SELECT f.*, 
-           (SELECT COUNT(*) FROM gcode_files g WHERE g.folder_id = f.id) as file_count
+           ${countSubquery} as file_count
     FROM file_folders f
+    WHERE f.folder_type = ?
     ORDER BY f.name ASC
-  `).all();
+  `).all(type);
     res.json(folders);
 });
 
 // POST /api/folders
 router.post('/', (req, res) => {
-    const { name, parent_id } = req.body;
+    const { name, parent_id, type } = req.body;
+    const folderType = type || 'gcode';
+
     if (!name || name.trim() === '') {
         return res.status(400).json({ error: 'Folder name is required' });
     }
@@ -25,9 +40,9 @@ router.post('/', (req, res) => {
     const db = getDb();
     try {
         const info = db.prepare(`
-      INSERT INTO file_folders (name, parent_id)
-      VALUES (?, ?)
-    `).run(name.trim(), parent_id || null);
+      INSERT INTO file_folders (name, parent_id, folder_type)
+      VALUES (?, ?, ?)
+    `).run(name.trim(), parent_id || null, folderType);
 
         const newFolder = db.prepare('SELECT * FROM file_folders WHERE id = ?').get(info.lastInsertRowid);
         newFolder.file_count = 0;

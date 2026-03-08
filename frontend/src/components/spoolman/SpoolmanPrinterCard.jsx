@@ -46,7 +46,11 @@ function scopeCSS(css, scope) {
 
 const scrapedCssCache = new Map();
 
-export default function SpoolmanPrinterCard({ printer, activeSpool, isTarget, onDragOver, onDragLeave, onDrop, onClearSpool }) {
+export default function SpoolmanPrinterCard({
+    printer, activeSpool, isTarget, onDragOver, onDragLeave, onDrop, onClearSpool, printerStatus,
+    // Bambu AMS props
+    amsSlots, amsSpools, dropTargetTray, onTrayDragOver, onTrayDragLeave, onTrayDrop, onClearTray,
+}) {
     const [scrapedCss, setScrapedCss] = useState(
         () => scrapedCssCache.get(`${printer.host}:${printer.port}`) || null
     );
@@ -111,8 +115,8 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
 ` : null;
 
     const isIsolated = !!rawCss;
+    const isBambu = printer.firmware_type === 'bambu';
 
-    // The drop handlers use the generic parent handlers
     return (
         <div data-spoolman-printer-id={printer.id} style={{ display: 'contents' }}>
             {isIsolated && (
@@ -120,48 +124,108 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
             )}
 
             <div
-                className={`printer-card v-card theme--dark${isIsolated ? ' isolated-theme' : ''} spoolman-printer-card${isTarget ? ' drop-hover' : ''}`}
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={onDrop}
-                style={{ cursor: 'pointer', marginBottom: '12px' }}
+                className={`printer-card v-card theme--dark${isIsolated ? ' isolated-theme' : ''} spoolman-printer-card${!isBambu && isTarget ? ' drop-hover' : ''}`}
+                onDragOver={!isBambu ? onDragOver : undefined}
+                onDragLeave={!isBambu ? onDragLeave : undefined}
+                onDrop={!isBambu ? onDrop : undefined}
+                style={{ cursor: isBambu ? 'default' : 'pointer', marginBottom: '12px' }}
             >
-                <div className="printer-card-header v-card__title">
+                <div className={`printer-card-header v-card__title${isBambu ? ' bambu-header' : ''}`}>
                     <h3 className="printer-name v-toolbar__title">{printer.name}</h3>
+                    {isBambu && <span className="ams-badge">AMS</span>}
                 </div>
 
                 <div className="printer-card-body" style={{ padding: '0 16px 16px' }}>
-                    {activeSpool ? (
-                        <div className="spool-info" style={{ margin: 0 }}>
-                            <span
-                                className="spool-color-dot"
-                                style={{ backgroundColor: `#${activeSpool.color_hex || '888'}` }}
-                            />
-                            <span className="spool-details" style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                <span className="spool-material">{activeSpool.material}</span>
-                                {' '}
-                                {activeSpool.filament_name}
-                            </span>
-                            <button
-                                className="btn-link"
-                                onClick={(e) => { e.stopPropagation(); onClearSpool(); }}
-                                title="Unload spool"
-                                style={{ fontSize: '12px', padding: 0 }}
-                            >
-                                ✕ Unload
-                            </button>
-                            <div className="spool-weight-bar" style={{ marginTop: '8px', gridColumn: 'span 3', justifySelf: 'stretch', width: '100%' }}>
-                                <div
-                                    className="spool-weight-fill"
-                                    style={{
-                                        width: `${Math.min(100, (activeSpool.remaining_weight / activeSpool.initial_weight) * 100)}%`,
-                                        backgroundColor: `#${activeSpool.color_hex || '888'}`,
-                                    }}
-                                />
-                            </div>
+                    {isBambu ? (
+                        /* ── Bambu: 4-slot AMS layout ────────────────────── */
+                        <div className="ams-slot-grid">
+                            {[0, 1, 2, 3].map(trayId => {
+                                const spoolId = amsSlots?.[trayId];
+                                const spool = spoolId ? amsSpools?.[spoolId] : null;
+                                const f = spool?.filament || {};
+                                const color = f.color_hex ? `#${f.color_hex}` : null;
+
+                                const physicalTray = printerStatus?._bambu?.ams?.ams?.[0]?.tray?.find(t => parseInt(t.id, 10) === trayId);
+                                const hasPhysical = !!(physicalTray && physicalTray.tray_color);
+                                const physicalColor = hasPhysical ? `#${physicalTray.tray_color.slice(0, 6)}` : null;
+
+                                const isTrayTarget = dropTargetTray?.printerId === printer.id && dropTargetTray?.trayId === trayId;
+                                return (
+                                    <div
+                                        key={trayId}
+                                        className={`ams-drop-slot${isTrayTarget ? ' ams-drop-hover' : ''}${(spool || hasPhysical) ? ' ams-slot-filled' : ''}`}
+                                        onDragOver={e => onTrayDragOver?.(e, printer.id, trayId)}
+                                        onDragLeave={() => onTrayDragLeave?.()}
+                                        onDrop={e => onTrayDrop?.(e, printer, trayId)}
+                                    >
+                                        <div className="ams-slot-header">
+                                            <span className="ams-slot-num">{trayId + 1}</span>
+                                        </div>
+                                        {spool ? (
+                                            <>
+                                                <div
+                                                    className="ams-slot-swatch"
+                                                    style={{ backgroundColor: color || '#888' }}
+                                                />
+                                                <span className="ams-slot-material">{f.material || '—'}</span>
+                                                <span className="ams-slot-name">{f.name || `#${spool.id}`}</span>
+                                                <button
+                                                    className="ams-slot-clear"
+                                                    onClick={e => { e.stopPropagation(); onClearTray?.(printer.id, trayId); }}
+                                                    title="Unload slot"
+                                                >✕</button>
+                                            </>
+                                        ) : hasPhysical ? (
+                                            <>
+                                                <div
+                                                    className="ams-slot-swatch"
+                                                    style={{ backgroundColor: physicalColor || '#888' }}
+                                                />
+                                                <span className="ams-slot-material" style={{ color: 'var(--text-muted)' }}>{physicalTray.tray_type || '—'}</span>
+                                                <span className="ams-slot-name" style={{ fontStyle: 'italic', fontSize: '11px', color: 'var(--text-muted)' }}>MQTT Status</span>
+                                                <span className="ams-slot-empty" style={{ opacity: 0.5, fontSize: '10px', marginTop: '4px' }}>Drop spool to assign</span>
+                                            </>
+                                        ) : (
+                                            <span className="ams-slot-empty">Drop spool</span>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     ) : (
-                        <span className="text-muted" style={{ fontStyle: 'italic', fontSize: '13px' }}>No spool loaded</span>
+                        /* ── Moonraker: single spool display ─────────────── */
+                        activeSpool ? (
+                            <div className="spool-info" style={{ margin: 0 }}>
+                                <span
+                                    className="spool-color-dot"
+                                    style={{ backgroundColor: `#${activeSpool.color_hex || '888'}` }}
+                                />
+                                <span className="spool-details" style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <span className="spool-material">{activeSpool.material}</span>
+                                    {' '}
+                                    {activeSpool.filament_name}
+                                </span>
+                                <button
+                                    className="btn-link"
+                                    onClick={(e) => { e.stopPropagation(); onClearSpool(); }}
+                                    title="Unload spool"
+                                    style={{ fontSize: '12px', padding: 0 }}
+                                >
+                                    ✕ Unload
+                                </button>
+                                <div className="spool-weight-bar" style={{ marginTop: '8px', gridColumn: 'span 3', justifySelf: 'stretch', width: '100%' }}>
+                                    <div
+                                        className="spool-weight-fill"
+                                        style={{
+                                            width: `${Math.min(100, (activeSpool.remaining_weight / activeSpool.initial_weight) * 100)}%`,
+                                            backgroundColor: `#${activeSpool.color_hex || '888'}`,
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <span className="text-muted" style={{ fontStyle: 'italic', fontSize: '13px' }}>No spool loaded</span>
+                        )
                     )}
                 </div>
             </div>

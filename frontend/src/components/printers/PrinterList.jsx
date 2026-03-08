@@ -41,6 +41,7 @@ export default function PrinterList({ printers, onRefresh }) {
             <tr>
               <th>Name</th>
               <th>Host</th>
+              <th>Firmware</th>
               <th>Bed Size</th>
               <th>Filaments</th>
               <th>Toolheads</th>
@@ -52,6 +53,12 @@ export default function PrinterList({ printers, onRefresh }) {
               <tr key={p.id}>
                 <td>{p.name}</td>
                 <td>{p.host}:{p.port}</td>
+                <td>
+                  {p.firmware_type === 'octoprint' && 'OctoPrint'}
+                  {p.firmware_type === 'duet' && 'Duet/RRF'}
+                  {p.firmware_type === 'bambu' && 'Bambu Lab'}
+                  {(!p.firmware_type || p.firmware_type === 'moonraker') && 'Klipper'}
+                </td>
                 <td>
                   {p.bed_width && p.bed_depth ? (
                     <span>{p.bed_width}×{p.bed_depth}×{p.bed_height || '?'}mm</span>
