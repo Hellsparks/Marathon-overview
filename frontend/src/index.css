@@ -607,6 +607,18 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   justify-content: space-between;
 }
 
+.printer-card-header.bambu-header {
+  background: #028e36;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  margin: -16px -16px 0 -16px;
+  padding: 12px 16px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.printer-card-header.bambu-header .printer-name {
+  color: #ffffff;
+}
+
 .printer-name {
   font-size: 15px;
   font-weight: 600;
@@ -749,6 +761,99 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .spool-weight-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width .5s;
+}
+
+/* ─── AMS Filament Tray Strip ──────────────────────────────────── */
+.ams-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.ams-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ams-trays {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+
+.ams-tray {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 4px 4px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: border-color .2s, background .2s;
+}
+
+.ams-tray--active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.ams-tray--empty {
+  opacity: .4;
+}
+
+.ams-tray-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  transition: transform .15s;
+}
+
+.ams-tray--active .ams-tray-swatch {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.ams-tray--empty .ams-tray-swatch {
+  border-style: dashed;
+}
+
+.ams-tray-material {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-align: center;
+}
+
+.ams-tray--active .ams-tray-material {
+  color: var(--text);
+}
+
+.ams-tray-remain-track {
+  width: 100%;
+  height: 3px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ams-tray-remain-fill {
   height: 100%;
   border-radius: 2px;
   transition: width .5s;
@@ -1792,6 +1897,142 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background: color-mix(in srgb, var(--primary) 8%, var(--surface));
 }
 
+.ams-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
+}
+
+/* ─── AMS Drop Slot Grid ────────────────────────────────────────── */
+.ams-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.ams-drop-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--surface2);
+  transition: border-color .2s, background .2s, box-shadow .2s;
+  position: relative;
+  min-height: 64px;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ams-drop-slot.ams-drop-hover {
+  border-color: var(--primary);
+  border-style: solid;
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+
+.ams-drop-slot.ams-slot-filled {
+  border-style: solid;
+  border-color: var(--border);
+}
+
+.ams-slot-header {
+  width: 100%;
+  text-align: center;
+}
+
+.ams-slot-num {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.ams-slot-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .15);
+  flex-shrink: 0;
+}
+
+.ams-slot-material {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text);
+  text-align: center;
+}
+
+.ams-slot-name {
+  font-size: 8px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-align: center;
+}
+
+.ams-slot-empty {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.ams-slot-clear {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  transition: color .15s, background .15s;
+}
+
+.ams-slot-clear:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+}
+
+/* ─── Bambu Usage Warnings ──────────────────────────────────────── */
+.bambu-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.bambu-warning-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.4;
+}
+
 .spoolman-printer-name {
   display: block;
   font-weight: 600;
@@ -1847,7 +2088,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .spoolman-filters-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 12px;
   margin-bottom: 16px;
   align-items: center;
@@ -1856,8 +2097,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .spoolman-search-wrap {
   position: relative;
   flex: 1;
-  min-width: 250px;
-  max-width: 450px;
+  min-width: 200px;
 }
 
 .spoolman-search-icon {
@@ -1908,6 +2148,73 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .spoolman-filter-select:focus {
   border-color: var(--primary);
+}
+
+.spoolman-filter-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color .15s, background .15s;
+}
+.spoolman-filter-btn:hover {
+  color: var(--text);
+  background: var(--surface3, rgba(255,255,255,0.06));
+}
+
+.spoolman-filter-popover {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.spoolman-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spoolman-filter-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.spoolman-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.spoolman-filter-clear {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.spoolman-filter-clear:hover {
+  border-color: var(--primary);
+  color: var(--text);
 }
 
 .spoolman-grid {
@@ -2324,6 +2631,29 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   color: var(--danger);
 }
 
+/* Subtle icon buttons for spool list view — matches card-view icon buttons */
+.spool-list-icon-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 0;
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.spool-list-icon-btn:hover {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
 .inv-shopping-size {
   font-weight: 400;
   color: var(--text-muted);
@@ -2384,6 +2714,68 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .spool-dialog-close:hover {
   color: var(--text);
+}
+
+/* ─── Pending Drop Confirmation Dialog ──────────────────────────── */
+.pending-drop-dialog {
+  max-width: 460px;
+}
+
+.pending-drop-spool-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.pending-drop-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pending-drop-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.pending-drop-warning--incompatible {
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  border-left: 3px solid var(--danger);
+}
+
+.pending-drop-warning--bambu_used {
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
+  border-left: 3px solid var(--warning);
+}
+
+.pending-drop-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.pending-drop-assign-btn {
+  background: transparent !important;
+  border: 1px solid var(--text-muted) !important;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+  transition: all .15s;
+}
+
+.pending-drop-assign-btn:hover:not(:disabled) {
+  border-color: var(--warning) !important;
+  color: var(--warning) !important;
+  background: color-mix(in srgb, var(--warning) 8%, transparent) !important;
 }
 
 .spool-dialog-desc {
@@ -2481,6 +2873,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   gap: 6px;
   margin-left: auto;
   flex-shrink: 0;
+  flex-wrap: nowrap;
 }
 
 .spoolman-add-btn {
@@ -3541,7 +3934,9 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 @keyframes blink {
-  50% { opacity: 0; }
+  50% {
+    opacity: 0;
+  }
 }
 
 .update-done-msg {
@@ -3555,4 +3950,245 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+/* ========================================================================= */
+/* Movement Rose Controls */
+/* ========================================================================= */
+
+.movement-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "rose z"
+    "extruder z";
+  gap: 16px 24px;
+  padding: 16px;
+  background-color: var(--surface2);
+  border-radius: var(--radius);
+  margin-top: 8px;
+  align-items: center;
+}
+
+.movement-rose-container {
+  grid-area: rose;
+  width: 180px;
+  height: 180px;
+  justify-self: center;
+}
+
+.movement-rose-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.rose-wedge path {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 2px;
+  transition: fill 0.2s, filter 0.2s;
+  cursor: pointer;
+}
+
+.rose-wedge:hover path {
+  fill: var(--primary);
+  filter: brightness(1.2);
+}
+
+.rose-wedge text {
+  pointer-events: none;
+  fill: var(--text-muted);
+  transition: fill 0.2s;
+}
+
+.rose-wedge:hover text {
+  fill: #fff;
+}
+
+.rose-home {
+  cursor: pointer;
+}
+
+.rose-home circle {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 2px;
+  transition: fill 0.2s;
+}
+
+.rose-home:hover circle {
+  fill: var(--primary);
+}
+
+.rose-home:hover path,
+.rose-home:hover text {
+  fill: #fff;
+}
+
+.movement-z-container {
+  grid-area: z;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.movement-e-container {
+  grid-area: extruder;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.e-btn-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.e-arrows {
+  display: flex;
+  gap: 4px;
+}
+
+.z-label,
+.e-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  letter-spacing: 0.05em;
+}
+
+.z-btn,
+.e-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  width: 48px;
+  height: 28px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.z-btn:hover:not(:disabled),
+.e-btn:hover:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.z-btn:disabled,
+.e-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-home-z {
+  height: 36px;
+  border-radius: 6px;
+  background: var(--surface2);
+}
+
+.e-step-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  width: 32px;
+  height: 28px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.e-step-btn:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.e-step-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+
+/* Orca Theme Overrides for Bambu Printers */
+.movement-panel.orca-theme {
+  --primary: #028e36;
+  --primary-d: #016b28;
+  --surface2: #1e1e24;
+  /* Darker background like bottom half of Orca */
+  --surface: #2b2d36;
+  /* Base wedge color */
+  --border: #14151a;
+  /* Darker borders */
+}
+
+/* Ensure the home icon path inherits color */
+.home-icon-path {
+  fill: var(--primary);
+  transition: fill 0.2s;
+}
+
+.home-icon-text {
+  fill: var(--primary);
+  transition: fill 0.2s;
+}
+
+.rose-home:hover .home-icon-path,
+.rose-home:hover .home-icon-text {
+  fill: #fff;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ─── Themed Checkboxes ─────────────────────────────────────────── */
+input[type="checkbox"] {
+  accent-color: var(--primary, #0ea5e9);
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--primary, #0ea5e9) !important;
+  border-color: var(--primary, #0ea5e9) !important;
+}
+
+input[type="checkbox"]:checked::after {
+  content: "✓";
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+input[type="checkbox"]:hover {
+  border-color: var(--primary, #0ea5e9) !important;
 }

@@ -112,6 +112,19 @@ export async function getFields(entity) {
     return r.json();
 }
 
+export async function createField(entity, data) {
+    const r = await fetch(`${API}/fields/${entity}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
 export async function updateFilament(id, data) {
     const r = await fetch(`${API}/filaments/${id}`, {
         method: 'PATCH',
@@ -184,12 +197,35 @@ export async function removeInventoryTarget(filamentId) {
     return r.json();
 }
 
-export async function setActiveSpool(printerId, spoolId) {
+export async function setActiveSpool(printerId, spoolId, trayId) {
+    const body = { printerId, spoolId };
+    if (trayId !== undefined) body.trayId = trayId;
     const r = await fetch(`${API}/set-active`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ printerId, spoolId }),
+        body: JSON.stringify(body),
     });
-    if (!r.ok) throw new Error(`Set active spool failed: ${r.status}`);
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `Set active spool failed: ${r.status}`);
+    }
+    return r.json();
+}
+
+export async function getAmsSlots(printerId) {
+    const r = await fetch(`${API}/ams-slots/${printerId}`);
+    if (!r.ok) throw new Error(`Failed to fetch AMS slots: ${r.status}`);
+    return r.json();
+}
+
+export async function getBambuWarnings() {
+    const r = await fetch(`${API}/bambu-warnings`);
+    if (!r.ok) throw new Error(`Failed to fetch Bambu warnings: ${r.status}`);
+    return r.json();
+}
+
+export async function dismissBambuWarning(spoolId) {
+    const r = await fetch(`${API}/bambu-warnings/${spoolId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error(`Failed to dismiss warning: ${r.status}`);
     return r.json();
 }

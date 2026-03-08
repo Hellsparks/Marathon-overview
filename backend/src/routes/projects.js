@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db').getDb();
 const path = require('path');
 const fs = require('fs');
+const { getClient } = require('../services/clientFactory');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '../../uploads');
 const TEMPLATES_DIR = process.env.TEMPLATES_DIR || path.join(UPLOADS_DIR, 'templates');
@@ -77,7 +78,15 @@ router.get('/:id', (req, res) => {
 
         if (!project) return res.status(404).json({ error: 'Project not found' });
 
-        project.plates = db.prepare(`SELECT * FROM project_plates WHERE project_id = ? ORDER BY sort_order`).all(project.id);
+        project.plates = db.prepare(`
+            SELECT pp.*, 
+                   datetime(pj.end_time, '-' || pj.total_duration_s || ' seconds') as actual_start_time, 
+                   pj.end_time as actual_end_time
+            FROM project_plates pp
+            LEFT JOIN gcode_print_jobs pj ON pp.print_job_id = pj.id
+            WHERE pp.project_id = ?
+            ORDER BY pp.sort_order
+        `).all(project.id);
         project.color_assignments = db.prepare(`SELECT * FROM project_color_assignments WHERE project_id = ?`).all(project.id);
 
         res.json(project);
@@ -88,14 +97,14 @@ router.get('/:id', (req, res) => {
 
 // POST /api/projects (Hybrid)
 router.post('/', (req, res) => {
-    const { template_id, name, due_date, file_ids = [], color_assignments = [] } = req.body;
+    const { template_id, name, due_date, file_ids = [], color_assignments = [], folder_id } = req.body;
     if (!name) return res.status(400).json({ error: 'Project name is required' });
 
     try {
         db.exec('BEGIN TRANSACTION');
         let projectId;
         try {
-            const run = db.prepare(`INSERT INTO projects (template_id, name, due_date) VALUES (?, ?, ?)`).run(template_id || null, name, due_date || null);
+            const run = db.prepare(`INSERT INTO projects (template_id, name, due_date, folder_id) VALUES (?, ?, ?, ?)`).run(template_id || null, name, due_date || null, folder_id || null);
             projectId = run.lastInsertRowid;
 
             if (template_id) {
@@ -141,12 +150,12 @@ router.post('/', (req, res) => {
                 for (const fid of file_ids) {
                     const filename = facilitateFile(fid, prefix);
                     const meta = db.prepare(`SELECT * FROM gcode_metadata WHERE file_id = ?`).get(fid) || {};
-                    const gfile = db.prepare(`SELECT filename FROM gcode_files WHERE id = ?`).get(fid);
+                    const gfile = db.prepare(`SELECT filename, display_name FROM gcode_files WHERE id = ?`).get(fid);
 
                     insertPlate.run(
                         projectId,
                         filename,
-                        gfile?.filename || filename,
+                        gfile?.display_name || filename,
                         meta.estimated_time_s || null,
                         meta.filament_usage_mm || null,
                         meta.filament_usage_g || null,
@@ -204,7 +213,8 @@ router.patch('/:id', (req, res) => {
         if (status !== undefined) {
             fields.push('status = ?'); params.push(status);
             if (status === 'archived') {
-                fields.push('completed_at = datetime("now")');
+                fields.push('completed_at = datetime(\'now\')');
+                fields.push('folder_id = NULL');
             }
         }
         if (completed_at !== undefined) { fields.push('completed_at = ?'); params.push(completed_at); }
@@ -255,19 +265,33 @@ router.patch('/:id', (req, res) => {
     if (!project) return res.status(404).json({ error: 'Project not found' });
 
     try {
-        db.prepare(`
-            UPDATE projects 
-            SET status = ?, 
-                name = ?,
-                due_date = ?,
-                updated_at = datetime('now') 
-            WHERE id = ?
-        `).run(
-            status ?? project.status,
-            name ?? project.name,
-            due_date !== undefined ? due_date : project.due_date,
-            req.params.id
-        );
+        const fields = ['updated_at = datetime(\'now\')'];
+        const params = [];
+
+        if (status !== undefined) {
+            fields.push('status = ?');
+            params.push(status);
+            if (status === 'archived') fields.push('folder_id = NULL');
+        }
+        if (name !== undefined) { fields.push('name = ?'); params.push(name); }
+        if (due_date !== undefined) { fields.push('due_date = ?'); params.push(due_date); }
+
+        params.push(req.params.id);
+        const sql = `UPDATE projects SET ${fields.join(', ')} WHERE id = ?`;
+        db.prepare(sql).run(...params);
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /api/projects/:id/folder
+router.patch('/:id/folder', (req, res) => {
+    const { folder_id } = req.body;
+    try {
+        const info = db.prepare('UPDATE projects SET folder_id = ? WHERE id = ?').run(folder_id || null, req.params.id);
+        if (info.changes === 0) return res.status(404).json({ error: 'Project not found' });
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -296,6 +320,51 @@ router.delete('/:id', (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/projects/:id/plates/:plateId/print
+// Upload the plate file to a printer and start the print, tracking the active job.
+router.post('/:id/plates/:plateId/print', async (req, res) => {
+    const { printer_id } = req.body;
+    if (!printer_id) return res.status(400).json({ error: 'printer_id is required' });
+
+    try {
+        const plate = db.prepare('SELECT * FROM project_plates WHERE id = ? AND project_id = ?')
+            .get(req.params.plateId, req.params.id);
+        if (!plate) return res.status(404).json({ error: 'Plate not found' });
+
+        const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(printer_id);
+        if (!printer) return res.status(404).json({ error: 'Printer not found' });
+
+        // Plate files live in TEMPLATES_DIR
+        const filePath = path.join(TEMPLATES_DIR, plate.filename);
+        if (!fs.existsSync(filePath)) return res.status(404).json({ error: `File not found on disk: ${plate.filename}` });
+
+        const fileBuffer = fs.readFileSync(filePath);
+
+        // Resolve a clean upload name: strip the prjXXX_ or tplXXX_ prefix,
+        // then look up the original gcode_files record to get its human-readable display_name.
+        const strippedName = plate.filename.replace(/^(?:prj|tpl)\d+_/, '');
+        const origFile = db.prepare('SELECT display_name FROM gcode_files WHERE filename = ?').get(strippedName);
+        const uploadName = origFile?.display_name || plate.display_name || strippedName;
+        console.log(`[Projects] plate="${plate.filename}" stripped="${strippedName}" origFile="${origFile?.display_name}" uploadName="${uploadName}"`);
+
+        const client = getClient(printer);
+        await client.uploadFile(uploadName, fileBuffer);
+        await client.startPrint(uploadName);
+
+        // Record active job so poller can link completion to this plate
+        db.prepare(`INSERT OR REPLACE INTO printer_active_jobs (printer_id, plate_id, filename) VALUES (?, ?, ?)`)
+            .run(printer.id, plate.id, uploadName);
+
+        // Mark plate as printing
+        db.prepare(`UPDATE project_plates SET status = 'printing', printer_id = ? WHERE id = ?`)
+            .run(printer.id, plate.id);
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
     }
 });
 

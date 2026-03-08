@@ -26,3 +26,23 @@ export const getWebcams = (printerId) =>
 
 export const getMacros = (printerId) =>
   apiFetch(`/api/printers/${printerId}/macros`);
+
+/**
+ * Toggle chamber or work light on a Bambu printer.
+ * node: 'chamber_light' | 'work_light'
+ */
+export const controlLight = (printerId, on, node = 'chamber_light') =>
+  apiFetch(`/api/printers/${printerId}/light`, {
+    method: 'POST',
+    body: JSON.stringify({ on, node }),
+  });
+
+/**
+ * Set bed or nozzle temperature.
+ * type: 'bed' | 'nozzle', temp: number (°C, 0 = off)
+ */
+export const setTemperature = (printerId, type, temp) =>
+  apiFetch(`/api/printers/${printerId}/temperature`, {
+    method: 'POST',
+    body: JSON.stringify({ type, temp }),
+  });

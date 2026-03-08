@@ -1,7 +1,7 @@
 {
   "name": "marathon-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.2.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -10,7 +10,9 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.0"
+    "react-router-dom": "^6.22.0",
+    "three": "^0.183.2",
+    "three-bvh-csg": "^0.0.18"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

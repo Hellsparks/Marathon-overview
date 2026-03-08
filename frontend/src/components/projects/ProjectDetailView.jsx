@@ -4,6 +4,8 @@ import { setActiveSpool, getSpools } from '../../api/spoolman';
 import { getSettings } from '../../api/settings';
 import { useRightPanel } from '../../contexts/RightPanelContext';
 import { usePrinterStatus } from '../../contexts/PrinterStatusContext';
+import { useFilamentGuard } from '../../hooks/useFilamentGuard';
+import { useToast } from '../../contexts/ToastContext';
 import StatusBadge from '../common/StatusBadge';
 
 function PrinterSelector({ printers, status, plate, selectedId, onSelect, disabled }) {
@@ -91,6 +93,7 @@ function PrinterSelector({ printers, status, plate, selectedId, onSelect, disabl
 export default function ProjectDetailView({ projectId, onBack, filaments = [] }) {
     const { setSelected } = useRightPanel() || {};
     const status = usePrinterStatus() || {};
+    const toast = useToast();
     const [project, setProject] = useState(null);
     const [spools, setSpools] = useState([]);
     const [showSpoolPicker, setShowSpoolPicker] = useState(null); // { slotKey, currentSpoolId }
@@ -134,6 +137,20 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
         fetchData();
     }, [projectId]);
 
+    // Auto-refresh while any plate is actively printing
+    useEffect(() => {
+        if (!project) return;
+        const hasActivePlate = project.plates?.some(p => p.status === 'printing');
+        if (!hasActivePlate) return;
+        const interval = setInterval(() => {
+            fetch(`/api/projects/${projectId}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => { if (data) setProject(data); })
+                .catch(() => { });
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [project?.plates?.map(p => p.status).join(',')]);
+
     const handlePrint = async (plate) => {
         const printerId = selectedPrinters[plate.id];
         if (!printerId) return alert('Please select a printer first.');
@@ -144,27 +161,19 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
         try {
             setLoading(true);
 
-            // 1. Find assigned spool if any
-            // Plates can have multiple slots, but usually one main one. 
-            // For now, let's look for any assignment for this project.
-            // In a better version, we'd know WHICH slot this plate uses.
-            // Templates have plate_slots which map to slot_key.
-            // Let's check if we have slot_keys for this plate.
-
+            // Set active spool if assigned to this project
             if (project.color_assignments?.length > 0) {
-                // If plate has slot_keys, pick the first one's assignment
                 const assignedSpoolId = project.color_assignments[0].spool_id;
                 if (assignedSpoolId) {
-                    console.log(`Setting active spool ${assignedSpoolId} for printer ${printer.name}`);
                     await setActiveSpool(printer.id, assignedSpoolId);
                 }
             }
 
-            // 2. Start Print
-            const res = await fetch(`/api/printers/${printer.id}/print/start`, {
+            // Upload file to printer and start print (backend handles upload + active job tracking)
+            const res = await fetch(`/api/projects/${project.id}/plates/${plate.id}/print`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename: plate.filename })
+                body: JSON.stringify({ printer_id: printer.id })
             });
 
             if (!res.ok) {
@@ -172,11 +181,10 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                 throw new Error(err.error || 'Failed to start print');
             }
 
-            // 3. Update plate status
-            await updatePlateStatus(plate.id, 'printing');
-            alert(`Print started on ${printer.name}`);
+            await fetchData();
+            toast?.(`Print started on ${printer.name}`, 'success');
         } catch (err) {
-            alert(err.message);
+            toast?.(err.message, 'error') || alert(err.message);
         } finally {
             setLoading(false);
         }
@@ -211,21 +219,68 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
         }
     };
 
-    const handleChangeSpool = async (slotKey, spoolId) => {
+    const handleUnarchive = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`/api/projects/${projectId}/filament`, {
+            const res = await fetch(`/api/projects/${projectId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ slot_key: slotKey, spool_id: spoolId })
+                body: JSON.stringify({ status: 'active' })
             });
-            if (!res.ok) throw new Error('Failed to update spool');
-            setShowSpoolPicker(null);
-            await fetchData();
+            if (!res.ok) throw new Error('Failed to unarchive project');
+            // If we successfully unarchive, fetch new data to update UI to active state 
+            // OR if we were viewing it from the Archive page, we should go back.
+            // Going back is generally safer so it removes it from the Archive list.
+            onBack();
+            toast?.('Project unarchived successfully', 'success');
         } catch (err) {
-            alert(err.message);
-        } finally {
+            toast?.(err.message, 'error') || alert(err.message);
             setLoading(false);
+        }
+    };
+
+    // To use the guard effectively here, we need to know WHICH printer this spool is intended for.
+    // In ProjectDetailView, the spool is applied to a "slot", not directly to a printer yet.
+    // However, the guard expects a printer to check compatibility against.
+    // Since we don't know the exact printer until print time, we'll run a slightly modified check,
+    // OR we can pass a null printer and the guard will just check "is this spool in use?".
+    // Let's modify the onDrop handler to trigger a guard check just for "spool in use" and "bambu used" warnings.
+
+    // Wait, the user specifically mentioned "this filament guard logic shgould also apply ANYWHERE on the website"
+    // In ProjectDetailView, you assign a spool *to the project*, not to a printer directly.
+    // So let's wrap `handleChangeSpool` inside the guard hook, passing `null` for printerId to skip material checks but trigger the "in use" warnings.
+
+    const { startGuard, renderGuardDialog } = useFilamentGuard({
+        onConfirm: async (spool, _printer, slotKey) => {
+            try {
+                setLoading(true);
+                const res = await fetch(`/api/projects/${projectId}/filament`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ slot_key: slotKey, spool_id: spool.id })
+                });
+                if (!res.ok) throw new Error('Failed to update spool');
+                setShowSpoolPicker(null);
+                await fetchData();
+            } catch (err) {
+                alert(err.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+    });
+
+    const handleChangeSpool = async (slotKey, spoolId) => {
+        if (spoolId === null) {
+            // Clearing spool bypasses guard
+            startGuard({ id: null }, null, slotKey);
+            return;
+        }
+
+        const spool = spools.find(s => s.id === spoolId);
+        if (spool) {
+            // Pass null for printerId since we're assigning to a project slot, not a specific printer yet
+            startGuard(spool, null, slotKey);
         }
     };
 
@@ -288,7 +343,11 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                             ⚠️ DEADLINE CRITICAL
                         </div>
                     )}
-                    <button className="btn btn-outline" onClick={handleArchive}>Archive Project</button>
+                    {project.status === 'archived' ? (
+                        <button className="btn btn-primary" onClick={handleUnarchive}>Unarchive Project</button>
+                    ) : (
+                        <button className="btn btn-outline" onClick={handleArchive}>Archive Project</button>
+                    )}
                 </div>
             </div>
 
@@ -364,23 +423,48 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                     </div>
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                                        <PrinterSelector
-                                            printers={printers}
-                                            status={status}
-                                            plate={plate}
-                                            selectedId={selectedPrinters[plate.id]}
-                                            onSelect={id => setSelectedPrinters(prev => ({ ...prev, [plate.id]: id }))}
-                                            disabled={plate.status === 'done' || loading}
-                                        />
+                                        {project.status === 'archived' ? (
+                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '2px', paddingRight: '12px', textAlign: 'right' }}>
+                                                {plate.actual_start_time ? (
+                                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                                        <span>start</span>
+                                                        <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                                            {new Date(plate.actual_start_time).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                ) : null}
+                                                {plate.actual_end_time ? (
+                                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                                        <span>finish</span>
+                                                        <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                                            {new Date(plate.actual_end_time).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                ) : (!plate.actual_start_time ? (
+                                                    <span style={{ fontStyle: 'italic', opacity: 0.7 }}>Not printed</span>
+                                                ) : null)}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <PrinterSelector
+                                                    printers={printers}
+                                                    status={status}
+                                                    plate={plate}
+                                                    selectedId={selectedPrinters[plate.id]}
+                                                    onSelect={id => setSelectedPrinters(prev => ({ ...prev, [plate.id]: id }))}
+                                                    disabled={plate.status === 'done' || loading}
+                                                />
 
-                                        <button
-                                            className="btn btn-sm btn-primary"
-                                            onClick={() => handlePrint(plate)}
-                                            disabled={!selectedPrinters[plate.id] || plate.status === 'done' || loading}
-                                            style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}
-                                        >
-                                            Print
-                                        </button>
+                                                <button
+                                                    className="btn btn-sm btn-primary"
+                                                    onClick={() => handlePrint(plate)}
+                                                    disabled={!selectedPrinters[plate.id] || plate.status === 'done' || loading}
+                                                    style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}
+                                                >
+                                                    Print
+                                                </button>
+                                            </>
+                                        )}
 
                                         <div style={{ width: '1px', height: '16px', background: 'var(--border)', margin: '0 4px' }} />
 
@@ -388,17 +472,19 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                             {plate.status === 'done' ? (
                                                 <span style={{ color: 'var(--success)', fontWeight: 700, fontSize: '11px' }}>✓ DONE</span>
                                             ) : (
-                                                <span style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '11px' }}>PENDING</span>
+                                                <span style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '11px' }}>{project.status === 'archived' ? 'Not printed' : 'PENDING'}</span>
                                             )}
                                         </div>
 
-                                        <button
-                                            className="btn btn-sm btn-outline"
-                                            onClick={() => updatePlateStatus(plate.id, plate.status === 'done' ? 'pending' : 'done')}
-                                            style={{ height: '28px', padding: '0 8px', fontSize: '11px', opacity: 0.7 }}
-                                        >
-                                            {plate.status === 'done' ? 'Re-open' : 'Done'}
-                                        </button>
+                                        {project.status !== 'archived' && (
+                                            <button
+                                                className="btn btn-sm btn-outline"
+                                                onClick={() => updatePlateStatus(plate.id, plate.status === 'done' ? 'pending' : 'done')}
+                                                style={{ height: '28px', padding: '0 8px', fontSize: '11px', opacity: 0.7 }}
+                                            >
+                                                {plate.status === 'done' ? 'Re-open' : 'Done'}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}

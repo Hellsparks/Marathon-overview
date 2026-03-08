@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 
-export function useFolders() {
+export function useFolders(type = 'gcode', baseMovePath = '/api/files') {
     const [folders, setFolders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -9,7 +9,7 @@ export function useFolders() {
         try {
             setLoading(true);
             setError(null);
-            const res = await fetch('/api/folders');
+            const res = await fetch(`/api/folders?type=${type}`);
             if (!res.ok) throw new Error('Failed to fetch folders');
             const data = await res.json();
             setFolders(data);
@@ -28,7 +28,7 @@ export function useFolders() {
         const res = await fetch('/api/folders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, parent_id: parentId }),
+            body: JSON.stringify({ name, parent_id: parentId, type }),
         });
         if (!res.ok) throw new Error('Failed to create folder');
         await fetchFolders();
@@ -51,12 +51,12 @@ export function useFolders() {
     };
 
     const moveFile = async (fileId, folderId) => {
-        const res = await fetch(`/api/files/${fileId}/folder`, {
+        const res = await fetch(`${baseMovePath}/${fileId}/folder`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ folder_id: folderId }),
         });
-        if (!res.ok) throw new Error('Failed to move file');
+        if (!res.ok) throw new Error('Failed to move item');
     };
 
     const moveFolder = async (folderIdToMove, destinationFolderId) => {

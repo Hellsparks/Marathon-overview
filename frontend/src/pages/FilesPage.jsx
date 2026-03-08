@@ -3,6 +3,7 @@ import { useFiles } from '../hooks/useFiles';
 import { useFolders } from '../hooks/useFolders';
 import FileList from '../components/files/FileList';
 import FolderCard from '../components/files/FolderCard';
+import ViewToggle from '../components/common/ViewToggle';
 
 export default function FilesPage() {
   const { files, loading: filesLoading, error: filesError, refresh: refreshFiles } = useFiles();
@@ -152,17 +153,7 @@ export default function FilesPage() {
             + New Folder
           </button>
 
-          <div className="file-view-toggle" style={{ height: '40px', display: 'flex' }}>
-            <button className={viewMode === 'list' ? 'active' : ''} onClick={() => updateViewMode('list')} title="List View" style={{ height: '100%' }}>
-              ☰
-            </button>
-            <button className={viewMode === 'grid-small' ? 'active' : ''} onClick={() => updateViewMode('grid-small')} title="Small Grid" style={{ height: '100%' }}>
-              ⚏
-            </button>
-            <button className={viewMode === 'grid-large' ? 'active' : ''} onClick={() => updateViewMode('grid-large')} title="Large Grid" style={{ height: '100%' }}>
-              ☷
-            </button>
-          </div>
+          <ViewToggle viewMode={viewMode} onChange={updateViewMode} />
         </div>
 
         {(filesLoading || foldersLoading) ? (

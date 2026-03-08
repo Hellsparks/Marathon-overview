@@ -16,7 +16,7 @@
 - **Print queue** — Per-printer queues with auto-start capability
 - **Macro support** — Execute Klipper macros from the UI
 - **Webcam integration** — Embedded webcam streams per printer
-- **Spoolman integration** — View active spool info, track filament usage per print
+- **Spoolman integration** — View active spool info, automated swatch tracking prompts, generate 3D swatch STLs, quickly Auto-Create Spoolman extra fields, and export HueForge catalogues
 - **Print history & statistics** — Tracks completed prints with duration, filament used, material, and spool data
 - **Preventive maintenance tracking** — Track maintenance tasks (lubrication, belt checks, etc.) per printer based on cumulative print-time runtime hours
 
@@ -39,6 +39,10 @@ The frontend talks to the backend API, which proxies requests to each printer's 
 - **Node.js** ≥ 18
 - **npm**
 - **Git** (for community theme support)
+- **Python 3** + **CadQuery** — required for the filament swatch STL generator
+  ```bash
+  pip install cadquery
+  ```
 
 ### Quick Start
 

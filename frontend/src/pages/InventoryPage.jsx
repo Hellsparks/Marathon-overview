@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getFilaments, getSpools, getInventory, setInventoryTarget, removeInventoryTarget, getSpoolmanSettings } from '../api/spoolman';
+import ViewToggle from '../components/common/ViewToggle';
 
 function countStock(spools, filamentId) {
     return spools.filter(s =>
@@ -32,6 +33,12 @@ export default function InventoryPage() {
     const [busy, setBusy] = useState({});
     const [showTracker, setShowTracker] = useState(false);
     const [trackSearch, setTrackSearch] = useState('');
+    const [search, setSearch] = useState('');
+    const [viewMode, setViewMode] = useState('list');
+    const [materialFilter, setMaterialFilter] = useState([]);
+    const [vendorFilter, setVendorFilter] = useState([]);
+    const [showFilter, setShowFilter] = useState(false);
+    const filterRef = useRef(null);
 
     const load = useCallback(async () => {
         try {
@@ -57,7 +64,35 @@ export default function InventoryPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    const tracked = filaments.filter(f => inventory[f.id]);
+    useEffect(() => {
+        if (!showFilter) return;
+        function handleClick(e) {
+            if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilter(false);
+        }
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [showFilter]);
+
+    const allTracked = filaments.filter(f => inventory[f.id]);
+    const allMaterials = [...new Set(allTracked.map(f => f.material).filter(Boolean))].sort();
+    const allVendors = [...new Set(allTracked.map(f => f.vendor?.name).filter(Boolean))].sort();
+
+    const tracked = allTracked.filter(f => {
+        if (search.trim()) {
+            const q = search.toLowerCase();
+            const match = (
+                (f.name || '').toLowerCase().includes(q) ||
+                (f.material || '').toLowerCase().includes(q) ||
+                (f.vendor?.name || '').toLowerCase().includes(q)
+            );
+            if (!match) return false;
+        }
+        if (materialFilter.length > 0 && !materialFilter.includes(f.material)) return false;
+        if (vendorFilter.length > 0 && !vendorFilter.includes(f.vendor?.name)) return false;
+        return true;
+    });
+
+    const activeFilterCount = materialFilter.length + vendorFilter.length;
 
     async function handleSave(filamentId) {
         const p = pending[filamentId] || {};
@@ -160,10 +195,123 @@ export default function InventoryPage() {
                 </button>
             </div>
 
-            {/* ── Stock table ────────────────────────────────────────── */}
+            {/* ── Search + View Toggle ───────────────────────────────── */}
+            <div style={{ display: 'flex', gap: '8px', margin: '12px 0', alignItems: 'center' }}>
+                <div className="spoolman-search-wrap" style={{ flex: 1, position: 'relative' }} ref={filterRef}>
+                    <span className="spoolman-search-icon">🔍</span>
+                    <input
+                        type="text"
+                        className="input spoolman-search-input"
+                        placeholder="Search tracked filaments…"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        style={{ paddingRight: '36px' }}
+                    />
+                    <button
+                        className="spoolman-filter-btn"
+                        onClick={() => setShowFilter(v => !v)}
+                        title="Filter"
+                        style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)' }}
+                    >
+                        {activeFilterCount > 0 ? `⚙ ${activeFilterCount}` : '⚙'}
+                    </button>
+                    {showFilter && (
+                        <div className="spoolman-filter-popover" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100 }}>
+                            {allMaterials.length > 0 && (
+                                <div className="spoolman-filter-group">
+                                    <div className="spoolman-filter-label">Material</div>
+                                    {allMaterials.map(mat => (
+                                        <label key={mat} className="spoolman-filter-option">
+                                            <input
+                                                type="checkbox"
+                                                checked={materialFilter.includes(mat)}
+                                                onChange={() => setMaterialFilter(prev =>
+                                                    prev.includes(mat) ? prev.filter(x => x !== mat) : [...prev, mat]
+                                                )}
+                                                style={{
+                                                    appearance: 'none', WebkitAppearance: 'none',
+                                                    width: '14px', height: '14px', borderRadius: '3px',
+                                                    border: '1.5px solid var(--border)', background: 'var(--surface)',
+                                                    cursor: 'pointer', flexShrink: 0,
+                                                    accentColor: 'var(--primary, #0ea5e9)'
+                                                }}
+                                            />
+                                            {mat}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                            {allVendors.length > 0 && (
+                                <div className="spoolman-filter-group">
+                                    <div className="spoolman-filter-label">Vendor</div>
+                                    {allVendors.map(v => (
+                                        <label key={v} className="spoolman-filter-option">
+                                            <input
+                                                type="checkbox"
+                                                checked={vendorFilter.includes(v)}
+                                                onChange={() => setVendorFilter(prev =>
+                                                    prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]
+                                                )}
+                                                style={{
+                                                    appearance: 'none', WebkitAppearance: 'none',
+                                                    width: '14px', height: '14px', borderRadius: '3px',
+                                                    border: '1.5px solid var(--border)', background: 'var(--surface)',
+                                                    cursor: 'pointer', flexShrink: 0,
+                                                    accentColor: 'var(--primary, #0ea5e9)'
+                                                }}
+                                            />
+                                            {v}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                            {(materialFilter.length > 0 || vendorFilter.length > 0) && (
+                                <button
+                                    className="spoolman-filter-clear"
+                                    onClick={() => { setMaterialFilter([]); setVendorFilter([]); }}
+                                >
+                                    Clear filters
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+                <ViewToggle viewMode={viewMode} onChange={setViewMode} />
+            </div>
+
+            {/* ── Stock table / cards ────────────────────────────────── */}
             {tracked.length === 0 ? (
                 <div className="text-muted" style={{ padding: '20px', textAlign: 'center' }}>
-                    No filaments tracked yet. Click "+ Track Filament" to get started.
+                    {search ? 'No filaments match your search' : 'No filaments tracked yet. Click "+ Track Filament" to get started.'}
+                </div>
+            ) : viewMode !== 'list' ? (
+                <div style={{
+                    display: 'grid',
+                    gap: '12px',
+                    gridTemplateColumns: viewMode === 'grid-large' ? 'repeat(auto-fill, minmax(280px, 1fr))' : 'repeat(auto-fill, minmax(200px, 1fr))',
+                    marginBottom: '16px'
+                }}>
+                    {tracked.map(f => {
+                        const inv = inventory[f.id];
+                        const current = countStock(spools, f.id);
+                        const status = current < inv.min_qty ? 'LOW' : 'OK';
+                        const color = `#${f.color_hex || '888888'}`;
+                        return (
+                            <div key={f.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                    <div className="sm-filament-dot" style={{ backgroundColor: color, flexShrink: 0 }} />
+                                    <div>
+                                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{f.name}</div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{[f.vendor?.name, f.material].filter(Boolean).join(' · ')}</div>
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>In stock: <strong style={{ color: current === 0 ? 'var(--danger)' : 'var(--text)' }}>{current}</strong> / {inv.target_qty}</span>
+                                    <span className={`inv-status-badge ${status === 'LOW' ? 'inv-status-low' : 'inv-status-ok'}`}>{status}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             ) : (
                 <div className="sm-catalogue-table-wrap">
@@ -233,7 +381,7 @@ export default function InventoryPage() {
                 </div>
             )}
 
-            {/* ── Shopping list ──────────────────────────────────────── */}
+            {/* ── Shopping list (always uses full tracked, not filtered) ── */}
             {shoppingList.length > 0 && (
                 <div className="inv-shopping-section">
                     <h2 className="inv-shopping-title">Shopping List</h2>
