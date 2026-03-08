@@ -23,6 +23,7 @@ const embeddedLinks = [
   { to: '/history', label: 'History', icon: '🕒', end: true },
   { to: '/maintenance', label: 'Maintenance', icon: '🔧', end: true },
   { to: '/settings', label: 'Settings', icon: '⚙', end: true },
+  { to: '/extras', label: 'Extras', icon: '✦', end: true },
 ];
 
 export default function Sidebar() {
@@ -170,6 +171,7 @@ export default function Sidebar() {
             { to: '/history', label: 'History', icon: '🕒' },
             { to: '/maintenance', label: 'Maintenance', icon: '🔧' },
             { to: '/settings', label: 'Settings', icon: '⚙' },
+            { to: '/extras', label: 'Extras', icon: '✦' },
           ].map(({ to, label, icon }) => (
             <li key={to} style={{ width: '100%' }}>
               <NavLink

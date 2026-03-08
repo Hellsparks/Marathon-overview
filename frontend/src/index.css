@@ -2150,6 +2150,73 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border-color: var(--primary);
 }
 
+.spoolman-filter-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color .15s, background .15s;
+}
+.spoolman-filter-btn:hover {
+  color: var(--text);
+  background: var(--surface3, rgba(255,255,255,0.06));
+}
+
+.spoolman-filter-popover {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.spoolman-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spoolman-filter-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.spoolman-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.spoolman-filter-clear {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.spoolman-filter-clear:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
 .spoolman-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -2562,6 +2629,29 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background: color-mix(in srgb, var(--danger) 15%, var(--surface2));
   border-color: var(--danger);
   color: var(--danger);
+}
+
+/* Subtle icon buttons for spool list view — matches card-view icon buttons */
+.spool-list-icon-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 0;
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.spool-list-icon-btn:hover {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .inv-shopping-size {
@@ -4068,6 +4158,37 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateX(40px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ─── Themed Checkboxes ─────────────────────────────────────────── */
+input[type="checkbox"] {
+  accent-color: var(--primary, #0ea5e9);
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--primary, #0ea5e9) !important;
+  border-color: var(--primary, #0ea5e9) !important;
+}
+
+input[type="checkbox"]:checked::after {
+  content: "✓";
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+input[type="checkbox"]:hover {
+  border-color: var(--primary, #0ea5e9) !important;
 }

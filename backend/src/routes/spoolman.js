@@ -467,6 +467,30 @@ router.get('/fields/:entity', async (req, res) => {
     }
 });
 
+// POST /api/spoolman/fields/:entity — create a custom field definition
+router.post('/fields/:entity', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    const allowed = ['filament', 'vendor', 'spool'];
+    if (!allowed.includes(req.params.entity))
+        return res.status(400).json({ error: 'Invalid entity type' });
+    try {
+        const r = await fetch(`${url}/api/v1/field/${req.params.entity}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
 // PATCH /api/spoolman/filaments/:id — update a filament
 router.patch('/filaments/:id', async (req, res) => {
     const url = getSpoolmanUrl();

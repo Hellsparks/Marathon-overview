@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { createSpool, getFilaments } from '../../api/spoolman';
+import { createSpool, getFilaments, updateFilament } from '../../api/spoolman';
+import { getSettings } from '../../api/settings';
+import { fetchSwatchStl, makeSwatchFilename, getSwatchLines, downloadBuffer } from '../../api/extras';
 
 export default function AddSpoolDialog({ onClose, onCreated, onAddFilament }) {
     const [filaments, setFilaments] = useState([]);
@@ -11,10 +13,21 @@ export default function AddSpoolDialog({ onClose, onCreated, onAddFilament }) {
     const [busy, setBusy] = useState(false);
     const [search, setSearch] = useState('');
 
+    const [swatchField, setSwatchField] = useState(null);
+    const [swatchPromptEnabled, setSwatchPromptEnabled] = useState(false);
+    const [promptSpool, setPromptSpool] = useState(null);
+    const [promptFilament, setPromptFilament] = useState(null);
+    const [promptBusy, setPromptBusy] = useState(false);
+    const [promptError, setPromptError] = useState(null);
+
     useEffect(() => {
         getFilaments()
             .then(f => setFilaments(f || []))
-            .catch(() => {});
+            .catch(() => { });
+        getSettings().then(s => {
+            setSwatchField(s.swatch_extra_field || null);
+            setSwatchPromptEnabled(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
+        }).catch(() => { });
     }, []);
 
     const filtered = filaments.filter(f => {
@@ -40,12 +53,88 @@ export default function AddSpoolDialog({ onClose, onCreated, onAddFilament }) {
             if (lotNr.trim()) body.lot_nr = lotNr.trim();
             if (comment.trim()) body.comment = comment.trim();
             const created = await createSpool(body);
+
+            if (swatchPromptEnabled && swatchField && selectedFilament) {
+                const hasPrinted = selectedFilament.extra?.[swatchField] === true || selectedFilament.extra?.[swatchField] === 'true';
+                if (!hasPrinted) {
+                    setPromptSpool(created);
+                    setPromptFilament(selectedFilament);
+                    setBusy(false);
+                    return;
+                }
+            }
+
             onCreated(created);
         } catch (err) {
             alert(err.message);
         } finally {
             setBusy(false);
         }
+    }
+
+    async function handleMarkPrinted() {
+        setPromptBusy(true);
+        try {
+            await updateFilament(promptFilament.id, { extra: { [swatchField]: 'true' } });
+            onCreated(promptSpool);
+        } catch (e) {
+            setPromptError(e.message);
+            setPromptBusy(false);
+        }
+    }
+
+    async function handleDownloadAndMark() {
+        setPromptBusy(true);
+        try {
+            const { line1, line2 } = getSwatchLines(promptFilament);
+            const buf = await fetchSwatchStl(line1, line2, null);
+            downloadBuffer(buf, makeSwatchFilename(promptFilament));
+            await updateFilament(promptFilament.id, { extra: { [swatchField]: 'true' } });
+            onCreated(promptSpool);
+        } catch (e) {
+            setPromptError(e.message);
+            setPromptBusy(false);
+        }
+    }
+
+    function handleIgnore() {
+        onCreated(promptSpool);
+    }
+
+    if (promptSpool && promptFilament) {
+        return (
+            <div className="spool-dialog-overlay" onClick={handleIgnore}>
+                <div className="spool-dialog" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+                    <div className="spool-dialog-header">
+                        <h3 className="spool-dialog-title">Swatch Check</h3>
+                        <button className="spool-dialog-close" onClick={handleIgnore}>✕</button>
+                    </div>
+                    <div style={{ padding: '20px 0', textAlign: 'center' }}>
+                        <div style={{ fontSize: '32px', marginBottom: '12px' }}>🎨</div>
+                        <p style={{ fontSize: '15px', fontWeight: 500, marginBottom: '8px', color: 'var(--text)' }}>
+                            Have you printed a swatch for this filament?
+                        </p>
+                        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '24px' }}>
+                            {promptFilament.vendor?.name} {promptFilament.name || `Filament #${promptFilament.id}`}
+                        </p>
+                        {promptError && (
+                            <div className="error" style={{ marginBottom: '16px', fontSize: '13px', textAlign: 'left' }}>{promptError}</div>
+                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <button className="btn btn-primary" onClick={handleMarkPrinted} disabled={promptBusy}>
+                                {promptBusy ? 'Saving…' : 'Yes, mark as Printed'}
+                            </button>
+                            <button className="btn" onClick={handleDownloadAndMark} disabled={promptBusy}>
+                                {promptBusy ? 'Downloading…' : 'No, Download STL & Mark'}
+                            </button>
+                            <button className="btn" onClick={handleIgnore} disabled={promptBusy} style={{ background: 'transparent', border: '1px solid transparent', color: 'var(--text-muted)' }}>
+                                Ignore Setup (Ask Later)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (

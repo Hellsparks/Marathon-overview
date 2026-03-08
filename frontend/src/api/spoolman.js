@@ -112,6 +112,19 @@ export async function getFields(entity) {
     return r.json();
 }
 
+export async function createField(entity, data) {
+    const r = await fetch(`${API}/fields/${entity}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
 export async function updateFilament(id, data) {
     const r = await fetch(`${API}/filaments/${id}`, {
         method: 'PATCH',

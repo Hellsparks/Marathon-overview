@@ -117,11 +117,11 @@ router.get('/:id', (req, res) => {
 
 // POST /api/templates
 router.post('/', (req, res) => {
-    const { name, description, plates = [], color_slots = [] } = req.body;
+    const { name, description, plates = [], color_slots = [], folder_id } = req.body;
     if (!name) return res.status(400).json({ error: 'Template name is required' });
 
     try {
-        const insertTemplate = db.prepare(`INSERT INTO project_templates (name, description) VALUES (?, ?)`);
+        const insertTemplate = db.prepare(`INSERT INTO project_templates (name, description, folder_id) VALUES (?, ?, ?)`);
         const insertPlate = db.prepare(`INSERT INTO template_plates (template_id, filename, display_name, sort_order, filament_type, estimated_time_s, sliced_for, filament_usage_mm, filament_usage_g, has_thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const insertSlot = db.prepare(`INSERT INTO template_color_slots (template_id, slot_key, label, pref_hex, pref_filament_id) VALUES (?, ?, ?, ?, ?)`);
         const insertPlateSlot = db.prepare(`INSERT INTO template_plate_slots (plate_id, slot_key) VALUES (?, ?)`);
@@ -129,7 +129,7 @@ router.post('/', (req, res) => {
         db.exec('BEGIN TRANSACTION');
         let templateId;
         try {
-            const run = insertTemplate.run(name, description || null);
+            const run = insertTemplate.run(name, description || null, folder_id || null);
             templateId = run.lastInsertRowid;
 
             const prefix = `tpl${templateId}`;
@@ -179,22 +179,23 @@ router.post('/', (req, res) => {
 
 // PUT /api/templates/:id
 router.put('/:id', (req, res) => {
-    const { name, description, plates = [], color_slots = [] } = req.body;
+    const { name, description, plates = [], color_slots = [], folder_id } = req.body;
     if (!name) return res.status(400).json({ error: 'Template name is required' });
 
     try {
         const templateId = req.params.id;
-        const existing = db.prepare('SELECT id FROM project_templates WHERE id = ?').get(templateId);
+        const existing = db.prepare('SELECT id, folder_id FROM project_templates WHERE id = ?').get(templateId);
         if (!existing) return res.status(404).json({ error: 'Template not found' });
 
-        const updateTemplate = db.prepare(`UPDATE project_templates SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?`);
+        const updateTemplate = db.prepare(`UPDATE project_templates SET name = ?, description = ?, folder_id = ?, updated_at = datetime('now') WHERE id = ?`);
         const insertPlate = db.prepare(`INSERT INTO template_plates (template_id, filename, display_name, sort_order, filament_type, estimated_time_s, sliced_for, filament_usage_mm, filament_usage_g, has_thumbnail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const insertSlot = db.prepare(`INSERT INTO template_color_slots (template_id, slot_key, label, pref_hex, pref_filament_id) VALUES (?, ?, ?, ?, ?)`);
         const insertPlateSlot = db.prepare(`INSERT INTO template_plate_slots (plate_id, slot_key) VALUES (?, ?)`);
 
         db.exec('BEGIN TRANSACTION');
         try {
-            updateTemplate.run(name, description || null, templateId);
+            const targetFolderId = folder_id !== undefined ? (folder_id || null) : existing.folder_id;
+            updateTemplate.run(name, description || null, targetFolderId, templateId);
 
             // We do a full replace of plates and slots for simplicity. 
             // First, find existing plates to know what files we already have copied.
@@ -262,6 +263,18 @@ router.put('/:id', (req, res) => {
             db.exec('ROLLBACK');
             throw txnErr;
         }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /api/templates/:id/folder
+router.patch('/:id/folder', (req, res) => {
+    const { folder_id } = req.body;
+    try {
+        const info = db.prepare('UPDATE project_templates SET folder_id = ? WHERE id = ?').run(folder_id || null, req.params.id);
+        if (info.changes === 0) return res.status(404).json({ error: 'Template not found' });
+        res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

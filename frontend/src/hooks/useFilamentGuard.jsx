@@ -5,9 +5,9 @@ import { getBambuWarnings } from '../api/spoolman';
 
 /**
  * Global hook to check if it's safe to assign a spool to a printer.
- * Returns { startGuard, renderGuardDialog, checkSpoolCompatibility, bambuWarnings, fetchWarningsIfNeeded }.
+ * Returns { startGuard, renderGuardDialog, checkSpoolCompatibility, bambuWarnings, fetchWarningsIfNeeded, confirmGuard, cancelGuard }.
  */
-export function useFilamentGuard({ onConfirm, onWeighSpool, onClearBambuWarning }) {
+export function useFilamentGuard({ onConfirm, onWeighSpool, onClearBambuWarning, onClearAndAssign }) {
     const { printers } = usePrinters();
     const { status: statuses } = useStatus();
     const [pendingAssignment, setPendingAssignment] = useState(null);
@@ -197,18 +197,34 @@ export function useFilamentGuard({ onConfirm, onWeighSpool, onClearBambuWarning 
                                 ⚖️ Weigh Spool
                             </button>
                         )}
-                        {hasBambuWarning && onClearBambuWarning && (
+                        {hasBambuWarning && (onClearBambuWarning || onClearAndAssign) && (
                             <button
                                 className="btn v-btn"
                                 style={{ background: 'var(--surface2)', color: 'var(--text)' }}
-                                onClick={() => {
-                                    onClearBambuWarning(pendingAssignment.spool.id);
-                                    cancelGuard();
+                                onClick={async () => {
+                                    try {
+                                        if (onClearAndAssign) {
+                                            // Clear warning and proceed with assignment
+                                            await onClearAndAssign(pendingAssignment.spool.id);
+                                            setPendingAssignment(prev => ({ ...prev, busy: true }));
+                                            await onConfirm(
+                                                pendingAssignment.spool,
+                                                pendingAssignment.printer,
+                                                pendingAssignment.trayId,
+                                                pendingAssignment.extraContext
+                                            );
+                                        } else if (onClearBambuWarning) {
+                                            // Just clear and close
+                                            onClearBambuWarning(pendingAssignment.spool.id);
+                                        }
+                                    } finally {
+                                        cancelGuard();
+                                    }
                                 }}
                                 disabled={pendingAssignment.busy}
-                                title="Mark as unused and clear the warning without weighing"
+                                title="Mark as unused, clear the warning, and assign the spool"
                             >
-                                ✨ Unused
+                                ✨ Unused & Assign
                             </button>
                         )}
                         <button
@@ -230,6 +246,8 @@ export function useFilamentGuard({ onConfirm, onWeighSpool, onClearBambuWarning 
         renderGuardDialog,
         checkSpoolCompatibility,
         pendingAssignment,
+        confirmGuard, // expose so parent can confirm after external actions (e.g., weigh spool)
+        cancelGuard,
         bambuWarnings,
         fetchWarningsIfNeeded
     };

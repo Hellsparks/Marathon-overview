@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createFilament, updateFilament, getVendors, getFields } from '../../api/spoolman';
+import { RAL_COLORS, findClosestRal } from '../../utils/ralColors';
+import { fetchSwatchStl, makeSwatchFilename, getSwatchLines, downloadBuffer } from '../../api/extras';
 
 const COMMON_MATERIALS = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PLA+', 'PA', 'PC', 'HIPS', 'PVA'];
 
@@ -15,8 +17,8 @@ const MATERIAL_DENSITIES = {
 };
 
 // filament prop = edit mode; undefined = create mode
-export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, filament }) {
-    const isEdit = !!filament;
+export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, filament, isClone }) {
+    const isEdit = !!filament && !isClone;
     const [vendors, setVendors] = useState([]);
     const [extraFields, setExtraFields] = useState([]);
 
@@ -25,24 +27,60 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
     const [material, setMaterial] = useState(filament?.material ?? '');
     const [density, setDensity] = useState(String(filament?.density ?? '1.24'));
     const [colorHex, setColorHex] = useState(filament?.color_hex ? `#${filament.color_hex}` : '#ffffff');
+    const [colorRal, setColorRal] = useState('');
     const [diameter, setDiameter] = useState(String(filament?.diameter ?? '1.75'));
     const [weight, setWeight] = useState(String(filament?.weight ?? '1000'));
     const [spoolWeight, setSpoolWeight] = useState(String(filament?.spool_weight ?? ''));
     const [comment, setComment] = useState(filament?.comment ?? '');
-    const [extra, setExtra] = useState(filament?.extra ?? {});
+    const [extra, setExtra] = useState(() => {
+        const e = filament?.extra ? { ...filament.extra } : {};
+        for (const k in e) {
+            if (typeof e[k] === 'string' && e[k].startsWith('"') && e[k].endsWith('"')) {
+                e[k] = e[k].slice(1, -1);
+            }
+        }
+        return e;
+    });
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
         Promise.all([getVendors(), getFields('filament')])
             .then(([v, f]) => { setVendors(v || []); setExtraFields(f || []); })
-            .catch(() => {});
+            .catch(() => { });
     }, []);
+
+    // Sync RAL string whenever hex changes
+    useEffect(() => {
+        if (!colorHex) {
+            setColorRal('');
+            return;
+        }
+        const closest = findClosestRal(colorHex);
+        if (closest) {
+            setColorRal(closest.exact ? `RAL ${closest.ral}` : `~ RAL ${closest.ral}`);
+        } else {
+            setColorRal('');
+        }
+    }, [colorHex]);
 
     function handleMaterialChange(val) {
         setMaterial(val);
         if (!isEdit) {
             const known = MATERIAL_DENSITIES[val.toUpperCase()] || MATERIAL_DENSITIES[val];
             if (known) setDensity(String(known));
+        }
+    }
+
+    function handleRalChange(val) {
+        setColorRal(val);
+        // Specifically check if they typed a valid RAL number (e.g. "RAL 1004" or "1004")
+        const match = val.match(/\b(10[0-3]\d|20[0-1]\d|30[0-3]\d|40[0-1]\d|50[0-2]\d|60[0-3]\d|70[0-4]\d|80[0-2]\d|90[0-2]\d)\b/);
+        if (match) {
+            const ralCode = match[1];
+            const ralColor = RAL_COLORS.find(r => r.ral === ralCode);
+            if (ralColor) {
+                setColorHex(ralColor.hex);
+            }
         }
     }
 
@@ -70,11 +108,29 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
 
             const extraOut = {};
             for (const f of extraFields) {
-                const val = extra[f.key];
-                if (val === '' || val === undefined || val === null) continue;
-                extraOut[f.key] = (f.field_type === 'float' || f.field_type === 'integer')
-                    ? parseFloat(val)
-                    : val;
+                let val = extra[f.key];
+                if (f.field_type === 'boolean') {
+                    // Boolean fields can be physically false, which fails the `!val` check below if we're not careful
+                    if (val !== undefined && val !== null) {
+                        extraOut[f.key] = (val === true || val === 'true') ? 'true' : 'false';
+                    }
+                    continue;
+                }
+
+                if (val === '' || val === undefined || val === null) {
+                    continue; // Do not send empty extra fields at all (avoids 422 if it's float/int)
+                }
+
+                if (f.field_type === 'float' || f.field_type === 'integer') {
+                    // Spoolman natively treats all extra fields as strings under the hood, but validating them
+                    // depends on Pydantic correctly decoding the string.
+                    extraOut[f.key] = String(parseFloat(val));
+                } else {
+                    if (typeof val === 'string' && !val.startsWith('"') && !val.startsWith('{') && !val.startsWith('[')) {
+                        val = `"${val}"`;
+                    }
+                    extraOut[f.key] = val;
+                }
             }
             body.extra = extraOut;
 
@@ -89,11 +145,30 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
         }
     }
 
+    async function handleDownloadSwatch() {
+        setBusy(true);
+        try {
+            const fakeFilament = {
+                id: filament?.id || 0,
+                name: name.trim(),
+                material: material.trim(),
+                vendor: vendors.find(v => String(v.id) === vendorId)
+            };
+            const { line1, line2 } = getSwatchLines(fakeFilament);
+            const buf = await fetchSwatchStl(line1, line2, null);
+            downloadBuffer(buf, makeSwatchFilename(fakeFilament));
+        } catch (e) {
+            alert(e.message);
+        } finally {
+            setBusy(false);
+        }
+    }
+
     return (
         <div className="spool-dialog-overlay" onClick={onClose}>
             <div className="spool-dialog spool-dialog-wide" onClick={e => e.stopPropagation()}>
                 <div className="spool-dialog-header">
-                    <h3 className="spool-dialog-title">{isEdit ? 'Edit Filament' : 'Add Filament'}</h3>
+                    <h3 className="spool-dialog-title">{isEdit ? 'Edit Filament' : isClone ? 'Clone Filament' : 'Add Filament'}</h3>
                     <button className="spool-dialog-close" onClick={onClose}>✕</button>
                 </div>
 
@@ -161,6 +236,16 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                                 value={colorHex}
                                 onChange={e => setColorHex(e.target.value)}
                                 placeholder="#ffffff"
+                                style={{ width: '80px', textTransform: 'uppercase' }}
+                            />
+                            <input
+                                className="sm-input sm-color-ral"
+                                type="text"
+                                value={colorRal}
+                                onChange={e => handleRalChange(e.target.value)}
+                                placeholder="RAL code"
+                                style={{ width: '100px' }}
+                                title="e.g. 1004 or RAL 1004"
                             />
                         </div>
                     </div>
@@ -190,19 +275,56 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                         <input className="sm-input" type="text" placeholder="Optional" value={comment} onChange={e => setComment(e.target.value)} />
                     </div>
 
-                    {extraFields.map(f => (
-                        <div key={f.key} className="sm-field">
-                            <label className="sm-label">{f.name}{f.unit ? ` (${f.unit})` : ''}</label>
-                            <input
-                                className="sm-input"
-                                type={f.field_type === 'float' || f.field_type === 'integer' ? 'number' : 'text'}
-                                step={f.field_type === 'float' ? 'any' : undefined}
-                                placeholder={f.default_value ?? ''}
-                                value={extra[f.key] ?? ''}
-                                onChange={e => setExtraVal(f.key, e.target.value)}
-                            />
-                        </div>
-                    ))}
+                    {extraFields.map(f => {
+                        if (f.field_type === 'boolean') {
+                            const isChecked = extra[f.key] === true || extra[f.key] === 'true';
+                            return (
+                                <div key={f.key} className="sm-field sm-field-full" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={e => setExtraVal(f.key, e.target.checked)}
+                                            style={{
+                                                appearance: 'none', WebkitAppearance: 'none', width: '18px', height: '18px',
+                                                border: '2px solid var(--border)', borderRadius: '4px', cursor: 'pointer',
+                                                backgroundColor: 'var(--surface)', display: 'flex', alignItems: 'center',
+                                                justifyContent: 'center', flexShrink: 0, accentColor: 'var(--primary, #0ea5e9)'
+                                            }}
+                                        />
+                                        <label className="sm-label" style={{ marginBottom: 0, cursor: 'pointer', userSelect: 'none' }} onClick={() => setExtraVal(f.key, !isChecked)}>
+                                            {f.name}
+                                        </label>
+                                    </div>
+                                    {f.key === 'swatch' && (
+                                        <button
+                                            type="button"
+                                            className="btn"
+                                            style={{ padding: '4px 8px', fontSize: '12px' }}
+                                            onClick={handleDownloadSwatch}
+                                            disabled={busy || !name.trim()}
+                                        >
+                                            Generate & Download STL
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div key={f.key} className="sm-field">
+                                <label className="sm-label">{f.name}{f.unit ? ` (${f.unit})` : ''}</label>
+                                <input
+                                    className="sm-input"
+                                    type={f.field_type === 'float' || f.field_type === 'integer' ? 'number' : 'text'}
+                                    step={f.field_type === 'float' ? 'any' : undefined}
+                                    placeholder={f.default_value ?? ''}
+                                    value={extra[f.key] ?? ''}
+                                    onChange={e => setExtraVal(f.key, e.target.value)}
+                                />
+                            </div>
+                        );
+                    })}
 
                     <div className="spool-dialog-actions sm-field-full">
                         <button type="button" className="btn v-btn" onClick={onClose} disabled={busy}>Cancel</button>
