@@ -78,7 +78,15 @@ router.get('/:id', (req, res) => {
 
         if (!project) return res.status(404).json({ error: 'Project not found' });
 
-        project.plates = db.prepare(`SELECT * FROM project_plates WHERE project_id = ? ORDER BY sort_order`).all(project.id);
+        project.plates = db.prepare(`
+            SELECT pp.*, 
+                   datetime(pj.end_time, '-' || pj.total_duration_s || ' seconds') as actual_start_time, 
+                   pj.end_time as actual_end_time
+            FROM project_plates pp
+            LEFT JOIN gcode_print_jobs pj ON pp.print_job_id = pj.id
+            WHERE pp.project_id = ?
+            ORDER BY pp.sort_order
+        `).all(project.id);
         project.color_assignments = db.prepare(`SELECT * FROM project_color_assignments WHERE project_id = ?`).all(project.id);
 
         res.json(project);
@@ -89,14 +97,14 @@ router.get('/:id', (req, res) => {
 
 // POST /api/projects (Hybrid)
 router.post('/', (req, res) => {
-    const { template_id, name, due_date, file_ids = [], color_assignments = [] } = req.body;
+    const { template_id, name, due_date, file_ids = [], color_assignments = [], folder_id } = req.body;
     if (!name) return res.status(400).json({ error: 'Project name is required' });
 
     try {
         db.exec('BEGIN TRANSACTION');
         let projectId;
         try {
-            const run = db.prepare(`INSERT INTO projects (template_id, name, due_date) VALUES (?, ?, ?)`).run(template_id || null, name, due_date || null);
+            const run = db.prepare(`INSERT INTO projects (template_id, name, due_date, folder_id) VALUES (?, ?, ?, ?)`).run(template_id || null, name, due_date || null, folder_id || null);
             projectId = run.lastInsertRowid;
 
             if (template_id) {
@@ -205,7 +213,8 @@ router.patch('/:id', (req, res) => {
         if (status !== undefined) {
             fields.push('status = ?'); params.push(status);
             if (status === 'archived') {
-                fields.push('completed_at = datetime("now")');
+                fields.push('completed_at = datetime(\'now\')');
+                fields.push('folder_id = NULL');
             }
         }
         if (completed_at !== undefined) { fields.push('completed_at = ?'); params.push(completed_at); }
@@ -256,19 +265,33 @@ router.patch('/:id', (req, res) => {
     if (!project) return res.status(404).json({ error: 'Project not found' });
 
     try {
-        db.prepare(`
-            UPDATE projects 
-            SET status = ?, 
-                name = ?,
-                due_date = ?,
-                updated_at = datetime('now') 
-            WHERE id = ?
-        `).run(
-            status ?? project.status,
-            name ?? project.name,
-            due_date !== undefined ? due_date : project.due_date,
-            req.params.id
-        );
+        const fields = ['updated_at = datetime(\'now\')'];
+        const params = [];
+
+        if (status !== undefined) {
+            fields.push('status = ?');
+            params.push(status);
+            if (status === 'archived') fields.push('folder_id = NULL');
+        }
+        if (name !== undefined) { fields.push('name = ?'); params.push(name); }
+        if (due_date !== undefined) { fields.push('due_date = ?'); params.push(due_date); }
+
+        params.push(req.params.id);
+        const sql = `UPDATE projects SET ${fields.join(', ')} WHERE id = ?`;
+        db.prepare(sql).run(...params);
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /api/projects/:id/folder
+router.patch('/:id/folder', (req, res) => {
+    const { folder_id } = req.body;
+    try {
+        const info = db.prepare('UPDATE projects SET folder_id = ? WHERE id = ?').run(folder_id || null, req.params.id);
+        if (info.changes === 0) return res.status(404).json({ error: 'Project not found' });
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

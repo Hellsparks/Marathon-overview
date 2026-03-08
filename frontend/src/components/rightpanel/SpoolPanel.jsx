@@ -1,3 +1,6 @@
+import { useState, useEffect } from 'react';
+import { getSpools, getBambuWarnings } from '../../api/spoolman';
+
 function toAbsUrl(url) {
     if (!url) return null;
     const clean = url.replace(/^["'\s]+|["'\s]+$/g, '');
@@ -5,12 +8,60 @@ function toAbsUrl(url) {
     return /^https?:\/\//i.test(clean) ? clean : `https://${clean}`;
 }
 
-export default function SpoolPanel({ selected }) {
+export default function SpoolPanel({ selected, spools = null, bambuWarnings = null }) {
+    const [localSpools, setLocalSpools] = useState([]);
+    const [localWarnings, setLocalWarnings] = useState([]);
+
+    // Fetch spools and warnings if not provided
+    useEffect(() => {
+        if (spools === null) {
+            getSpools()
+                .then(data => setLocalSpools(data.filter(s => !s.archived)))
+                .catch(() => setLocalSpools([]));
+        }
+    }, [spools]);
+
+    useEffect(() => {
+        if (bambuWarnings === null) {
+            getBambuWarnings()
+                .then(data => setLocalWarnings(data))
+                .catch(() => setLocalWarnings([]));
+        }
+    }, [bambuWarnings]);
+
+    const displaySpools = spools !== null ? spools : localSpools;
+    const displayWarnings = bambuWarnings !== null ? bambuWarnings : localWarnings;
+
+    // Calculate summary stats
+    const totalSpools = displaySpools.length;
+    const trackedSpools = displaySpools.filter(s => !displayWarnings.some(w => w.spool_id === s.id)).length;
+    const untrackedSpools = displayWarnings.length;
+
     if (!selected) {
         return (
-            <div className="rp-placeholder">
-                <span className="rp-placeholder-icon">🧵</span>
-                <span>Click a spool to see details</span>
+            <div className="rp-placeholder" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+                <div style={{ textAlign: 'center', paddingTop: '20px' }}>
+                    <span className="rp-placeholder-icon">🧵</span>
+                    <span>Click a spool to see details</span>
+                </div>
+
+                {/* Summary Cards at Bottom */}
+                <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border)' }}>
+                    <div style={{ padding: '10px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Total Spools</div>
+                        <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text)' }}>{totalSpools}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ flex: 1, padding: '10px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Tracked</div>
+                            <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--success)' }}>{trackedSpools}</div>
+                        </div>
+                        <div style={{ flex: 1, padding: '10px 12px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Untracked 📦</div>
+                            <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--warning)' }}>{untrackedSpools}</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     }

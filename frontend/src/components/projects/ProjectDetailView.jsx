@@ -146,7 +146,7 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
             fetch(`/api/projects/${projectId}`)
                 .then(r => r.ok ? r.json() : null)
                 .then(data => { if (data) setProject(data); })
-                .catch(() => {});
+                .catch(() => { });
         }, 5000);
         return () => clearInterval(interval);
     }, [project?.plates?.map(p => p.status).join(',')]);
@@ -216,6 +216,26 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
             onBack();
         } catch (err) {
             alert(err.message);
+        }
+    };
+
+    const handleUnarchive = async () => {
+        try {
+            setLoading(true);
+            const res = await fetch(`/api/projects/${projectId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'active' })
+            });
+            if (!res.ok) throw new Error('Failed to unarchive project');
+            // If we successfully unarchive, fetch new data to update UI to active state 
+            // OR if we were viewing it from the Archive page, we should go back.
+            // Going back is generally safer so it removes it from the Archive list.
+            onBack();
+            toast?.('Project unarchived successfully', 'success');
+        } catch (err) {
+            toast?.(err.message, 'error') || alert(err.message);
+            setLoading(false);
         }
     };
 
@@ -323,7 +343,11 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                             ⚠️ DEADLINE CRITICAL
                         </div>
                     )}
-                    <button className="btn btn-outline" onClick={handleArchive}>Archive Project</button>
+                    {project.status === 'archived' ? (
+                        <button className="btn btn-primary" onClick={handleUnarchive}>Unarchive Project</button>
+                    ) : (
+                        <button className="btn btn-outline" onClick={handleArchive}>Archive Project</button>
+                    )}
                 </div>
             </div>
 
@@ -399,23 +423,48 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                     </div>
 
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                                        <PrinterSelector
-                                            printers={printers}
-                                            status={status}
-                                            plate={plate}
-                                            selectedId={selectedPrinters[plate.id]}
-                                            onSelect={id => setSelectedPrinters(prev => ({ ...prev, [plate.id]: id }))}
-                                            disabled={plate.status === 'done' || loading}
-                                        />
+                                        {project.status === 'archived' ? (
+                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '2px', paddingRight: '12px', textAlign: 'right' }}>
+                                                {plate.actual_start_time ? (
+                                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                                        <span>start</span>
+                                                        <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                                            {new Date(plate.actual_start_time).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                ) : null}
+                                                {plate.actual_end_time ? (
+                                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                                        <span>finish</span>
+                                                        <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                                            {new Date(plate.actual_end_time).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                ) : (!plate.actual_start_time ? (
+                                                    <span style={{ fontStyle: 'italic', opacity: 0.7 }}>Not printed</span>
+                                                ) : null)}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <PrinterSelector
+                                                    printers={printers}
+                                                    status={status}
+                                                    plate={plate}
+                                                    selectedId={selectedPrinters[plate.id]}
+                                                    onSelect={id => setSelectedPrinters(prev => ({ ...prev, [plate.id]: id }))}
+                                                    disabled={plate.status === 'done' || loading}
+                                                />
 
-                                        <button
-                                            className="btn btn-sm btn-primary"
-                                            onClick={() => handlePrint(plate)}
-                                            disabled={!selectedPrinters[plate.id] || plate.status === 'done' || loading}
-                                            style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}
-                                        >
-                                            Print
-                                        </button>
+                                                <button
+                                                    className="btn btn-sm btn-primary"
+                                                    onClick={() => handlePrint(plate)}
+                                                    disabled={!selectedPrinters[plate.id] || plate.status === 'done' || loading}
+                                                    style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}
+                                                >
+                                                    Print
+                                                </button>
+                                            </>
+                                        )}
 
                                         <div style={{ width: '1px', height: '16px', background: 'var(--border)', margin: '0 4px' }} />
 
@@ -423,17 +472,19 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                             {plate.status === 'done' ? (
                                                 <span style={{ color: 'var(--success)', fontWeight: 700, fontSize: '11px' }}>✓ DONE</span>
                                             ) : (
-                                                <span style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '11px' }}>PENDING</span>
+                                                <span style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '11px' }}>{project.status === 'archived' ? 'Not printed' : 'PENDING'}</span>
                                             )}
                                         </div>
 
-                                        <button
-                                            className="btn btn-sm btn-outline"
-                                            onClick={() => updatePlateStatus(plate.id, plate.status === 'done' ? 'pending' : 'done')}
-                                            style={{ height: '28px', padding: '0 8px', fontSize: '11px', opacity: 0.7 }}
-                                        >
-                                            {plate.status === 'done' ? 'Re-open' : 'Done'}
-                                        </button>
+                                        {project.status !== 'archived' && (
+                                            <button
+                                                className="btn btn-sm btn-outline"
+                                                onClick={() => updatePlateStatus(plate.id, plate.status === 'done' ? 'pending' : 'done')}
+                                                style={{ height: '28px', padding: '0 8px', fontSize: '11px', opacity: 0.7 }}
+                                            >
+                                                {plate.status === 'done' ? 'Re-open' : 'Done'}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}

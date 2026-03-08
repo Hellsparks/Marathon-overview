@@ -1,4 +1,10 @@
-FROM node:24-alpine
+FROM node:24-slim
+
+# Install Python 3, pip, and CadQuery (+ a font for text rendering)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-pip fonts-liberation \
+    && pip3 install --break-system-packages cadquery \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

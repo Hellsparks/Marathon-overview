@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - **Printer Ecosystem Expansion**: Added native support and adapter services for OctoPrint and Duet/RepRapFirmware printers.
 - **Bambu Lab LAN Developer Mode**: Added support with persistent MQTT connections, light and temp control, real-time status mapping, and a Bambu Connect cloud placeholder.
 - **Spoolman Integration**: Added Bambu Lab color mapping, real-time physical AMS slot rendering, global filament guards, Bambu incompatibility warnings, and fixed slot routing and UI layout.
+- **Spoolman Extra Fields & Tools**: Added automated Filament Swatch Tracking system with optional "Print Swatch" prompts on new spool additions, Auto-Create Extra Field buttons in Settings, click-to-buy Product Links in the catalogue, and a "Filaments with TD Value" HueForge JSON export filter.
 - **Enhanced Printer UI**: Upgraded the movement rose widget with a 100mm outer ring, 50mm Z alignment, and horizontal extruder steps.
 
 ### 🐛 Bug Fixes
