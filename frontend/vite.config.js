@@ -11,6 +11,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(version),
   },
   server: {
+    host: true, // Listen on all network interfaces to allow connections from other devices (like an iPad)
     port: 5173,
     proxy: {
       '/api': {
