@@ -4,11 +4,16 @@
  *
  * Exposes Marathon's printer fleet management capabilities as MCP tools.
  * Configure via environment variables:
- *   MARATHON_URL  — base URL of the Marathon backend (default: http://localhost:3000)
+ *   MARATHON_URL     — base URL of the Marathon backend (default: http://localhost:3000)
+ *   MCP_TRANSPORT    — "http" to run as HTTP server; omit for stdio (default)
+ *   MCP_PORT         — HTTP listen port when MCP_TRANSPORT=http (default: 3001)
  */
 
+import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -730,35 +735,79 @@ async function handleTool(name, args) {
 }
 
 // ---------------------------------------------------------------------------
-// MCP Server bootstrap
+// Transport — stdio (default) or HTTP (MCP_TRANSPORT=http)
 // ---------------------------------------------------------------------------
 
-const server = new Server(
-  { name: 'marathon-mcp', version: '1.0.0' },
-  { capabilities: { tools: {} } },
-);
+function buildServer() {
+  const s = new Server(
+    { name: 'marathon-mcp', version: '1.0.0' },
+    { capabilities: { tools: {} } },
+  );
+  s.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  s.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args = {} } = request.params;
+    try {
+      const result = await handleTool(name, args);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }], isError: true };
+    }
+  });
+  return s;
+}
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+if (process.env.MCP_TRANSPORT === 'http') {
+  // ── HTTP / Streamable-HTTP mode ────────────────────────────────────────────
+  const { default: express } = await import('express');
+  const MCP_PORT = parseInt(process.env.MCP_PORT || '3001', 10);
+  const app = express();
+  app.use(express.json());
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args = {} } = request.params;
-  try {
-    const result = await handleTool(name, args);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  } catch (err) {
-    return {
-      content: [{ type: 'text', text: `Error: ${err.message}` }],
-      isError: true,
-    };
-  }
-});
+  const sessions = {};
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+  app.post('/mcp', async (req, res) => {
+    try {
+      const sessionId = req.headers['mcp-session-id'];
+      let transport;
+
+      if (sessionId && sessions[sessionId]) {
+        transport = sessions[sessionId];
+      } else if (!sessionId && isInitializeRequest(req.body)) {
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: id => { sessions[id] = transport; },
+        });
+        transport.onclose = () => { if (transport.sessionId) delete sessions[transport.sessionId]; };
+        const srv = buildServer();
+        await srv.connect(transport);
+      } else {
+        res.status(400).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Bad Request' }, id: null });
+        return;
+      }
+      await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal error' }, id: null });
+    }
+  });
+
+  app.get('/mcp', async (req, res) => {
+    const transport = sessions[req.headers['mcp-session-id']];
+    if (!transport) { res.status(400).send('Unknown session'); return; }
+    await transport.handleRequest(req, res);
+  });
+
+  app.delete('/mcp', async (req, res) => {
+    const transport = sessions[req.headers['mcp-session-id']];
+    if (!transport) { res.status(400).send('Unknown session'); return; }
+    await transport.handleRequest(req, res);
+  });
+
+  app.listen(MCP_PORT, () => {
+    console.error(`Marathon MCP server (HTTP) listening on port ${MCP_PORT}`);
+    console.error(`Endpoint: http://localhost:${MCP_PORT}/mcp`);
+  });
+} else {
+  // ── Stdio mode (default — used by Claude Code / Claude Desktop) ────────────
+  const transport = new StdioServerTransport();
+  await buildServer().connect(transport);
+}
