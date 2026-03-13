@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { scrapedCssCache } from '../../services/scrapedCssCache';
+import { getCachedCss, scrapeTheme } from '../../services/themeScraper';
 
 /**
  * Scope every CSS rule to `scope` — copied verbatim from PrinterCard.jsx.
@@ -66,31 +66,12 @@ function calcBar(interval_hours, runtimeS, histEntry) {
 }
 
 export default function MaintenancePrinterCard({ printer, tasks, intervals, history, onMarkDone, busy }) {
-  const [scrapedCss, setScrapedCss] = useState(
-    () => scrapedCssCache.get(`${printer.host}:${printer.port}`) || null
-  );
+  const [scrapedCss, setScrapedCss] = useState(() => getCachedCss(printer));
 
   useEffect(() => {
     if (printer.theme_mode !== 'scrape') return;
-    const cacheKey = `${printer.host}:${printer.port}`;
-    if (scrapedCssCache.has(cacheKey)) {
-      setScrapedCss(scrapedCssCache.get(cacheKey));
-      return;
-    }
-    fetch('/api/printers/scrape-theme', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ host: printer.host, port: printer.port }),
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (d.css) {
-          scrapedCssCache.set(cacheKey, d.css);
-          setScrapedCss(d.css);
-        }
-      })
-      .catch(() => { });
-  }, [printer.id, printer.host, printer.port, printer.theme_mode]);
+    scrapeTheme(printer).then(({ css }) => { if (css) setScrapedCss(css); });
+  }, [printer.id, printer.host, printer.port, printer.theme_mode, printer.scrape_css_path]);
 
   const rawCss = printer.theme_mode === 'custom' ? printer.custom_css
     : printer.theme_mode === 'scrape' ? scrapedCss

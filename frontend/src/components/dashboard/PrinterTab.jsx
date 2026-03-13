@@ -4,7 +4,7 @@
  * gets the same accent colours as its corresponding card.
  */
 import { useState, useEffect } from 'react';
-import { scrapedCssCache } from '../../services/scrapedCssCache';
+import { getCachedCss, scrapeTheme } from '../../services/themeScraper';
 import StatusBadge from '../common/StatusBadge';
 
 function scopeCSS(css, scope) {
@@ -49,31 +49,12 @@ function scopeCSS(css, scope) {
 }
 
 export default function PrinterTab({ printer, status, active, sidebar }) {
-  const [scrapedCss, setScrapedCss] = useState(
-    () => scrapedCssCache.get(`${printer.host}:${printer.port}`) || null
-  );
+  const [scrapedCss, setScrapedCss] = useState(() => getCachedCss(printer));
 
   useEffect(() => {
     if (printer.theme_mode !== 'scrape') return;
-    const cacheKey = `${printer.host}:${printer.port}`;
-    if (scrapedCssCache.has(cacheKey)) {
-      setScrapedCss(scrapedCssCache.get(cacheKey));
-      return;
-    }
-    fetch('/api/printers/scrape-theme', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ host: printer.host, port: printer.port }),
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (d.css) {
-          scrapedCssCache.set(cacheKey, d.css);
-          setScrapedCss(d.css);
-        }
-      })
-      .catch(() => {});
-  }, [printer.id, printer.host, printer.port, printer.theme_mode]);
+    scrapeTheme(printer).then(({ css }) => { if (css) setScrapedCss(css); });
+  }, [printer.id, printer.host, printer.port, printer.theme_mode, printer.scrape_css_path]);
 
   const online = status?._online;
   const state = online ? (status?.print_stats?.state ?? 'standby') : 'offline';

@@ -6,8 +6,11 @@ export default function PrinterIframePage() {
   const { printers, loading } = usePrinters();
 
   const printer = printers.find(p => String(p.id) === printerId);
-  // Mainsail runs on port 80 of the same host as Moonraker
-  const mainsailUrl = printer ? `http://${printer.host}` : null;
+  // Mainsail runs on port 80 of the same host as Moonraker.
+  // If host is already a full URL (e.g. OctoEverywhere), use it directly.
+  const mainsailUrl = printer
+    ? (/^https?:\/\//i.test(printer.host) ? printer.host.replace(/\/+$/, '') : `http://${printer.host}`)
+    : null;
 
   return (
     <div className="printer-iframe-page">

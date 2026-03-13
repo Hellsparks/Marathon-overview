@@ -22,6 +22,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
     preset_id: printer?.preset_id ?? '',
     custom_css: printer?.custom_css ?? '',
     theme_mode: printer?.theme_mode ?? 'global',
+    scrape_css_path: printer?.scrape_css_path ?? '',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -96,6 +97,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
         bed_depth: form.bed_depth || null,
         bed_height: form.bed_height || null,
         filament_types: JSON.stringify(form.filament_types || []),
+        scrape_css_path: form.scrape_css_path || null,
         // If scrape mode was set but firmware changed away from Moonraker, reset to global
         theme_mode: form.firmware_type !== 'moonraker' && form.theme_mode === 'scrape'
           ? 'global'
@@ -181,13 +183,19 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
               <label className="form-label">
                 Host / IP Address
                 <input className="form-input" value={form.host}
-                  onChange={e => set('host', e.target.value)} required placeholder="e.g. 192.168.1.101" />
+                  onChange={e => set('host', e.target.value)} required placeholder="e.g. 192.168.1.101 or https://shared-xxx.octoeverywhere.com/" />
               </label>
-              <label className="form-label">
-                Port
-                <input className="form-input" type="number" value={form.port}
-                  onChange={e => set('port', Number(e.target.value))} required min={1} max={65535} />
-              </label>
+              {/^https?:\/\//i.test(form.host) ? (
+                <p className="text-muted" style={{ fontSize: '12px', marginTop: '-8px', marginBottom: '8px' }}>
+                  Full URL detected — port field will be ignored.
+                </p>
+              ) : (
+                <label className="form-label">
+                  Port
+                  <input className="form-input" type="number" value={form.port}
+                    onChange={e => set('port', Number(e.target.value))} required min={1} max={65535} />
+                </label>
+              )}
               {form.firmware_type === 'bambu' && (
                 <label className="form-label">
                   Serial Number
@@ -291,6 +299,18 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                   <span className="text-muted" style={{ fontSize: '12px', marginLeft: '6px' }}>— Enter or upload custom card styling manually.</span>
                 </label>
               </div>
+
+              {form.theme_mode === 'scrape' && (
+                <label className="form-label" style={{ marginTop: '8px' }}>
+                  CSS File Path
+                  <input className="form-input" value={form.scrape_css_path}
+                    onChange={e => set('scrape_css_path', e.target.value)}
+                    placeholder=".theme/custom.css" />
+                  <span className="text-muted" style={{ fontSize: '12px' }}>
+                    Path relative to Moonraker's config root. Leave blank for the standard Mainsail location (<code>.theme/custom.css</code>). RatOS example: <code>RatOS/mainsail.cfg</code>
+                  </span>
+                </label>
+              )}
 
               {form.theme_mode === 'custom' && (
                 <div style={{ marginTop: '20px', padding: '16px', background: 'var(--surface2)', borderRadius: 'var(--radius)' }}>
