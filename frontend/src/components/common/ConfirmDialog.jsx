@@ -1,5 +1,7 @@
+import { createPortal } from 'react-dom';
+
 export default function ConfirmDialog({ message, onConfirm, onCancel }) {
-  return (
+  return createPortal(
     <div className="dialog-overlay" onClick={onCancel}>
       <div className="dialog" onClick={e => e.stopPropagation()}>
         <p>{message}</p>
@@ -8,6 +10,7 @@ export default function ConfirmDialog({ message, onConfirm, onCancel }) {
           <button className="btn" onClick={onCancel}>Cancel</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
