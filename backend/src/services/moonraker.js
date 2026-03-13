@@ -2,7 +2,12 @@
 
 class MoonrakerClient {
   constructor(printer) {
-    this.baseUrl = `http://${printer.host}:${printer.port}`;
+    // Allow a full URL in host (e.g. OctoEverywhere shared links like https://shared-xxx.octoeverywhere.com/)
+    if (/^https?:\/\//i.test(printer.host)) {
+      this.baseUrl = printer.host.replace(/\/+$/, '');
+    } else {
+      this.baseUrl = `http://${printer.host}:${printer.port}`;
+    }
     this.apiKey = printer.api_key;
   }
 

@@ -88,7 +88,7 @@ router.get('/:id/webcams', async (req, res) => {
   }
 
   // 4. Auto-guess: standard mjpeg-streamer path used by most Klipper setups
-  res.json([{ name: 'webcam', stream_url: `http://${printer.host}/webcam/?action=stream`, snapshot_url: null }]);
+  res.json([{ name: 'webcam', stream_url: `${printerOrigin(printer)}/webcam/?action=stream`, snapshot_url: null }]);
 });
 
 // GET /api/printers/:id/bambu-stream
@@ -169,7 +169,14 @@ router.get('/:id/bambu-stream', (req, res) => {
 function resolveWebcamUrl(url, printer) {
   if (!url) return null;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `http://${printer.host}${url.startsWith('/') ? '' : '/'}${url}`;
+  const origin = printerOrigin(printer);
+  return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+// Returns the HTTP origin to use for a printer (handles full-URL hosts like OctoEverywhere)
+function printerOrigin(printer) {
+  if (/^https?:\/\//i.test(printer.host)) return printer.host.replace(/\/+$/, '');
+  return `http://${printer.host}`;
 }
 
 // GET /api/printers/:id/macros

@@ -10,8 +10,11 @@ export default function PrinterDetailPage() {
     const printer = printers.find(p => p.id === parseInt(id));
     if (!printer) return <div className="error">Printer not found</div>;
 
-    // Mainsail runs on port 80 (the web UI port), not the Moonraker API port
-    const mainsailUrl = `http://${printer.host}`;
+    // Mainsail runs on port 80 (the web UI port), not the Moonraker API port.
+    // If host is a full URL (e.g. OctoEverywhere), use it directly.
+    const mainsailUrl = /^https?:\/\//i.test(printer.host)
+      ? printer.host.replace(/\/+$/, '')
+      : `http://${printer.host}`;
 
     return (
         <div className="printer-detail-page">

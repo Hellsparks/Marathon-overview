@@ -7,7 +7,7 @@ import ConfirmDialog from '../common/ConfirmDialog';
 import WebcamStream from './WebcamStream';
 import MovementRose from './MovementRose';
 import { pausePrint, resumePrint, cancelPrint, sendGcode, getMacros, controlLight } from '../../api/control';
-import { scrapedCssCache } from '../../services/scrapedCssCache';
+import { getCachedCss, getScrapeError, scrapeTheme } from '../../services/themeScraper';
 
 /**
  * Scope every CSS rule to `scope` so per-printer styles can't bleed to other cards.
@@ -77,34 +77,19 @@ export default function PrinterCard({ printer, status }) {
   const [macrosOpen, setMacrosOpen] = useState(false);
   const [lightOn, setLightOn] = useState(false);
   const [macros, setMacros] = useState([]);
-  const [scrapedCss, setScrapedCss] = useState(
-    () => scrapedCssCache.get(`${printer.host}:${printer.port}`) || null
-  );
+  const [scrapedCss, setScrapedCss] = useState(() => getCachedCss(printer));
+  const [scrapeError, setScrapeError] = useState(() => getScrapeError(printer));
   const navigate = useNavigate();
 
-  // Fetch the printer's own Mainsail CSS when theme_mode === 'scrape'
-  // Cached at module level so it persists across page navigations
+  // Fetch the printer's own Mainsail CSS when theme_mode === 'scrape'.
+  // Rate-limiting and max-attempt logic lives in themeScraper.js.
   useEffect(() => {
     if (printer.theme_mode !== 'scrape') return;
-    const cacheKey = `${printer.host}:${printer.port}`;
-    if (scrapedCssCache.has(cacheKey)) {
-      setScrapedCss(scrapedCssCache.get(cacheKey));
-      return;
-    }
-    fetch('/api/printers/scrape-theme', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ host: printer.host, port: printer.port }),
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (d.css) {
-          scrapedCssCache.set(cacheKey, d.css);
-          setScrapedCss(d.css);
-        }
-      })
-      .catch(() => { }); // Fail silently — card just stays unstyled
-  }, [printer.id, printer.host, printer.port, printer.theme_mode]);
+    scrapeTheme(printer).then(({ css, error }) => {
+      if (css) setScrapedCss(css);
+      setScrapeError(error);
+    });
+  }, [printer.id, printer.host, printer.port, printer.theme_mode, printer.scrape_css_path]);
 
   useEffect(() => {
     if (macrosOpen && status?._online && macros.length === 0) {
@@ -275,6 +260,9 @@ ${cardSel} .printer-card {
         {/* Header */}
         <div className={`printer-card-header v-card__title${printer.firmware_type === 'bambu' ? ' bambu-header' : ''}`}>
           <h3 className="printer-name v-toolbar__title">{printer.name}</h3>
+          {scrapeError && (
+            <span title={`CSS scrape failed: ${scrapeError}`} style={{ fontSize: '14px', cursor: 'help', opacity: 0.7, marginLeft: '4px' }}>⚠️</span>
+          )}
           <StatusBadge state={state} />
         </div>
 
@@ -499,6 +487,9 @@ ${cardSel} .printer-card {
             <div className="printer-card-footer v-card__actions">
               <button className="btn-link" onClick={() => navigate(`/queue/${printer.id}`)}>
                 View Queue →
+              </button>
+              <button className="btn-link" onClick={() => navigate(`/printer/${printer.id}`)}>
+                Open Mainsail →
               </button>
             </div>
           </>
