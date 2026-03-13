@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getFilaments, deleteFilament, getFields } from '../api/spoolman';
 import { getSettings } from '../api/settings';
 import AddFilamentDialog from '../components/spoolman/AddFilamentDialog';
+import ColoriometerPanel from '../components/spoolman/ColoriometerPanel';
 import { findClosestRal } from '../utils/ralColors';
 import ViewToggle from '../components/common/ViewToggle';
 
@@ -78,6 +79,7 @@ export default function FilamentsPage() {
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                     <ViewToggle viewMode={viewMode} onChange={setViewMode} />
                     <button className="btn btn-primary v-btn" onClick={() => setShowAdd(true)}>+ Add Filament</button>
+                    <ColoriometerPanel />
                 </div>
             </div>
 
