@@ -245,6 +245,17 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'list_plates',
+    description: 'List all plates for a specific project, including plate ID, name, status, filename, and estimated duration. Use this to find plate_id values before calling print_plate.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'number', description: 'Project ID from list_projects' },
+      },
+      required: ['project_id'],
+    },
+  },
+  {
     name: 'print_plate',
     description: 'Send a project plate directly to a printer and start or queue it.',
     inputSchema: {
@@ -633,6 +644,21 @@ async function handleTool(name, args) {
     // ── Projects & Plates ─────────────────────────────────────────────────
     case 'list_projects':
       return get('/api/projects');
+
+    case 'list_plates': {
+      const project = await get(`/api/projects/${args.project_id}`);
+      return (project.plates || []).map(p => ({
+        id: p.id,
+        name: p.name,
+        filename: p.filename,
+        status: p.status,
+        sort_order: p.sort_order,
+        estimated_duration_s: p.estimated_duration_s,
+        estimated_filament_g: p.estimated_filament_g,
+        actual_start_time: p.actual_start_time,
+        actual_end_time: p.actual_end_time,
+      }));
+    }
 
     case 'print_plate':
       return post(`/api/projects/${args.project_id}/plates/${args.plate_id}/print`, {
