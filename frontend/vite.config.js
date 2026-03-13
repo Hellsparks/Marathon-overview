@@ -7,6 +7,11 @@ const { version } = JSON.parse(readFileSync(resolve(__dirname, '../package.json'
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/tests/setup.js'],
+  },
   define: {
     __APP_VERSION__: JSON.stringify(version),
   },

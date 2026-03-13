@@ -4,6 +4,8 @@ const { getDb } = require('../db');
 const { pollAll } = require('../services/poller');
 const bambuManager = require('../services/bambuManager');
 
+const VALID_FIRMWARE_TYPES = ['moonraker', 'octoprint', 'duet', 'bambu'];
+
 // GET /api/printers
 router.get('/', (req, res) => {
   const db = getDb();
@@ -20,6 +22,7 @@ router.post('/', (req, res) => {
     custom_css = null, theme_mode = 'global',
     firmware_type = 'moonraker',
     serial_number = null,
+    scrape_css_path = null,
   } = req.body;
 
   const port = req.body.port ?? defaultPort(firmware_type);
@@ -27,16 +30,20 @@ router.post('/', (req, res) => {
   if (!name || !host) {
     return res.status(400).json({ error: 'name and host are required' });
   }
+  if (!VALID_FIRMWARE_TYPES.includes(firmware_type)) {
+    return res.status(400).json({ error: `firmware_type must be one of: ${VALID_FIRMWARE_TYPES.join(', ')}` });
+  }
 
   const db = getDb();
   const result = db.prepare(
-    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     name, host, port, api_key || null,
     bed_width, bed_depth, bed_height,
     typeof filament_types === 'string' ? filament_types : JSON.stringify(filament_types),
-    toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number || null
+    toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number || null,
+    scrape_css_path || null
   );
 
   const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(result.lastInsertRowid);
@@ -46,14 +53,17 @@ router.post('/', (req, res) => {
 
 // PUT /api/printers/:id
 router.put('/:id', (req, res) => {
-  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number } = req.body;
+  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path } = req.body;
+  if (firmware_type !== undefined && !VALID_FIRMWARE_TYPES.includes(firmware_type)) {
+    return res.status(400).json({ error: `firmware_type must be one of: ${VALID_FIRMWARE_TYPES.join(', ')}` });
+  }
   const db = getDb();
   const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id);
   if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
   db.prepare(
     `UPDATE printers SET name=?, host=?, port=?, api_key=?, enabled=?,
-     bed_width=?, bed_depth=?, bed_height=?, filament_types=?, toolhead_count=?, preset_id=?, custom_css=?, theme_mode=?, firmware_type=?, serial_number=?,
+     bed_width=?, bed_depth=?, bed_height=?, filament_types=?, toolhead_count=?, preset_id=?, custom_css=?, theme_mode=?, firmware_type=?, serial_number=?, scrape_css_path=?,
      updated_at=datetime('now')
      WHERE id=?`
   ).run(
@@ -74,6 +84,7 @@ router.put('/:id', (req, res) => {
     theme_mode !== undefined ? theme_mode : printer.theme_mode,
     firmware_type !== undefined ? firmware_type : (printer.firmware_type || 'moonraker'),
     serial_number !== undefined ? serial_number : printer.serial_number,
+    scrape_css_path !== undefined ? (scrape_css_path || null) : printer.scrape_css_path,
     req.params.id
   );
 
@@ -83,22 +94,84 @@ router.put('/:id', (req, res) => {
 
 // POST /api/printers/scrape-theme
 router.post('/scrape-theme', async (req, res) => {
-  const { host, port } = req.body;
-  if (!host || !port) return res.status(400).json({ error: 'Host and port are required' });
+  const { host, port, api_key, scrape_css_path } = req.body;
+  const isFullUrl = /^https?:\/\//i.test(host);
+  if (!host || (!isFullUrl && !port)) return res.status(400).json({ error: 'Host and port are required' });
+
+  // Default path is the standard Mainsail custom theme location
+  const cssPath = (scrape_css_path || '.theme/custom.css').replace(/^\/+/, '');
+
+  // For full URLs (OctoEverywhere etc) use as-is.
+  // For regular printers use port 80 (Mainsail/nginx web server), NOT the Moonraker API
+  // port — nginx proxies /server/files/... without the per-client auth that port 7125 enforces.
+  const baseUrl = isFullUrl
+    ? host.replace(/\/+$/, '')
+    : `http://${host}`;
+
+  const headers = {};
+  if (api_key) headers['X-Api-Key'] = api_key;
+
+  // Helper: fetch a file from config root, returns null on 404 or HTML response
+  async function fetchConfigFile(filePath) {
+    try {
+      const r = await fetch(`${baseUrl}/server/files/config/${filePath}`, { headers, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return null;
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('text/html')) return null;
+      return await r.text();
+    } catch {
+      return null;
+    }
+  }
 
   try {
-    const url = `http://${host}:${port}/server/files/config/.theme/custom.css`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      if (response.status === 404) return res.status(404).json({ error: 'No custom.css found on printer at standard Moonraker path.' });
-      throw new Error(`Printer responded with HTTP ${response.status}`);
+    // Fetch all three sources in parallel
+    const themeDir = cssPath.includes('/') ? cssPath.slice(0, cssPath.lastIndexOf('/') + 1) : '.theme/';
+    const [customCss, defaultJsonText, mainsailJsonText] = await Promise.all([
+      fetchConfigFile(cssPath),                   // .theme/custom.css  (or custom path)
+      fetchConfigFile(`${themeDir}default.json`), // .theme/default.json  (theme defaults)
+      fetchConfigFile('mainsail.json'),            // mainsail.json  (Mainsail saved UI state — RatOS stores primary here)
+    ]);
+
+    // Extract primary colour from whichever JSON source has it.
+    // Priority: mainsail.json uiSettings.primary > default.json top-level primary_color
+    const primary = extractPrimary(mainsailJsonText) || extractPrimary(defaultJsonText);
+    const jsonCss = primary ? primaryToCss(primary) : '';
+
+    const combined = [jsonCss, customCss].filter(Boolean).join('\n');
+    if (!combined) {
+      return res.status(404).json({ error: 'No theme data found on printer (.theme/custom.css, .theme/default.json, mainsail.json).' });
     }
-    const cssContent = await response.text();
-    res.json({ css: cssContent });
+    res.json({ css: combined });
   } catch (err) {
-    res.status(500).json({ error: `Failed to connect to printer: ${err.message}` });
+    console.error('[scrape-theme]', err.message);
+    res.status(500).json({ error: 'Failed to connect to printer' });
   }
 });
+
+function hexToRgb(hex) {
+  const m = hex.replace('#', '').match(/^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  return m ? `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}` : null;
+}
+
+// Extract a primary colour from a Mainsail JSON blob (handles multiple schema shapes)
+function extractPrimary(jsonText) {
+  if (!jsonText) return null;
+  try {
+    const cfg = JSON.parse(jsonText);
+    // mainsail.json: uiSettings.primary  (RatOS and standard Mainsail saved state)
+    if (cfg.uiSettings?.primary) return cfg.uiSettings.primary;
+    // default.json: top-level fields used by community themes
+    return cfg.primary_color || cfg.primaryColor || cfg.primary || null;
+  } catch {
+    return null;
+  }
+}
+
+function primaryToCss(primary) {
+  const rgb = hexToRgb(primary);
+  return `:root {\n  --primary: ${primary};\n${rgb ? `  --v-theme-primary: ${rgb};\n` : ''}}\n`;
+}
 
 // DELETE /api/printers/:id
 router.delete('/:id', (req, res) => {

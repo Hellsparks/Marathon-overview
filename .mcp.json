@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "marathon": {
+      "command": "node",
+      "args": ["mcp-server/src/index.js"],
+      "env": {
+        "MARATHON_URL": "http://localhost:3000"
+      }
+    }
+  }
+}

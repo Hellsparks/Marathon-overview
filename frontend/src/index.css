@@ -926,6 +926,25 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   font-size: 12px;
 }
 
+.btn-icon {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background .15s, color .15s;
+  border-radius: 4px;
+}
+.btn-icon:hover {
+  background: var(--surface-hover, rgba(255,255,255,.07));
+  color: var(--text);
+}
+.btn-icon:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
 .btn-primary {
   background: var(--btn-primary-bg, var(--primary));
   border-color: var(--primary);
@@ -4187,6 +4206,118 @@ input[type="checkbox"]:checked::after {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ── Colorimeter Widget (toolbar button + dropdown) ──────────────── */
+.colorimeter-widget {
+  position: relative;
+  font-size: 13px;
+}
+
+/* Toolbar trigger button — use .btn.colorimeter-trigger for higher specificity */
+.btn.colorimeter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.btn.colorimeter-trigger--on,
+.btn.colorimeter-trigger.colorimeter-trigger--on {
+  border-color: #22c55e;
+}
+
+.colorimeter-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.colorimeter-dot--disconnected { background: var(--text-muted, #888); }
+.colorimeter-dot--connecting    { background: #f59e0b; animation: colorimeter-blink 1s infinite; }
+.colorimeter-dot--connected     { background: #22c55e; }
+.colorimeter-dot--error         { background: #ef4444; }
+
+@keyframes colorimeter-blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.colorimeter-mini-swatch {
+  width: 12px; height: 12px; border-radius: 3px;
+  border: 1px solid var(--border); flex-shrink: 0;
+}
+.colorimeter-chevron { font-size: 9px; opacity: .6; }
+
+/* Dropdown panel — fixed so it's never clipped by overflow-y:auto scroll containers */
+.colorimeter-dropdown {
+  position: fixed;
+  width: 400px;
+  z-index: 1000;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.colorimeter-controls {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+.colorimeter-baud { width: 110px !important; }
+
+.colorimeter-error {
+  color: #ef4444; font-size: 12px; padding: 4px 6px;
+  background: #fef2f2; border-radius: 4px;
+}
+
+.colorimeter-reading {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; background: var(--surface-alt, var(--surface));
+  border-radius: 5px; border: 1px solid var(--border);
+}
+.colorimeter-swatch {
+  width: 28px; height: 28px; border-radius: 5px;
+  border: 1px solid var(--border); flex-shrink: 0;
+}
+.colorimeter-reading-hex { font-family: monospace; font-size: 14px; font-weight: 600; }
+.colorimeter-reading-td  { font-size: 13px; color: var(--text-muted, #888); }
+.colorimeter-reading-field { font-size: 11px; opacity: .7; }
+
+.colorimeter-log-header {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--text-muted, #888); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+
+.colorimeter-log {
+  height: 120px; overflow-y: auto;
+  background: #0d1117; border-radius: 4px;
+  padding: 6px 8px; font-family: monospace; font-size: 11px;
+}
+.colorimeter-log-empty { color: #666; }
+.colorimeter-log-line {
+  display: flex; gap: 8px; line-height: 1.6; color: #cdd;
+}
+.colorimeter-log-line--parsed { color: #7ee787; }
+.colorimeter-log-ts   { color: #666; flex-shrink: 0; }
+.colorimeter-log-raw  { flex: 1; word-break: break-all; }
+.colorimeter-log-tag  {
+  color: #79c0ff; flex-shrink: 0; font-weight: 600;
+}
+
+.colorimeter-apply-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-alt, var(--surface));
+  min-height: 34px;
+}
+
+.colorimeter-unsupported {
+  font-size: 12px; color: var(--text-muted, #888);
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
 }
 
 input[type="checkbox"]:hover {
