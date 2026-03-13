@@ -538,10 +538,25 @@ async function handleTool(name, args) {
         get('/api/printers'),
         get('/api/status'),
       ]);
-      return printers.map(p => ({
-        ...p,
-        status: status[p.id] ?? null,
-      }));
+      return printers.map(p => {
+        const s = status[p.id] ?? {};
+        return {
+          id: p.id,
+          name: p.name,
+          host: p.host,
+          port: p.port,
+          enabled: p.enabled,
+          state: s.state ?? 'unknown',
+          message: s.message ?? null,
+          filename: s.filename ?? null,
+          progress: s.progress != null ? Math.round(s.progress * 1000) / 10 : null,
+          hotend_actual: s.hotend_actual ?? null,
+          hotend_target: s.hotend_target ?? null,
+          bed_actual: s.bed_actual ?? null,
+          bed_target: s.bed_target ?? null,
+          print_duration: s.print_duration ?? null,
+        };
+      });
     }
 
     case 'get_printer_status': {
@@ -549,7 +564,9 @@ async function handleTool(name, args) {
         get(`/api/printers`).then(list => list.find(p => p.id === args.printer_id) ?? null),
         get(`/api/status/${args.printer_id}`),
       ]);
-      return { printer, status };
+      // Return full status but drop raw Moonraker sensor arrays that bloat the response
+      const { raw, sensors, history, ...trimmedStatus } = status ?? {};
+      return { printer, status: trimmedStatus };
     }
 
     case 'set_temperature':
