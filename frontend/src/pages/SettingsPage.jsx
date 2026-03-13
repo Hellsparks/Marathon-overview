@@ -3,8 +3,10 @@ import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
-import { testConnection, getFields, createField } from '../api/spoolman';
+import { testConnection, getFields, createField, exportSpoolman, importSpoolman, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative } from '../api/spoolman';
+import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate } from '../api/updates';
+import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
 import UpdateDialog from '../components/layout/UpdateDialog';
 
 export default function SettingsPage() {
@@ -29,6 +31,45 @@ export default function SettingsPage() {
   const [updateChecked, setUpdateChecked] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
 
+  // Marathon DB backup
+  const [dbExportBusy, setDbExportBusy] = useState(false);
+  const [dbExportError, setDbExportError] = useState('');
+  const [dbImportFile, setDbImportFile] = useState(null);
+  const [dbImportBusy, setDbImportBusy] = useState(false);
+  const [dbImportResult, setDbImportResult] = useState(null); // { ok, backedUpTo } | { error }
+
+  // Backup / Restore
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [importFile, setImportFile] = useState(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importLog, setImportLog] = useState([]);
+  const [importError, setImportError] = useState('');
+
+  // Docker setup
+  const [dockerStatus, setDockerStatus] = useState(null); // null = loading
+  const [dockerBusy, setDockerBusy] = useState(false);
+  const [dockerLog, setDockerLog] = useState([]);
+  const [dockerError, setDockerError] = useState('');
+  const [installPort, setInstallPort] = useState('7912');
+  const [removeData, setRemoveData] = useState(false);
+
+  // MCP server
+  const [mcpStatus, setMcpStatus] = useState(null);
+  const [mcpBusy, setMcpBusy] = useState(false);
+  const [mcpError, setMcpError] = useState('');
+  const [mcpPort, setMcpPort] = useState('3001');
+  const [mcpMarathonUrl, setMcpMarathonUrl] = useState('http://localhost:3000');
+  const [mcpCopied, setMcpCopied] = useState(false);
+
+  // Native (Python venv) setup
+  const [nativeStatus, setNativeStatus] = useState(null);
+  const [nativeBusy, setNativeBusy] = useState(false);
+  const [nativeLog, setNativeLog] = useState([]);
+  const [nativeError, setNativeError] = useState('');
+  const [nativePort, setNativePort] = useState('7912');
+  const [nativeRemoveData, setNativeRemoveData] = useState(false);
+
   useEffect(() => {
     getSettings().then(s => {
       setSpoolmanUrl(s.spoolman_url || '');
@@ -45,6 +86,13 @@ export default function SettingsPage() {
       setSwatchPromptSaved(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
     }).catch(() => { });
     getFields('filament').then(fields => setExtraFields(fields || [])).catch(() => { });
+    getDockerStatus().then(setDockerStatus).catch(() => { });
+    getNativeStatus().then(setNativeStatus).catch(() => { });
+    getMcpStatus().then(s => {
+      setMcpStatus(s);
+      if (s.port) setMcpPort(String(s.port));
+      if (s.marathonUrl) setMcpMarathonUrl(s.marathonUrl);
+    }).catch(() => { });
   }, []);
 
   async function handleSpoolmanSave() {
@@ -170,6 +218,206 @@ export default function SettingsPage() {
     } catch (e) {
       alert('Failed to create field: ' + e.message);
     }
+  }
+
+  async function handleDbExport() {
+    setDbExportBusy(true);
+    setDbExportError('');
+    try {
+      await exportDatabase();
+    } catch (e) {
+      setDbExportError(e.message);
+    } finally {
+      setDbExportBusy(false);
+    }
+  }
+
+  async function handleDbImport() {
+    if (!dbImportFile) return;
+    if (!confirm('This will replace the entire Marathon database with the uploaded file.\n\nA backup of the current database will be saved alongside it before replacing.\n\nContinue?')) return;
+    setDbImportBusy(true);
+    setDbImportResult(null);
+    try {
+      const result = await importDatabase(dbImportFile);
+      setDbImportResult(result);
+      setDbImportFile(null);
+    } catch (e) {
+      setDbImportResult({ error: e.message });
+    } finally {
+      setDbImportBusy(false);
+    }
+  }
+
+  async function handleExport() {
+    setExportBusy(true);
+    setExportError('');
+    try {
+      await exportSpoolman();
+    } catch (e) {
+      setExportError(e.message);
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  async function handleImport() {
+    if (!importFile) return;
+    setImportBusy(true);
+    setImportLog([]);
+    setImportError('');
+    try {
+      const text = await importFile.text();
+      const data = JSON.parse(text);
+      const result = await importSpoolman(data);
+      setImportLog(result.log || []);
+    } catch (e) {
+      setImportError(e.message);
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function handleDockerInstall() {
+    setDockerBusy(true);
+    setDockerLog([]);
+    setDockerError('');
+    try {
+      const result = await installSpoolman(parseInt(installPort) || 7912);
+      setDockerLog(result.log || []);
+      // Refresh URL field and docker status
+      if (result.spoolmanUrl) {
+        setSpoolmanUrl(result.spoolmanUrl);
+        setSpoolmanSaved(result.spoolmanUrl);
+      }
+      const status = await getDockerStatus();
+      setDockerStatus(status);
+    } catch (e) {
+      setDockerError(e.message);
+    } finally {
+      setDockerBusy(false);
+    }
+  }
+
+  async function handleDockerUninstall() {
+    if (!confirm(`Remove the Spoolman container?${removeData ? '\n\nThis will also delete all Spoolman data (volume). This cannot be undone.' : ''}`)) return;
+    setDockerBusy(true);
+    setDockerLog([]);
+    setDockerError('');
+    try {
+      const result = await uninstallSpoolman(removeData);
+      setDockerLog(result.log || []);
+      const status = await getDockerStatus();
+      setDockerStatus(status);
+    } catch (e) {
+      setDockerError(e.message);
+    } finally {
+      setDockerBusy(false);
+    }
+  }
+
+  async function handleNativeInstall() {
+    setNativeBusy(true);
+    setNativeLog([]);
+    setNativeError('');
+    try {
+      const result = await installNative(parseInt(nativePort) || 7912);
+      setNativeLog(result.log || []);
+      if (result.spoolmanUrl) { setSpoolmanUrl(result.spoolmanUrl); setSpoolmanSaved(result.spoolmanUrl); }
+      setNativeStatus(await getNativeStatus());
+    } catch (e) {
+      setNativeError(e.message);
+    } finally {
+      setNativeBusy(false);
+    }
+  }
+
+  async function handleNativeStart() {
+    setNativeBusy(true);
+    setNativeLog([]);
+    setNativeError('');
+    try {
+      const result = await startNative();
+      setNativeLog(result.log || [result.message || 'Started']);
+      setNativeStatus(await getNativeStatus());
+    } catch (e) {
+      setNativeError(e.message);
+    } finally {
+      setNativeBusy(false);
+    }
+  }
+
+  async function handleNativeStop() {
+    setNativeBusy(true);
+    setNativeLog([]);
+    setNativeError('');
+    try {
+      const result = await stopNative();
+      setNativeLog([result.message || 'Stopped']);
+      setNativeStatus(await getNativeStatus());
+    } catch (e) {
+      setNativeError(e.message);
+    } finally {
+      setNativeBusy(false);
+    }
+  }
+
+  async function handleNativeUninstall() {
+    if (!confirm(`Remove Spoolman?${nativeRemoveData ? '\n\nThis will also delete all Spoolman data. This cannot be undone.' : ''}`)) return;
+    setNativeBusy(true);
+    setNativeLog([]);
+    setNativeError('');
+    try {
+      const result = await uninstallNative(nativeRemoveData);
+      setNativeLog(result.log || []);
+      setNativeStatus(await getNativeStatus());
+    } catch (e) {
+      setNativeError(e.message);
+    } finally {
+      setNativeBusy(false);
+    }
+  }
+
+  async function handleMcpStart() {
+    setMcpBusy(true);
+    setMcpError('');
+    try {
+      const result = await startMcp(parseInt(mcpPort) || 3001, mcpMarathonUrl);
+      setMcpStatus(result);
+    } catch (e) {
+      setMcpError(e.message);
+    } finally {
+      setMcpBusy(false);
+    }
+  }
+
+  async function handleMcpStop() {
+    setMcpBusy(true);
+    setMcpError('');
+    try {
+      await stopMcp();
+      setMcpStatus(await getMcpStatus());
+    } catch (e) {
+      setMcpError(e.message);
+    } finally {
+      setMcpBusy(false);
+    }
+  }
+
+  function handleMcpCopy() {
+    const port = parseInt(mcpPort) || 3001;
+    const snippet = JSON.stringify({
+      mcpServers: {
+        marathon: {
+          command: 'node',
+          args: ['PATH_TO/mcp-server/src/index.js'],
+          env: { MARATHON_URL: mcpMarathonUrl },
+        },
+      },
+    }, null, 2);
+    navigator.clipboard.writeText(snippet).then(() => {
+      setMcpCopied(true);
+      setTimeout(() => setMcpCopied(false), 2000);
+    });
   }
 
   return (
@@ -352,6 +600,318 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* ── Backup & Restore ── */}
+        <div style={{
+          marginTop: '24px',
+          padding: '20px',
+          background: 'var(--surface2)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+        }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>Backup &amp; Restore</h3>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+            Export all vendors, filaments, and spools to a JSON file, or restore from a previous export.
+          </p>
+
+          {/* Export */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={handleExport}
+              disabled={exportBusy || !spoolmanSaved}
+            >
+              {exportBusy ? 'Exporting…' : 'Download Backup JSON'}
+            </button>
+            {!spoolmanSaved && (
+              <span style={{ marginLeft: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                Configure Spoolman URL above first.
+              </span>
+            )}
+            {exportError && (
+              <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--danger)' }}>{exportError}</p>
+            )}
+          </div>
+
+          {/* Import */}
+          <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Import</label>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+              Imports will add new entries — existing data is not deleted or overwritten.
+            </p>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="file"
+                accept=".json"
+                onChange={e => setImportFile(e.target.files?.[0] || null)}
+                style={{ fontSize: '13px' }}
+              />
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={handleImport}
+                disabled={importBusy || !importFile || !spoolmanSaved}
+              >
+                {importBusy ? 'Importing…' : 'Import'}
+              </button>
+            </div>
+            {importError && (
+              <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{importError}</p>
+            )}
+            {importLog.length > 0 && (
+              <div style={{
+                marginTop: '10px', padding: '10px 14px',
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px',
+                maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap',
+              }}>
+                {importLog.join('\n')}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Docker Setup ── */}
+        {dockerStatus?.reason === 'docker_not_found' ? (
+          <div style={{
+            marginTop: '24px', padding: '16px 20px',
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-muted)',
+          }}>
+            <strong style={{ color: 'var(--text)' }}>Docker Setup</strong>
+            <p style={{ marginTop: '6px' }}>
+              Docker was not found on this system. Install{' '}
+              <a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener noreferrer">Docker Desktop</a>{' '}
+              and restart Marathon to enable one-click Spoolman install.
+            </p>
+          </div>
+        ) : dockerStatus?.available && (
+          <div style={{
+            marginTop: '24px',
+            padding: '20px',
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+          }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>Docker Setup</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+              Install and manage a Spoolman container directly from Marathon.
+              {dockerStatus.mode === 'docker'
+                ? <> The container joins the <code>marathon_net</code> network and exposes a port for browser access.</>
+                : <> The container is managed via the Docker CLI and will be accessible at <code>localhost:{installPort}</code>.</>
+              }
+            </p>
+
+            {/* Status badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
+              {!dockerStatus.created ? (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not installed</span>
+              ) : dockerStatus.running ? (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid var(--success)' }}>Running</span>
+              ) : (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(245,158,11,0.15)', color: 'var(--warning,#f59e0b)', border: '1px solid var(--warning,#f59e0b)' }}>{dockerStatus.status}</span>
+              )}
+            </div>
+
+            {!dockerStatus.created ? (
+              /* Install form */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>External port:</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={installPort}
+                    onChange={e => setInstallPort(e.target.value)}
+                    style={{ width: '90px', padding: '6px 10px', fontSize: '13px' }}
+                    min="1024" max="65535"
+                  />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Spoolman will be accessible at <code>http://&lt;host&gt;:{installPort}</code>
+                  </span>
+                </div>
+                <div>
+                  <button
+                    className="btn btn-sm btn-primary"
+                    onClick={handleDockerInstall}
+                    disabled={dockerBusy}
+                    style={{ minWidth: '140px' }}
+                  >
+                    {dockerBusy ? 'Installing…' : 'Install Spoolman'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Uninstall form */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input
+                    type="checkbox"
+                    id="removeData"
+                    checked={removeData}
+                    onChange={e => setRemoveData(e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="removeData" style={{ fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
+                    Also delete all Spoolman data (volume) — irreversible
+                  </label>
+                </div>
+                <div>
+                  <button
+                    className="btn btn-sm"
+                    onClick={handleDockerUninstall}
+                    disabled={dockerBusy}
+                    style={{ minWidth: '160px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                  >
+                    {dockerBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {dockerError && (
+              <p style={{ marginTop: '10px', fontSize: '12px', color: 'var(--danger)' }}>{dockerError}</p>
+            )}
+            {dockerLog.length > 0 && (
+              <div style={{
+                marginTop: '12px', padding: '10px 14px',
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px',
+                maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap',
+              }}>
+                {dockerLog.join('\n')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Native (Python) Install ── */}
+        {nativeStatus && (nativeStatus.pythonAvailable || nativeStatus.installed) && (
+          <div style={{
+            marginTop: '24px', padding: '20px',
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+          }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>Native Install (Python)</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+              Install Spoolman directly alongside Marathon using a Python virtual environment.
+              No Docker required — data lives in <code style={{ fontSize: '11px' }}>{nativeStatus.installDir}/data/</code>
+            </p>
+
+            {/* Status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
+              {!nativeStatus.installed ? (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not installed</span>
+              ) : nativeStatus.running ? (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid var(--success)' }}>Running (PID {nativeStatus.pid}, port {nativeStatus.port})</span>
+              ) : (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(245,158,11,0.15)', color: 'var(--warning,#f59e0b)', border: '1px solid var(--warning,#f59e0b)' }}>Installed, not running</span>
+              )}
+              {nativeStatus.pythonVersion && (
+                <span style={{ fontSize: '11px', opacity: 0.5 }}>Python {nativeStatus.pythonVersion}</span>
+              )}
+            </div>
+
+            {!nativeStatus.installed ? (
+              /* Install form */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={nativePort}
+                    onChange={e => setNativePort(e.target.value)}
+                    style={{ width: '90px', padding: '6px 10px', fontSize: '13px' }}
+                    min="1024" max="65535"
+                  />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Accessible at <code>http://localhost:{nativePort}</code>
+                  </span>
+                </div>
+                <div>
+                  <button
+                    className="btn btn-sm btn-primary"
+                    onClick={handleNativeInstall}
+                    disabled={nativeBusy}
+                    style={{ minWidth: '160px' }}
+                  >
+                    {nativeBusy ? 'Installing…' : 'Install Spoolman'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Manage form */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {nativeStatus.running ? (
+                    <button className="btn btn-sm" onClick={handleNativeStop} disabled={nativeBusy}>
+                      {nativeBusy ? 'Stopping…' : 'Stop'}
+                    </button>
+                  ) : (
+                    <button className="btn btn-sm btn-primary" onClick={handleNativeStart} disabled={nativeBusy}>
+                      {nativeBusy ? 'Starting…' : 'Start'}
+                    </button>
+                  )}
+                </div>
+                <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                    <input
+                      type="checkbox"
+                      id="nativeRemoveData"
+                      checked={nativeRemoveData}
+                      onChange={e => setNativeRemoveData(e.target.checked)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="nativeRemoveData" style={{ fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
+                      Also delete all Spoolman data — irreversible
+                    </label>
+                  </div>
+                  <button
+                    className="btn btn-sm"
+                    onClick={handleNativeUninstall}
+                    disabled={nativeBusy}
+                    style={{ minWidth: '140px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                  >
+                    {nativeBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {nativeError && (
+              <p style={{ marginTop: '10px', fontSize: '12px', color: 'var(--danger)' }}>{nativeError}</p>
+            )}
+            {nativeLog.length > 0 && (
+              <div style={{
+                marginTop: '12px', padding: '10px 14px',
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px',
+                maxHeight: '200px', overflowY: 'auto', whiteSpace: 'pre-wrap',
+              }}>
+                {nativeLog.join('\n')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Python not found note */}
+        {nativeStatus && !nativeStatus.pythonAvailable && !nativeStatus.installed && (
+          <div style={{
+            marginTop: '24px', padding: '14px 20px',
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-muted)',
+          }}>
+            <strong style={{ color: 'var(--text)' }}>Native Install</strong>
+            <p style={{ marginTop: '4px' }}>
+              Python 3.8+ was not found on this system.{' '}
+              <a href="https://www.python.org/downloads/" target="_blank" rel="noopener noreferrer">Install Python</a>{' '}
+              to enable a Docker-free Spoolman install.
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="page-section">
@@ -383,6 +943,65 @@ export default function SettingsPage() {
         <h2 className="section-title">Printer Presets</h2>
         <p>Presets let you quickly configure printers with common build volumes and filament capabilities. Built-in presets cannot be edited or deleted.</p>
         <PresetList />
+      </section>
+
+      <section className="page-section">
+        <h2 className="section-title">Marathon Database</h2>
+        <p>Export or restore the entire Marathon database — includes all printers, print history, maintenance records, files metadata, settings, and more.</p>
+
+        <div style={{
+          marginTop: '16px', padding: '20px',
+          background: 'var(--surface2)', border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+        }}>
+          {/* Export */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={handleDbExport}
+              disabled={dbExportBusy}
+            >
+              {dbExportBusy ? 'Exporting…' : 'Download Database Backup'}
+            </button>
+            {dbExportError && (
+              <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--danger)' }}>{dbExportError}</p>
+            )}
+          </div>
+
+          {/* Import */}
+          <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>Import</label>
+            <p style={{ fontSize: '12px', color: 'var(--danger)', marginBottom: '10px', fontWeight: 500 }}>
+              Warning: this replaces ALL current data. A backup of the current database will be saved first.
+            </p>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="file"
+                accept=".db"
+                onChange={e => { setDbImportFile(e.target.files?.[0] || null); setDbImportResult(null); }}
+                style={{ fontSize: '13px' }}
+              />
+              <button
+                className="btn btn-sm"
+                onClick={handleDbImport}
+                disabled={dbImportBusy || !dbImportFile}
+                style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+              >
+                {dbImportBusy ? 'Restoring…' : 'Restore'}
+              </button>
+            </div>
+            {dbImportResult?.ok && (
+              <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--success)' }}>
+                Database restored. Backup saved to <code style={{ fontSize: '11px' }}>{dbImportResult.backedUpTo}</code>.
+                Reload the page to see updated data.
+              </p>
+            )}
+            {dbImportResult?.error && (
+              <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{dbImportResult.error}</p>
+            )}
+          </div>
+        </div>
       </section>
 
       <section className="page-section">
@@ -459,6 +1078,95 @@ export default function SettingsPage() {
           <li><strong>Cura:</strong> Marketplace → OctoPrint plugin → OctoPrint URL: <code>{window.location.origin}</code></li>
         </ul>
         <p>Uploaded files will appear in the <a href="/files">Files</a> page.</p>
+      </section>
+
+      {/* ── MCP Server ── */}
+      <section className="page-section">
+        <h2 className="section-title">MCP Server</h2>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+          Expose Marathon as an MCP tool server so Claude Desktop or other AI clients can control your printers directly.
+        </p>
+
+        {!mcpStatus?.installed && (
+          <div style={{ fontSize: '13px', color: 'var(--danger)', marginBottom: '12px' }}>
+            MCP server not found. Make sure <code>mcp-server/src/index.js</code> exists and run <code>npm install</code> inside <code>mcp-server/</code>.
+          </div>
+        )}
+
+        {/* Status row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+          <span style={{
+            width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+            background: mcpStatus?.running ? 'var(--success, #22c55e)' : 'var(--text-muted)',
+          }} />
+          <span style={{ fontSize: '13px' }}>
+            {mcpStatus === null ? 'Checking…' : mcpStatus.running ? `Running — port ${mcpStatus.port}` : 'Stopped'}
+          </span>
+          {mcpStatus?.running ? (
+            <button className="btn btn-sm" onClick={handleMcpStop} disabled={mcpBusy}>
+              {mcpBusy ? 'Stopping…' : 'Stop'}
+            </button>
+          ) : (
+            <button className="btn btn-sm btn-primary" onClick={handleMcpStart} disabled={mcpBusy || !mcpStatus?.installed}>
+              {mcpBusy ? 'Starting…' : 'Start'}
+            </button>
+          )}
+        </div>
+
+        {/* Config inputs */}
+        {!mcpStatus?.running && (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Port</label>
+              <input
+                className="form-input"
+                type="number"
+                value={mcpPort}
+                onChange={e => setMcpPort(e.target.value)}
+                style={{ width: '90px', fontSize: '13px', padding: '6px 10px' }}
+                placeholder="3001"
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Marathon backend URL</label>
+              <input
+                className="form-input"
+                type="url"
+                value={mcpMarathonUrl}
+                onChange={e => setMcpMarathonUrl(e.target.value)}
+                style={{ fontSize: '13px', padding: '6px 10px' }}
+                placeholder="http://localhost:3000"
+              />
+            </div>
+          </div>
+        )}
+
+        {mcpError && <div style={{ fontSize: '13px', color: 'var(--danger)', marginBottom: '12px' }}>{mcpError}</div>}
+
+        {/* Connection info */}
+        {mcpStatus?.running && (
+          <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '14px', fontSize: '13px' }}>
+            <div style={{ marginBottom: '10px' }}>
+              <span style={{ color: 'var(--text-muted)' }}>HTTP endpoint: </span>
+              <code style={{ userSelect: 'all' }}>{mcpStatus.endpoint}</code>
+            </div>
+            <div style={{ marginBottom: '14px' }}>
+              <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Claude Desktop config (<code>%APPDATA%\Claude\claude_desktop_config.json</code>):</span>
+              <pre style={{
+                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '4px',
+                padding: '10px', fontSize: '12px', overflowX: 'auto', margin: 0, userSelect: 'all',
+              }}>{`"marathon": {
+  "command": "node",
+  "args": ["D:/Github/Marathon-overview/mcp-server/src/index.js"],
+  "env": { "MARATHON_URL": "${mcpStatus.marathonUrl}" }
+}`}</pre>
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+              For HTTP clients: use <code>{mcpStatus.endpoint}</code> as the connector URL.
+              For Claude Desktop: edit the config file above and restart Claude Desktop.
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
