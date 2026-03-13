@@ -37,6 +37,12 @@ For Claude Desktop, add to `claude_desktop_config.json` (`%APPDATA%\Claude\claud
 
 Run the server as a persistent HTTP process:
 
+**PowerShell (Windows):**
+```powershell
+$env:MCP_TRANSPORT="http"; $env:MCP_PORT="3001"; $env:MARATHON_URL="http://localhost:3000"; node src/index.js
+```
+
+**bash/Linux/macOS:**
 ```bash
 MCP_TRANSPORT=http MCP_PORT=3001 MARATHON_URL=http://localhost:3000 node src/index.js
 ```
