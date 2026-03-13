@@ -9,9 +9,15 @@ cd mcp-server
 npm install
 ```
 
-## Claude Desktop config
+## Transport modes
 
-Add to `claude_desktop_config.json` (usually `%APPDATA%\Claude\claude_desktop_config.json`):
+The server supports two transport modes:
+
+### Stdio (default — Claude Code / Claude Desktop)
+
+No extra config needed. Claude Code picks this up automatically via `.mcp.json`.
+
+For Claude Desktop, add to `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json`):
 
 ```json
 {
@@ -27,21 +33,42 @@ Add to `claude_desktop_config.json` (usually `%APPDATA%\Claude\claude_desktop_co
 }
 ```
 
-For Claude Code, add to `.mcp.json` in the project root:
+### HTTP / Streamable-HTTP (for clients that require a URL)
 
-```json
-{
-  "mcpServers": {
-    "marathon": {
-      "command": "node",
-      "args": ["mcp-server/src/index.js"],
-      "env": {
-        "MARATHON_URL": "http://localhost:3000"
-      }
-    }
-  }
+Run the server as a persistent HTTP process:
+
+```bash
+MCP_TRANSPORT=http MCP_PORT=3001 MARATHON_URL=http://localhost:3000 node src/index.js
+```
+
+Then add the endpoint URL in your MCP client:
+
+```
+http://localhost:3001/mcp
+```
+
+For HTTPS, put the server behind an nginx reverse proxy with a TLS certificate (see below).
+
+#### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `MARATHON_URL` | `http://localhost:3000` | Marathon backend URL |
+| `MCP_TRANSPORT` | _(stdio)_ | Set to `http` for HTTP mode |
+| `MCP_PORT` | `3001` | HTTP listen port |
+
+#### nginx HTTPS reverse proxy example
+
+```nginx
+location /mcp-server/ {
+    proxy_pass http://127.0.0.1:3001/;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;
 }
 ```
+
+Then connect clients to `https://your-host/mcp-server/mcp`.
 
 Set `MARATHON_URL` to wherever Marathon is running (e.g. `http://192.168.1.10:3000` for a remote instance).
 
