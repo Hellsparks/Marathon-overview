@@ -298,4 +298,9 @@ function stopPolling() {
   }
 }
 
-module.exports = { startPolling, stopPolling, pollAll };
+/** Evict a spool from the cache (call when set-active changes the active spool) */
+function clearSpoolCache(spoolId) {
+  if (spoolId != null) spoolCache.delete(spoolId);
+}
+
+module.exports = { startPolling, stopPolling, pollAll, clearSpoolCache };

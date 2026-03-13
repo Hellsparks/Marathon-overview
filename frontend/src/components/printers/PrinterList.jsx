@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { deletePrinter } from '../../api/printers';
+import { clearPrinterScrapeCache } from '../../services/themeScraper';
 import ConfirmDialog from '../common/ConfirmDialog';
 import PrinterForm from './PrinterForm';
 
@@ -9,8 +10,10 @@ export default function PrinterList({ printers, onRefresh }) {
   const [deletingId, setDeletingId] = useState(null);
 
   async function handleDelete(id) {
+    const printer = printers.find(p => p.id === id);
     try {
       await deletePrinter(id);
+      if (printer) clearPrinterScrapeCache(printer);
       onRefresh?.();
     } catch (e) {
       alert(e.message);

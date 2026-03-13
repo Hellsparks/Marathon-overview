@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { createFilament, updateFilament, getVendors, getFields } from '../../api/spoolman';
+import { getSettings } from '../../api/settings';
 import { RAL_COLORS, findClosestRal } from '../../utils/ralColors';
 import { fetchSwatchStl, makeSwatchFilename, getSwatchLines, downloadBuffer } from '../../api/extras';
+import { onReading as coloriometerOnReading, getLastReading, getStatus as coloriometerStatus } from '../../services/colorimeter';
 
 const COMMON_MATERIALS = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PLA+', 'PA', 'PC', 'HIPS', 'PVA'];
 
@@ -42,10 +44,19 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
         return e;
     });
     const [busy, setBusy] = useState(false);
+    const [tdFieldKey, setTdFieldKey] = useState('');
+    const [td1Reading, setTd1Reading] = useState(() => getLastReading());
+
+    // Track live TD1 readings while dialog is open
+    useEffect(() => coloriometerOnReading(setTd1Reading), []);
 
     useEffect(() => {
-        Promise.all([getVendors(), getFields('filament')])
-            .then(([v, f]) => { setVendors(v || []); setExtraFields(f || []); })
+        Promise.all([getVendors(), getFields('filament'), getSettings()])
+            .then(([v, f, s]) => {
+                setVendors(v || []);
+                setExtraFields(f || []);
+                setTdFieldKey(s?.hueforge_td_field || '');
+            })
             .catch(() => { });
     }, []);
 
@@ -86,6 +97,13 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
 
     function setExtraVal(key, val) {
         setExtra(prev => ({ ...prev, [key]: val }));
+    }
+
+    function handleColoriometerReading({ hex, td }) {
+        if (hex) setColorHex(`#${hex}`);
+        if (td !== null && td !== undefined && tdFieldKey) {
+            setExtraVal(tdFieldKey, String(td));
+        }
     }
 
     async function handleSubmit(e) {
@@ -247,6 +265,37 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                                 style={{ width: '100px' }}
                                 title="e.g. 1004 or RAL 1004"
                             />
+                        </div>
+                    </div>
+
+                    {/* TD1 colorimeter quick-apply */}
+                    <div className="sm-field sm-field-full">
+                        <div className="colorimeter-apply-row">
+                            {td1Reading ? (
+                                <>
+                                    <span className="colorimeter-mini-swatch" style={{ background: `#${td1Reading.hex}`, width: 18, height: 18, borderRadius: 4, border: '1px solid var(--border)', flexShrink: 0 }} />
+                                    <span style={{ fontFamily: 'monospace', fontSize: 13 }}>#{td1Reading.hex}</span>
+                                    {td1Reading.td !== null && (
+                                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                            TD: {td1Reading.td}{tdFieldKey ? ` → ${tdFieldKey}` : ''}
+                                        </span>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        style={{ marginLeft: 'auto', padding: '3px 10px', fontSize: 12 }}
+                                        onClick={() => handleColoriometerReading(td1Reading)}
+                                    >
+                                        Apply TD1
+                                    </button>
+                                </>
+                            ) : (
+                                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                    {coloriometerStatus() === 'connected'
+                                        ? 'TD1 connected — scan a filament to get a reading'
+                                        : 'Connect TD1 on the Filaments page to auto-fill color & TD'}
+                                </span>
+                            )}
                         </div>
                     </div>
 

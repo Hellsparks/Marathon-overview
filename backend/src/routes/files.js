@@ -61,7 +61,8 @@ router.post('/upload', upload.single('file'), (req, res) => {
 
 // GET /api/files/thumb/:filename
 router.get('/thumb/:filename', (req, res) => {
-  const { filename } = req.params;
+  // path.basename prevents path traversal (strips any directory components)
+  const filename = path.basename(req.params.filename);
   const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '../../uploads');
   const thumbPath = path.join(UPLOADS_DIR, '.thumbnails', `${filename}.png`);
 

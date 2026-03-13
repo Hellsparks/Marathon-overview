@@ -1,0 +1,16 @@
+{
+  "name": "marathon-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Marathon 3D printer fleet manager",
+  "type": "module",
+  "bin": {
+    "marathon-mcp": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
