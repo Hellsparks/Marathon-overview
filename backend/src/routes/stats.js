@@ -62,7 +62,7 @@ router.get('/files', (req, res) => {
 router.get('/history', (req, res) => {
     const db = getDb();
     try {
-        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 50, 200));
         const page  = Math.max(parseInt(req.query.page) || 1, 1);
         const offset = (page - 1) * limit;
 

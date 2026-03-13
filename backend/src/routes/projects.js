@@ -202,35 +202,6 @@ router.post('/', (req, res) => {
     }
 });
 
-// PATCH /api/projects/:id (Rename, Update status, etc)
-router.patch('/:id', (req, res) => {
-    const { name, status, completed_at } = req.body;
-    try {
-        const fields = [];
-        const params = [];
-
-        if (name !== undefined) { fields.push('name = ?'); params.push(name); }
-        if (status !== undefined) {
-            fields.push('status = ?'); params.push(status);
-            if (status === 'archived') {
-                fields.push('completed_at = datetime(\'now\')');
-                fields.push('folder_id = NULL');
-            }
-        }
-        if (completed_at !== undefined) { fields.push('completed_at = ?'); params.push(completed_at); }
-
-        if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
-
-        params.push(req.params.id);
-        const sql = `UPDATE projects SET ${fields.join(', ')} WHERE id = ?`;
-        db.prepare(sql).run(...params);
-
-        res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // Update project plate status
 router.patch('/:id/plates/:plateId', (req, res) => {
     const { status, printer_id, print_job_id } = req.body;
@@ -258,9 +229,9 @@ router.patch('/:id/plates/:plateId', (req, res) => {
     }
 });
 
-// PATCH /api/projects/:id (Update status, name, or due_date)
+// PATCH /api/projects/:id (Update status, name, due_date, or completed_at)
 router.patch('/:id', (req, res) => {
-    const { status, name, due_date } = req.body;
+    const { status, name, due_date, completed_at } = req.body;
     const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
     if (!project) return res.status(404).json({ error: 'Project not found' });
 
@@ -271,10 +242,14 @@ router.patch('/:id', (req, res) => {
         if (status !== undefined) {
             fields.push('status = ?');
             params.push(status);
-            if (status === 'archived') fields.push('folder_id = NULL');
+            if (status === 'archived') {
+                fields.push('folder_id = NULL');
+                if (completed_at === undefined) fields.push('completed_at = datetime(\'now\')');
+            }
         }
         if (name !== undefined) { fields.push('name = ?'); params.push(name); }
         if (due_date !== undefined) { fields.push('due_date = ?'); params.push(due_date); }
+        if (completed_at !== undefined) { fields.push('completed_at = ?'); params.push(completed_at); }
 
         params.push(req.params.id);
         const sql = `UPDATE projects SET ${fields.join(', ')} WHERE id = ?`;
@@ -337,8 +312,9 @@ router.post('/:id/plates/:plateId/print', async (req, res) => {
         const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(printer_id);
         if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
-        // Plate files live in TEMPLATES_DIR
-        const filePath = path.join(TEMPLATES_DIR, plate.filename);
+        // path.basename prevents path traversal (plate.filename comes from DB but defence-in-depth)
+        const safeFilename = path.basename(plate.filename);
+        const filePath = path.join(TEMPLATES_DIR, safeFilename);
         if (!fs.existsSync(filePath)) return res.status(404).json({ error: `File not found on disk: ${plate.filename}` });
 
         const fileBuffer = fs.readFileSync(filePath);

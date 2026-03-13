@@ -20,7 +20,9 @@ router.get('/version', (req, res) => {
 // GET /api/printer  — minimal printer state (slicers may poll this)
 router.get('/printer', (req, res) => {
   const allStatus = printerCache.getAll();
-  const first = Object.values(allStatus)[0] || {};
+  const db = getDb();
+  const enabledIds = new Set(db.prepare('SELECT id FROM printers WHERE enabled = 1').all().map(p => String(p.id)));
+  const first = Object.entries(allStatus).find(([id]) => enabledIds.has(id))?.[1] || {};
   res.json({
     temperature: {
       tool0: {
@@ -42,7 +44,9 @@ router.get('/printer', (req, res) => {
 // GET /api/job  — minimal job state
 router.get('/job', (req, res) => {
   const allStatus = printerCache.getAll();
-  const first = Object.values(allStatus)[0] || {};
+  const db = getDb();
+  const enabledIds = new Set(db.prepare('SELECT id FROM printers WHERE enabled = 1').all().map(p => String(p.id)));
+  const first = Object.entries(allStatus).find(([id]) => enabledIds.has(id))?.[1] || {};
   res.json({
     state: first.print_stats?.state ?? 'Operational',
     job: {

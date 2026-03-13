@@ -7,10 +7,16 @@ const { version } = JSON.parse(readFileSync(resolve(__dirname, '../package.json'
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/tests/setup.js'],
+  },
   define: {
     __APP_VERSION__: JSON.stringify(version),
   },
   server: {
+    host: true, // Listen on all network interfaces to allow connections from other devices (like an iPad)
     port: 5173,
     proxy: {
       '/api': {
