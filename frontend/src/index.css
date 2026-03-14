@@ -3433,6 +3433,161 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   color: var(--text-muted);
 }
 
+/* ─── Spool Storage section ─────────────────────────────────────── */
+.inv-storage-section {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 24px;
+}
+
+.inv-storage-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0 10px;
+  color: var(--text);
+  text-align: left;
+}
+
+.inv-storage-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.inv-storage-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--surface2);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.inv-storage-chevron {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.inv-storage-location-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.inv-storage-location-input {
+  font-size: 13px;
+  padding: 4px 8px;
+  width: 180px;
+}
+
+.inv-storage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inv-storage-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+
+.inv-storage-row-alert {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+}
+
+.inv-storage-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 120px;
+}
+
+.inv-storage-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.inv-storage-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.inv-storage-counts {
+  display: flex;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.inv-storage-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 36px;
+}
+
+.inv-storage-stat-val {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.inv-storage-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-muted);
+}
+
+.inv-storage-alert-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warning);
+  flex-shrink: 0;
+}
+
+.inv-storage-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.inv-storage-open-btn,
+.inv-storage-add-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.sm-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
 /* ─── Right Panel ────────────────────────────────────────────────── */
 .rp-content {
   display: flex;
