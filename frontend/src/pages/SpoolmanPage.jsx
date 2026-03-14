@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePrinters } from '../hooks/usePrinters';
-import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool, getAmsSlots, getBambuWarnings, dismissBambuWarning } from '../api/spoolman';
+import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool, getAmsSlots, getBambuWarnings, dismissBambuWarning, getStorageLocation, patchSpool } from '../api/spoolman';
+import { groupSpoolsByFilament } from '../utils/spoolStorage';
 import { useFilamentGuard } from '../hooks/useFilamentGuard';
 import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
 import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
@@ -77,6 +78,8 @@ export default function SpoolmanPage() {
     const [adjustBusy, setAdjustBusy] = useState(false);
 
     const [showAddSpool, setShowAddSpool] = useState(false);
+    const [storageLocation, setStorageLocationState] = useState('Storage');
+    const [openBusy, setOpenBusy] = useState({});
 
     // AMS state for Bambu printers
     const [amsSlots, setAmsSlots] = useState({});       // { printerId: { 0: spoolId, 1: spoolId, ... } }
@@ -118,8 +121,12 @@ export default function SpoolmanPage() {
 
     const fetchSpools = useCallback(async () => {
         try {
-            const data = await getSpools();
+            const [data, locData] = await Promise.all([
+                getSpools(),
+                getStorageLocation().catch(() => ({ storage_location: 'Storage' })),
+            ]);
             setSpools(data.filter(s => !s.archived));
+            setStorageLocationState(locData.storage_location || 'Storage');
             setError(null);
         } catch (e) {
             setError(e.message);
@@ -182,7 +189,14 @@ export default function SpoolmanPage() {
     const uniqueMaterials = Array.from(new Set(spools.map(s => s.filament?.material).filter(Boolean))).sort();
     const uniqueVendors = Array.from(new Set(spools.map(s => s.filament?.vendor?.name).filter(Boolean))).sort();
 
-    const filtered = spools.filter(s => {
+    const storageLoc = storageLocation.toLowerCase();
+    // Storage spools are hidden from the main grid and shown separately below
+    const activeSpools = spools.filter(s =>
+        !(typeof s.location === 'string' && s.location.toLowerCase() === storageLoc)
+    );
+    const storageGroups = groupSpoolsByFilament(spools, storageLocation);
+
+    const filtered = activeSpools.filter(s => {
         const f = s.filament || {};
         // If materials are selected, spool's material must be in the selected list
         if (materialFilter.length > 0 && !materialFilter.includes(f.material)) return false;
@@ -337,6 +351,20 @@ export default function SpoolmanPage() {
     function getSpoolPercentage(spool) {
         if (!spool.initial_weight || spool.initial_weight === 0) return 100;
         return Math.min(100, (spool.remaining_weight / spool.initial_weight) * 100);
+    }
+
+    async function handleOpenStorageSpool(group) {
+        const spool = group.storageSpools[0];
+        if (!spool) return;
+        setOpenBusy(b => ({ ...b, [spool.id]: true }));
+        try {
+            await patchSpool(spool.id, { location: null });
+            await fetchSpools();
+        } catch (e) {
+            alert(e.message);
+        } finally {
+            setOpenBusy(b => ({ ...b, [spool.id]: false }));
+        }
     }
 
     return (
@@ -691,6 +719,56 @@ export default function SpoolmanPage() {
                                 })}
                             </div>
                         )
+                    )}
+                    {/* Storage spools — one card per filament type, no weight tracking */}
+                    {storageGroups.some(g => g.storageSpools.length > 0) && (
+                        <div style={{ marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                                In Storage — {storageGroups.reduce((n, g) => n + g.storageSpools.length, 0)} sealed spool{storageGroups.reduce((n, g) => n + g.storageSpools.length, 0) !== 1 ? 's' : ''}
+                            </div>
+                            <div className={`spoolman-grid ${viewMode === 'grid-large' ? 'large' : 'small'}`} style={{
+                                display: 'grid',
+                                gap: '16px',
+                                gridTemplateColumns: viewMode === 'list' ? '1fr' : viewMode === 'grid-large' ? 'repeat(auto-fill, minmax(320px, 1fr))' : 'repeat(auto-fill, minmax(220px, 1fr))',
+                            }}>
+                                {storageGroups.filter(g => g.storageSpools.length > 0).map(group => {
+                                    const f = group.filament || {};
+                                    const color = `#${f.color_hex || '888888'}`;
+                                    const top = group.storageSpools[0];
+                                    const isOpening = top && openBusy[top.id];
+                                    return (
+                                        <div
+                                            key={f.id}
+                                            className="spoolman-spool-card spool-card-storage"
+                                            style={{ backgroundColor: 'var(--surface)' }}
+                                        >
+                                            <div className="spool-card-header">
+                                                <div className="spool-color-circle" style={{ backgroundColor: color }} />
+                                                <div className="spool-card-info">
+                                                    <span className="spool-card-name">{f.name || `Filament #${f.id}`}</span>
+                                                    <span className="spool-card-material">
+                                                        {f.material || '—'}
+                                                        {f.color_hex && <span className="spool-card-hex">#{f.color_hex.toUpperCase()}</span>}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            {f.vendor?.name && <span className="spool-card-vendor">{f.vendor.name}</span>}
+                                            <div className="spool-card-storage-label">
+                                                📦 {group.storageSpools.length} sealed in storage
+                                            </div>
+                                            <button
+                                                className="btn btn-primary spool-card-open-btn"
+                                                disabled={isOpening}
+                                                onClick={() => handleOpenStorageSpool(group)}
+                                                title={`Open spool #${top?.id} (oldest first)`}
+                                            >
+                                                {isOpening ? '…' : 'Open spool from storage'}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     )}
                 </div>
 
