@@ -16,6 +16,7 @@ export default function AddSpoolDialog({
     const [lotNr, setLotNr] = useState('');
     const [comment, setComment] = useState('');
     const [inStorage, setInStorage] = useState(defaultInStorage);
+    const [quantity, setQuantity] = useState(1);
     const [busy, setBusy] = useState(false);
     const [search, setSearch] = useState('');
 
@@ -63,9 +64,13 @@ export default function AddSpoolDialog({
             if (lotNr.trim()) body.lot_nr = lotNr.trim();
             if (comment.trim()) body.comment = comment.trim();
             if (inStorage && storageLocation) body.location = storageLocation;
-            const created = await createSpool(body);
 
-            if (swatchPromptEnabled && swatchField && selectedFilament) {
+            const qty = Math.max(1, parseInt(quantity) || 1);
+            let created;
+            for (let i = 0; i < qty; i++) created = await createSpool(body);
+
+            // Only show swatch prompt for single-spool creation
+            if (qty === 1 && swatchPromptEnabled && swatchField && selectedFilament) {
                 const hasPrinted = selectedFilament.extra?.[swatchField] === true || selectedFilament.extra?.[swatchField] === 'true';
                 if (!hasPrinted) {
                     setPromptSpool(created);
@@ -258,8 +263,8 @@ export default function AddSpoolDialog({
                         />
                     </div>
 
-                    {storageLocation && (
-                        <div className="sm-field sm-field-full">
+                    <div className="sm-field sm-field-full" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                        {storageLocation && (
                             <label className="sm-checkbox-label">
                                 <input
                                     type="checkbox"
@@ -268,13 +273,25 @@ export default function AddSpoolDialog({
                                 />
                                 Add to storage ({storageLocation})
                             </label>
-                        </div>
-                    )}
+                        )}
+                        <label className="sm-checkbox-label" style={{ gap: '6px' }}>
+                            Quantity
+                            <input
+                                className="sm-input"
+                                type="number"
+                                min="1"
+                                max="50"
+                                value={quantity}
+                                onChange={e => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                style={{ width: '60px', textAlign: 'center' }}
+                            />
+                        </label>
+                    </div>
 
                     <div className="spool-dialog-actions sm-field-full">
                         <button type="button" className="btn v-btn" onClick={onClose} disabled={busy}>Cancel</button>
                         <button type="submit" className="btn btn-primary v-btn" disabled={busy || !filamentId}>
-                            {busy ? 'Saving…' : 'Create'}
+                            {busy ? 'Saving…' : quantity > 1 ? `Create ×${quantity}` : 'Create'}
                         </button>
                     </div>
                 </form>

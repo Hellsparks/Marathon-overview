@@ -347,6 +347,12 @@ export default function InventoryPage() {
                                     <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>In stock: <strong style={{ color: current === 0 ? 'var(--danger)' : 'var(--text)' }}>{current}</strong> / {inv.target_qty}</span>
                                     <span className={`inv-status-badge ${status === 'LOW' ? 'inv-status-low' : 'inv-status-ok'}`}>{status}</span>
                                 </div>
+                                <div style={{ marginTop: '8px', textAlign: 'right' }}>
+                                    <button className="btn inv-storage-add-btn" title="Add to storage"
+                                        onClick={() => { setAddSpoolFilamentId(f.id); setShowAddSpool(true); }}>
+                                        📦 Store
+                                    </button>
+                                </div>
                             </div>
                         );
                     })}
@@ -408,6 +414,10 @@ export default function InventoryPage() {
                                                     {busy[f.id] ? '…' : '✓'}
                                                 </button>
                                             )}
+                                            <button className="sm-action-btn" title="Add to storage"
+                                                onClick={() => { setAddSpoolFilamentId(f.id); setShowAddSpool(true); }}>
+                                                📦
+                                            </button>
                                             <button className="sm-action-btn sm-action-danger"
                                                 onClick={() => handleRemove(f.id)} title="Stop tracking">✕</button>
                                         </td>
