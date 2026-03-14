@@ -229,3 +229,137 @@ export async function dismissBambuWarning(spoolId) {
     if (!r.ok) throw new Error(`Failed to dismiss warning: ${r.status}`);
     return r.json();
 }
+
+/** Download all Spoolman data as a JSON file (triggers browser download). */
+export async function exportSpoolman() {
+    const r = await fetch(`${API}/export`);
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    const blob = await r.blob();
+    const disposition = r.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : `spoolman-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+/** Import (restore) Spoolman data from a parsed JSON object. */
+export async function importSpoolman(jsonData) {
+    const r = await fetch(`${API}/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(jsonData),
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+/** Get the status of the managed Spoolman Docker container. */
+export async function getDockerStatus() {
+    const r = await fetch(`${API}/docker/status`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+}
+
+/** Install and start the Spoolman Docker container. */
+export async function installSpoolman(port = 7912) {
+    const r = await fetch(`${API}/docker/install`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port }),
+        // Image pull can take a while
+        signal: AbortSignal.timeout(300000),
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+/** Stop and remove the Spoolman Docker container. */
+export async function uninstallSpoolman(removeData = false) {
+    const r = await fetch(`${API}/docker/uninstall?removeData=${removeData}`, { method: 'DELETE' });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+// ── Native (Python venv) management ──────────────────────────────────────────
+
+export async function getNativeStatus() {
+    const r = await fetch(`${API}/native/status`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+}
+
+export async function installNative(port = 7912) {
+    const r = await fetch(`${API}/native/install`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port }),
+        signal: AbortSignal.timeout(600000), // pip install can be slow
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+export async function startNative() {
+    const r = await fetch(`${API}/native/start`, { method: 'POST' });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+export async function stopNative() {
+    const r = await fetch(`${API}/native/stop`, { method: 'POST' });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+export async function uninstallNative(removeData = false) {
+    const r = await fetch(`${API}/native/uninstall?removeData=${removeData}`, { method: 'DELETE' });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+// ── Spool Storage management ─────────────────────────────────────────────────
+
+/** Get the configured storage location name (default: "Storage"). */
+export async function getStorageLocation() {
+    const r = await fetch(`${API}/storage-location`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json(); // { storage_location: string }
+}
+
+/** Update the storage location name. */
+export async function setStorageLocation(storage_location) {
+    const r = await fetch(`${API}/storage-location`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storage_location }),
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+/** Partial-update a spool in Spoolman (e.g. set/clear location field). */
+export async function patchSpool(id, data) {
+    const r = await fetch(`${API}/spools/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}

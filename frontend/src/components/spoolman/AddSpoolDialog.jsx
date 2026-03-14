@@ -3,13 +3,19 @@ import { createSpool, getFilaments, updateFilament } from '../../api/spoolman';
 import { getSettings } from '../../api/settings';
 import { fetchSwatchStl, makeSwatchFilename, getSwatchLines, downloadBuffer } from '../../api/extras';
 
-export default function AddSpoolDialog({ onClose, onCreated, onAddFilament }) {
+export default function AddSpoolDialog({
+    onClose, onCreated, onAddFilament,
+    storageLocation = null,
+    defaultInStorage = false,
+    preselectedFilamentId = null,
+}) {
     const [filaments, setFilaments] = useState([]);
     const [filamentId, setFilamentId] = useState('');
     const [initialWeight, setInitialWeight] = useState('');
     const [spoolWeight, setSpoolWeight] = useState('');
     const [lotNr, setLotNr] = useState('');
     const [comment, setComment] = useState('');
+    const [inStorage, setInStorage] = useState(defaultInStorage);
     const [busy, setBusy] = useState(false);
     const [search, setSearch] = useState('');
 
@@ -19,6 +25,10 @@ export default function AddSpoolDialog({ onClose, onCreated, onAddFilament }) {
     const [promptFilament, setPromptFilament] = useState(null);
     const [promptBusy, setPromptBusy] = useState(false);
     const [promptError, setPromptError] = useState(null);
+
+    useEffect(() => {
+        if (preselectedFilamentId != null) setFilamentId(String(preselectedFilamentId));
+    }, [preselectedFilamentId]);
 
     useEffect(() => {
         getFilaments()
@@ -52,6 +62,7 @@ export default function AddSpoolDialog({ onClose, onCreated, onAddFilament }) {
             if (spoolWeight) body.spool_weight = parseFloat(spoolWeight);
             if (lotNr.trim()) body.lot_nr = lotNr.trim();
             if (comment.trim()) body.comment = comment.trim();
+            if (inStorage && storageLocation) body.location = storageLocation;
             const created = await createSpool(body);
 
             if (swatchPromptEnabled && swatchField && selectedFilament) {
@@ -246,6 +257,19 @@ export default function AddSpoolDialog({ onClose, onCreated, onAddFilament }) {
                             placeholder="Optional"
                         />
                     </div>
+
+                    {storageLocation && (
+                        <div className="sm-field sm-field-full">
+                            <label className="sm-checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    checked={inStorage}
+                                    onChange={e => setInStorage(e.target.checked)}
+                                />
+                                Add to storage ({storageLocation})
+                            </label>
+                        </div>
+                    )}
 
                     <div className="spool-dialog-actions sm-field-full">
                         <button type="button" className="btn v-btn" onClick={onClose} disabled={busy}>Cancel</button>

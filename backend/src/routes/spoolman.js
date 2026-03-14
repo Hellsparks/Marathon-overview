@@ -440,6 +440,28 @@ router.post('/spools', async (req, res) => {
     }
 });
 
+// PATCH /api/spoolman/spools/:id — partial update (proxy to Spoolman)
+// Used to set/clear the location field when opening a stored spool
+router.patch('/spools/:id', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${url}/api/v1/spool/${req.params.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({ message: r.statusText }));
+            return res.status(r.status).json({ error: err.message || r.statusText });
+        }
+        res.json(await r.json());
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
 // DELETE /api/spoolman/spools/:id — delete a spool
 router.delete('/spools/:id', async (req, res) => {
     const url = getSpoolmanUrl();
@@ -617,6 +639,26 @@ router.delete('/inventory/:filamentId', (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+// GET /api/spoolman/storage-location — return the configured storage location name
+router.get('/storage-location', (req, res) => {
+    const db = getDb();
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'storage_location'").get();
+    res.json({ storage_location: row?.value || 'Storage' });
+});
+
+// PUT /api/spoolman/storage-location — update the storage location name
+router.put('/storage-location', (req, res) => {
+    const { storage_location } = req.body;
+    if (typeof storage_location !== 'string' || !storage_location.trim())
+        return res.status(400).json({ error: 'storage_location (non-empty string) required' });
+    const db = getDb();
+    const val = storage_location.trim();
+    const info = db.prepare("UPDATE settings SET value = ? WHERE key = 'storage_location'").run(val);
+    if (info.changes === 0)
+        db.prepare("INSERT INTO settings (key, value) VALUES ('storage_location', ?)").run(val);
+    res.json({ ok: true, storage_location: val });
 });
 
 // GET /api/spoolman/settings — fetch Spoolman global settings (currency, etc.)

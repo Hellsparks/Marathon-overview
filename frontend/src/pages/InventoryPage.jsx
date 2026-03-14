@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getFilaments, getSpools, getInventory, setInventoryTarget, removeInventoryTarget, getSpoolmanSettings } from '../api/spoolman';
+import { getFilaments, getSpools, getInventory, setInventoryTarget, removeInventoryTarget, getSpoolmanSettings, getStorageLocation, setStorageLocation, patchSpool } from '../api/spoolman';
+import { groupSpoolsByFilament, isSpoolLow } from '../utils/spoolStorage';
+import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
 import ViewToggle from '../components/common/ViewToggle';
 
 function countStock(spools, filamentId) {
@@ -31,6 +33,13 @@ export default function InventoryPage() {
     const [error, setError] = useState(null);
     const [pending, setPending] = useState({});
     const [busy, setBusy] = useState({});
+    const [storageLocation, setStorageLocationState] = useState('Storage');
+    const [storageOpen, setStorageOpen] = useState(true);
+    const [editingLocation, setEditingLocation] = useState(false);
+    const [locationInput, setLocationInput] = useState('');
+    const [openBusy, setOpenBusy] = useState({});
+    const [showAddSpool, setShowAddSpool] = useState(false);
+    const [addSpoolFilamentId, setAddSpoolFilamentId] = useState(null);
     const [showTracker, setShowTracker] = useState(false);
     const [trackSearch, setTrackSearch] = useState('');
     const [search, setSearch] = useState('');
@@ -42,18 +51,19 @@ export default function InventoryPage() {
 
     const load = useCallback(async () => {
         try {
-            const [f, s, inv, settings] = await Promise.all([
+            const [f, s, inv, settings, storageSetting] = await Promise.all([
                 getFilaments(), getSpools(), getInventory(),
                 getSpoolmanSettings().catch(() => ({})),
+                getStorageLocation().catch(() => ({ storage_location: 'Storage' })),
             ]);
             setFilaments(f || []);
             setSpools(s || []);
             const invMap = {};
             for (const row of (inv || [])) invMap[row.filament_id] = row;
             setInventory(invMap);
-            // Spoolman returns { currency: { value: "NOK", is_set: true, type: "str" }, ... }
             const c = settings?.currency;
             setCurrency(typeof c === 'string' ? c : (c?.value ?? ''));
+            setStorageLocationState(storageSetting.storage_location || 'Storage');
             setError(null);
         } catch (e) {
             setError(e.message);
@@ -167,6 +177,34 @@ export default function InventoryPage() {
             (f.vendor?.name || '').toLowerCase().includes(q)
         );
     });
+
+    const storageGroups = groupSpoolsByFilament(spools, storageLocation);
+
+    async function handleOpenSpool(group) {
+        const spool = group.storageSpools[0];
+        if (!spool) return;
+        setOpenBusy(b => ({ ...b, [spool.id]: true }));
+        try {
+            await patchSpool(spool.id, { location: null });
+            await load();
+        } catch (e) {
+            alert(e.message);
+        } finally {
+            setOpenBusy(b => ({ ...b, [spool.id]: false }));
+        }
+    }
+
+    async function handleSaveStorageLocation() {
+        if (!locationInput.trim()) return;
+        try {
+            await setStorageLocation(locationInput.trim());
+            setStorageLocationState(locationInput.trim());
+            setEditingLocation(false);
+            await load();
+        } catch (e) {
+            alert(e.message);
+        }
+    }
 
     if (loading) return <div className="loading">Loading inventory…</div>;
     if (error) return <div className="error">{error}</div>;
@@ -427,6 +465,118 @@ export default function InventoryPage() {
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* ── Spool Storage ──────────────────────────────────────── */}
+            {storageGroups.length > 0 && (
+                <div className="inv-storage-section">
+                    <button
+                        className="inv-storage-toggle"
+                        onClick={() => setStorageOpen(v => !v)}
+                    >
+                        <span className="inv-storage-toggle-label">
+                            Spool Storage
+                            <span className="inv-storage-count">{storageGroups.length}</span>
+                        </span>
+                        <span className="inv-storage-chevron">{storageOpen ? '▲' : '▼'}</span>
+                    </button>
+
+                    {storageOpen && (
+                        <div>
+                            <div className="inv-storage-location-row">
+                                {editingLocation ? (
+                                    <>
+                                        <input
+                                            className="input inv-storage-location-input"
+                                            value={locationInput}
+                                            onChange={e => setLocationInput(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleSaveStorageLocation(); if (e.key === 'Escape') setEditingLocation(false); }}
+                                            autoFocus
+                                        />
+                                        <button className="btn btn-sm btn-primary" onClick={handleSaveStorageLocation}>Save</button>
+                                        <button className="btn btn-sm" onClick={() => setEditingLocation(false)}>Cancel</button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="text-muted" style={{ fontSize: '12px' }}>
+                                            Storage location: <strong style={{ color: 'var(--text)' }}>{storageLocation}</strong>
+                                        </span>
+                                        <button
+                                            className="sm-action-btn"
+                                            title="Change storage location name"
+                                            onClick={() => { setLocationInput(storageLocation); setEditingLocation(true); }}
+                                        >✏</button>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="inv-storage-list">
+                                {storageGroups.map(({ filament: f, storageSpools, activeSpools }) => {
+                                    const color = `#${f.color_hex || '888888'}`;
+                                    const hasLowActive = activeSpools.some(isSpoolLow);
+                                    const showAlert = hasLowActive && storageSpools.length > 0;
+                                    const topStorageSpool = storageSpools[0];
+                                    const isOpening = topStorageSpool && openBusy[topStorageSpool.id];
+                                    return (
+                                        <div key={f.id} className={`inv-storage-row${showAlert ? ' inv-storage-row-alert' : ''}`}>
+                                            <div className="sm-filament-dot" style={{ backgroundColor: color, flexShrink: 0 }} />
+                                            <div className="inv-storage-info">
+                                                <span className="inv-storage-name">{f.name}</span>
+                                                <span className="inv-storage-meta">
+                                                    {[f.vendor?.name, f.material].filter(Boolean).join(' · ')}
+                                                </span>
+                                            </div>
+                                            <div className="inv-storage-counts">
+                                                <span className="inv-storage-stat" title="Sealed in storage">
+                                                    <span className="inv-storage-stat-val">{storageSpools.length}</span>
+                                                    <span className="inv-storage-stat-label">stored</span>
+                                                </span>
+                                                <span className="inv-storage-stat" title="Active (opened)">
+                                                    <span className="inv-storage-stat-val">{activeSpools.length}</span>
+                                                    <span className="inv-storage-stat-label">active</span>
+                                                </span>
+                                            </div>
+                                            {showAlert && (
+                                                <span className="inv-storage-alert-badge" title="Active spool running low — storage available">
+                                                    ⚠ Low
+                                                </span>
+                                            )}
+                                            <div className="inv-storage-actions">
+                                                <button
+                                                    className="btn inv-storage-open-btn"
+                                                    disabled={storageSpools.length === 0 || isOpening}
+                                                    title={storageSpools.length === 0 ? 'No spools in storage' : `Open spool #${topStorageSpool?.id} (oldest first)`}
+                                                    onClick={() => handleOpenSpool({ storageSpools })}
+                                                >
+                                                    {isOpening ? '…' : 'Open Spool'}
+                                                </button>
+                                                <button
+                                                    className="btn btn-primary inv-storage-add-btn"
+                                                    title="Add a new sealed spool to storage"
+                                                    onClick={() => { setAddSpoolFilamentId(f.id); setShowAddSpool(true); }}
+                                                >
+                                                    + Store
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Add Spool to storage dialog ─────────────────────────── */}
+            {showAddSpool && (
+                <AddSpoolDialog
+                    storageLocation={storageLocation}
+                    defaultInStorage={true}
+                    preselectedFilamentId={addSpoolFilamentId}
+                    onAddFilament={() => {}}
+                    onClose={() => { setShowAddSpool(false); setAddSpoolFilamentId(null); }}
+                    onCreated={() => { setShowAddSpool(false); setAddSpoolFilamentId(null); load(); }}
+                />
             )}
 
             {/* ── Track filament picker ──────────────────────────────── */}
