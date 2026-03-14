@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createSpool, getFilaments, updateFilament } from '../../api/spoolman';
 import { getSettings } from '../../api/settings';
 import { fetchSwatchStl, makeSwatchFilename, getSwatchLines, downloadBuffer } from '../../api/extras';
+import { buildColorStyle } from '../../utils/colorUtils';
 
 export default function AddSpoolDialog({
     onClose, onCreated, onAddFilament,
@@ -185,7 +186,6 @@ export default function AddSpoolDialog({
                                 <div className="sm-filament-empty">No filaments found</div>
                             )}
                             {filtered.map(f => {
-                                const color = `#${f.color_hex || '888888'}`;
                                 const selected = String(f.id) === String(filamentId);
                                 return (
                                     <div
@@ -193,7 +193,7 @@ export default function AddSpoolDialog({
                                         className={`sm-filament-row${selected ? ' selected' : ''}`}
                                         onClick={() => setFilamentId(String(f.id))}
                                     >
-                                        <div className="sm-filament-dot" style={{ '--spool-color': color }} />
+                                        <div className="sm-filament-dot" style={buildColorStyle(f)} />
                                         <div className="sm-filament-info">
                                             <span className="sm-filament-name">{f.name}</span>
                                             <span className="sm-filament-meta">

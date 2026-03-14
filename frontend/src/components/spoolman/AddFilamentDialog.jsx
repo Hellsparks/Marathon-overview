@@ -4,6 +4,7 @@ import { getSettings } from '../../api/settings';
 import { RAL_COLORS, findClosestRal } from '../../utils/ralColors';
 import { fetchSwatchStl, makeSwatchFilename, getSwatchLines, downloadBuffer } from '../../api/extras';
 import { onReading as coloriometerOnReading, getLastReading, getStatus as coloriometerStatus } from '../../services/colorimeter';
+import { buildColorStyle, isMultiColor } from '../../utils/colorUtils';
 
 const COMMON_MATERIALS = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PLA+', 'PA', 'PC', 'HIPS', 'PVA'];
 
@@ -43,10 +44,23 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
     const [material, setMaterial] = useState(filament?.material ?? '');
     const [density, setDensity] = useState(String(filament?.density ?? '1.24'));
     const [colorHex, setColorHex] = useState(filament?.color_hex ? `#${filament.color_hex.slice(0, 6)}` : '#ffffff');
+    const [multiColorEnabled, setMultiColorEnabled] = useState(
+        !!(filament?.multi_color_hexes)
+    );
+    const [multiColorHexes, setMultiColorHexes] = useState(() => {
+        if (filament?.multi_color_hexes) {
+            return filament.multi_color_hexes.split(',').map(h => `#${h.trim()}`);
+        }
+        return ['#0ea5e9', '#a855f7'];
+    });
+    const [multiColorDirection, setMultiColorDirection] = useState(
+        filament?.multi_color_direction || 'longitudinal'
+    );
     const [colorRal, setColorRal] = useState('');
     const [diameter, setDiameter] = useState(String(filament?.diameter ?? '1.75'));
     const [weight, setWeight] = useState(String(filament?.weight ?? '1000'));
     const [spoolWeight, setSpoolWeight] = useState(String(filament?.spool_weight ?? ''));
+    const [price, setPrice] = useState(String(filament?.price ?? ''));
     const [comment, setComment] = useState(filament?.comment ?? '');
     const [extra, setExtra] = useState(() => {
         const e = filament?.extra ? { ...filament.extra } : {};
@@ -164,8 +178,15 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                     body.color_hex = baseHex;
                 }
             }
+            if (multiColorEnabled && multiColorHexes.length > 1) {
+                body.multi_color_hexes = multiColorHexes
+                    .map(h => h.replace(/^#/, '').slice(0, 8))
+                    .join(',');
+                body.multi_color_direction = multiColorDirection;
+            }
             if (weight) body.weight = parseFloat(weight);
             if (spoolWeight) body.spool_weight = parseFloat(spoolWeight);
+            if (price) body.price = parseFloat(price);
             if (comment.trim()) body.comment = comment.trim();
 
             const extraOut = {};
@@ -282,68 +303,177 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                         </datalist>
                     </div>
 
-                    <div className="sm-field">
+                    <div className="sm-field sm-field-full">
                         <label className="sm-label">Color</label>
-                        <div className="sm-color-row">
-                            {/* Custom preview circle with checkerboard so translucency is visible */}
-                            <div className="sm-color-preview" onClick={() => colorInputRef.current?.click()}>
-                                <div
-                                    className="sm-color-preview-fill"
-                                    style={(() => {
-                                        const { r, g, b } = hexToRgb(colorHex);
-                                        return { background: `rgba(${r},${g},${b},${(100 - translucency) / 100})` };
-                                    })()}
-                                />
-                                <input
-                                    ref={colorInputRef}
-                                    type="color"
-                                    className="sm-color-picker-overlay"
-                                    value={colorHex.match(/^#[0-9a-fA-F]{6}$/) ? colorHex : '#ffffff'}
-                                    onChange={e => setColorHex(e.target.value)}
-                                />
+
+                        {/* Multi-color toggle */}
+                        <label className="sm-checkbox-label" style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                                type="checkbox"
+                                checked={multiColorEnabled}
+                                onChange={e => setMultiColorEnabled(e.target.checked)}
+                            />
+                            Multi-color filament
+                        </label>
+
+                        {!multiColorEnabled ? (
+                            /* ── Single color ── */
+                            <>
+                                <div className="sm-color-row">
+                                    <div className="sm-color-preview" onClick={() => colorInputRef.current?.click()}>
+                                        <div
+                                            className="sm-color-preview-fill"
+                                            style={(() => {
+                                                const { r, g, b } = hexToRgb(colorHex);
+                                                return { background: `rgba(${r},${g},${b},${(100 - translucency) / 100})` };
+                                            })()}
+                                        />
+                                        <input
+                                            ref={colorInputRef}
+                                            type="color"
+                                            className="sm-color-picker-overlay"
+                                            value={colorHex.match(/^#[0-9a-fA-F]{6}$/) ? colorHex : '#ffffff'}
+                                            onChange={e => setColorHex(e.target.value)}
+                                        />
+                                    </div>
+                                    <input
+                                        className="sm-input sm-color-hex"
+                                        type="text"
+                                        maxLength={7}
+                                        value={colorHex}
+                                        onChange={e => setColorHex(e.target.value)}
+                                        placeholder="#ffffff"
+                                        style={{ width: '80px', textTransform: 'uppercase' }}
+                                    />
+                                    <input
+                                        className="sm-input sm-color-ral"
+                                        type="text"
+                                        value={colorRal}
+                                        onChange={e => handleRalChange(e.target.value)}
+                                        placeholder="RAL code"
+                                        style={{ width: '100px' }}
+                                        title="e.g. 1004 or RAL 1004"
+                                    />
+                                </div>
+                                <div className="sm-translucency-row">
+                                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Translucency</span>
+                                    <input
+                                        type="range"
+                                        min="0" max="95" step="1"
+                                        value={translucency}
+                                        onChange={e => { setTranslucency(+e.target.value); setTranslucencyManual(true); }}
+                                    />
+                                    <span className="sm-translucency-val">{translucency}%</span>
+                                    {translucencyManual && (
+                                        <button
+                                            type="button"
+                                            className="sm-hint-use"
+                                            title="Reset to TD-inferred value"
+                                            onClick={() => {
+                                                setTranslucencyManual(false);
+                                                const tdVal = parseFloat(extra[tdFieldKey]);
+                                                setTranslucency(!isNaN(tdVal) && tdVal > 0 ? tdToTranslucency(tdVal) : 0);
+                                            }}
+                                        >Reset</button>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            /* ── Multi-color ── */
+                            <div className="sm-multicolor-section">
+                                {/* Direction */}
+                                <div className="sm-multicolor-direction">
+                                    <label className={`sm-multicolor-dir-btn${multiColorDirection === 'longitudinal' ? ' active' : ''}`}>
+                                        <input type="radio" name="mc-direction" value="longitudinal"
+                                            checked={multiColorDirection === 'longitudinal'}
+                                            onChange={() => setMultiColorDirection('longitudinal')}
+                                        />
+                                        <span className="sm-multicolor-dir-preview" style={{
+                                            ...buildColorStyle({ multi_color_hexes: multiColorHexes.map(h => h.replace('#', '')).join(','), multi_color_direction: 'longitudinal' }),
+                                            borderRadius: '4px',
+                                        }} />
+                                        Longitudinal
+                                    </label>
+                                    <label className={`sm-multicolor-dir-btn${multiColorDirection === 'coextrusion' ? ' active' : ''}`}>
+                                        <input type="radio" name="mc-direction" value="coextrusion"
+                                            checked={multiColorDirection === 'coextrusion'}
+                                            onChange={() => setMultiColorDirection('coextrusion')}
+                                        />
+                                        <span className="sm-multicolor-dir-preview" style={{
+                                            ...buildColorStyle({ multi_color_hexes: multiColorHexes.map(h => h.replace('#', '')).join(','), multi_color_direction: 'coextrusion' }),
+                                            borderRadius: '50%',
+                                        }} />
+                                        Coextruded
+                                    </label>
+                                </div>
+
+                                {/* Color swatches preview */}
+                                <div className="sm-multicolor-preview">
+                                    <div className="sm-color-preview" style={{ cursor: 'default', width: '48px', height: '48px' }}>
+                                        <div className="sm-color-preview-fill" style={buildColorStyle({ multi_color_hexes: multiColorHexes.map(h => h.replace('#','')).join(','), multi_color_direction: multiColorDirection })} />
+                                    </div>
+                                </div>
+
+                                {/* Per-color rows */}
+                                <div className="sm-multicolor-list">
+                                    {multiColorHexes.map((hex, idx) => (
+                                        <div key={idx} className="sm-multicolor-row">
+                                            <span className="sm-multicolor-idx">{idx + 1}</span>
+                                            <input
+                                                type="color"
+                                                className="sm-color-picker"
+                                                value={hex.match(/^#[0-9a-fA-F]{6}$/) ? hex : '#888888'}
+                                                onChange={e => {
+                                                    const next = [...multiColorHexes];
+                                                    next[idx] = e.target.value;
+                                                    setMultiColorHexes(next);
+                                                    if (idx === 0) setColorHex(e.target.value);
+                                                }}
+                                            />
+                                            <input
+                                                className="sm-input sm-color-hex"
+                                                type="text"
+                                                maxLength={7}
+                                                value={hex}
+                                                onChange={e => {
+                                                    const next = [...multiColorHexes];
+                                                    next[idx] = e.target.value;
+                                                    setMultiColorHexes(next);
+                                                    if (idx === 0) setColorHex(e.target.value);
+                                                }}
+                                                style={{ width: '80px', textTransform: 'uppercase' }}
+                                            />
+                                            {td1Reading && (
+                                                <button
+                                                    type="button"
+                                                    className="btn"
+                                                    style={{ padding: '2px 7px', fontSize: 11, whiteSpace: 'nowrap' }}
+                                                    title={`Apply TD1 reading (#${td1Reading.hex}) to color ${idx + 1}`}
+                                                    onClick={() => {
+                                                        const next = [...multiColorHexes];
+                                                        next[idx] = `#${td1Reading.hex}`;
+                                                        setMultiColorHexes(next);
+                                                        if (idx === 0) setColorHex(`#${td1Reading.hex}`);
+                                                    }}
+                                                >
+                                                    TD1
+                                                </button>
+                                            )}
+                                            {multiColorHexes.length > 2 && (
+                                                <button type="button" className="sm-action-btn sm-action-danger"
+                                                    onClick={() => setMultiColorHexes(multiColorHexes.filter((_, i) => i !== idx))}>
+                                                    ✕
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                <button type="button" className="btn" style={{ marginTop: '6px', fontSize: '12px' }}
+                                    onClick={() => setMultiColorHexes([...multiColorHexes, '#888888'])}>
+                                    + Add Color
+                                </button>
                             </div>
-                            <input
-                                className="sm-input sm-color-hex"
-                                type="text"
-                                maxLength={7}
-                                value={colorHex}
-                                onChange={e => setColorHex(e.target.value)}
-                                placeholder="#ffffff"
-                                style={{ width: '80px', textTransform: 'uppercase' }}
-                            />
-                            <input
-                                className="sm-input sm-color-ral"
-                                type="text"
-                                value={colorRal}
-                                onChange={e => handleRalChange(e.target.value)}
-                                placeholder="RAL code"
-                                style={{ width: '100px' }}
-                                title="e.g. 1004 or RAL 1004"
-                            />
-                        </div>
-                        {/* Translucency slider — auto-inferred from TD, manually overridable */}
-                        <div className="sm-translucency-row">
-                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Translucency</span>
-                            <input
-                                type="range"
-                                min="0" max="95" step="1"
-                                value={translucency}
-                                onChange={e => { setTranslucency(+e.target.value); setTranslucencyManual(true); }}
-                            />
-                            <span className="sm-translucency-val">{translucency}%</span>
-                            {translucencyManual && (
-                                <button
-                                    type="button"
-                                    className="sm-hint-use"
-                                    title="Reset to TD-inferred value"
-                                    onClick={() => {
-                                        setTranslucencyManual(false);
-                                        const tdVal = parseFloat(extra[tdFieldKey]);
-                                        setTranslucency(!isNaN(tdVal) && tdVal > 0 ? tdToTranslucency(tdVal) : 0);
-                                    }}
-                                >Reset</button>
-                            )}
-                        </div>
+                        )}
                     </div>
 
                     {/* TD1 colorimeter quick-apply */}
@@ -395,6 +525,11 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                     <div className="sm-field">
                         <label className="sm-label">Empty Spool Weight (g)</label>
                         <input className="sm-input" type="number" step="any" value={spoolWeight} onChange={e => setSpoolWeight(e.target.value)} placeholder="Optional" />
+                    </div>
+
+                    <div className="sm-field">
+                        <label className="sm-label">Price</label>
+                        <input className="sm-input" type="number" step="any" min="0" value={price} onChange={e => setPrice(e.target.value)} placeholder="Optional" />
                     </div>
 
                     <div className="sm-field sm-field-full">

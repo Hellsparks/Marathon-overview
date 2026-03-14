@@ -8,6 +8,7 @@ import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
 import { useRightPanel } from '../contexts/RightPanelContext';
 import ViewToggle from '../components/common/ViewToggle';
 import { normalizeFilamentType, isAbrasiveFilament } from '../utils/materialUtils';
+import { buildColorStyle, isMultiColor } from '../utils/colorUtils';
 
 const COLOR_NAMES = {
     red: [255, 0, 0],
@@ -623,13 +624,16 @@ export default function SpoolmanPage() {
                                             >
                                                 <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <div className="spool-color-circle" style={{ '--spool-color': color, width: '12px', height: '12px' }} />
+                                                        <div className="spool-color-circle" style={{ ...buildColorStyle(f), width: '12px', height: '12px' }} />
                                                         {bambuWarnings?.some(w => w.spool_id === spool.id) && <span title="Bambu Warning">📦</span>}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', fontWeight: '500' }}>{f.name || `Spool #${spool.id}`}</td>
                                                 <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                                                    {f.material || '—'} {f.color_hex && <span style={{ fontSize: '11px', opacity: 0.7 }}>(#{f.color_hex.toUpperCase()})</span>}
+                                                    {f.material || '—'} {f.multi_color_hexes
+                                                        ? <span style={{ fontSize: '11px', opacity: 0.7 }}>({f.multi_color_hexes.split(',').length} colors, {f.multi_color_direction === 'coextrusion' ? 'coextruded' : 'longitudinal'})</span>
+                                                        : f.color_hex && <span style={{ fontSize: '11px', opacity: 0.7 }}>(#{f.color_hex.toUpperCase()})</span>
+                                                    }
                                                 </td>
                                                 <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>{f.vendor?.name || '—'}</td>
                                                 <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
@@ -667,7 +671,7 @@ export default function SpoolmanPage() {
                                             style={{ backgroundColor: 'var(--surface)' }}
                                         >
                                             <div className="spool-card-header">
-                                                <div className="spool-color-circle" style={{ '--spool-color': color }} />
+                                                <div className="spool-color-circle" style={buildColorStyle(f)} />
                                                 <div className="spool-card-info">
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <span className="spool-card-name">{f.name || `Spool #${spool.id}`}</span>
@@ -689,9 +693,10 @@ export default function SpoolmanPage() {
                                                         {isAbrasiveFilament(f.material) && (
                                                             <span className="spool-card-abrasive-badge" title="Abrasive filler — requires hardened nozzle">⬡ HN</span>
                                                         )}
-                                                        {f.color_hex && (
-                                                            <span className="spool-card-hex">#{f.color_hex.toUpperCase()}</span>
-                                                        )}
+                                                        {f.multi_color_hexes
+                                                            ? <span className="spool-card-hex">{f.multi_color_hexes.split(',').length} colors · {f.multi_color_direction === 'coextrusion' ? 'coextruded' : 'longitudinal'}</span>
+                                                            : f.color_hex && <span className="spool-card-hex">#{f.color_hex.slice(0,6).toUpperCase()}</span>
+                                                        }
                                                     </span>
                                                 </div>
                                             </div>
@@ -749,7 +754,7 @@ export default function SpoolmanPage() {
                                             style={{ backgroundColor: 'var(--surface)' }}
                                         >
                                             <div className="spool-card-header">
-                                                <div className="spool-color-circle" style={{ '--spool-color': color }} />
+                                                <div className="spool-color-circle" style={buildColorStyle(f)} />
                                                 <div className="spool-card-info">
                                                     <span className="spool-card-name">{f.name || `Filament #${f.id}`}</span>
                                                     <span className="spool-card-material">
@@ -757,7 +762,10 @@ export default function SpoolmanPage() {
                                                         {isAbrasiveFilament(f.material) && (
                                                             <span className="spool-card-abrasive-badge" title="Abrasive filler — requires hardened nozzle">⬡ HN</span>
                                                         )}
-                                                        {f.color_hex && <span className="spool-card-hex">#{f.color_hex.toUpperCase()}</span>}
+                                                        {f.multi_color_hexes
+                                                            ? <span className="spool-card-hex">{f.multi_color_hexes.split(',').length} colors · {f.multi_color_direction === 'coextrusion' ? 'coextruded' : 'longitudinal'}</span>
+                                                            : f.color_hex && <span className="spool-card-hex">#{f.color_hex.slice(0,6).toUpperCase()}</span>
+                                                        }
                                                     </span>
                                                 </div>
                                             </div>
