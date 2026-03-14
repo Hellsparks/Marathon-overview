@@ -5,6 +5,7 @@ import AddFilamentDialog from '../components/spoolman/AddFilamentDialog';
 import ColoriometerPanel from '../components/spoolman/ColoriometerPanel';
 import { findClosestRal } from '../utils/ralColors';
 import ViewToggle from '../components/common/ViewToggle';
+import { buildColorStyle } from '../utils/colorUtils';
 
 function toAbsUrl(url) {
     if (!url) return null;
@@ -115,12 +116,11 @@ export default function FilamentsPage() {
                             </thead>
                             <tbody>
                                 {filtered.map(f => {
-                                    const color = `#${f.color_hex || '888888'}`;
                                     const ralMatch = f.color_hex ? findClosestRal(f.color_hex) : null;
                                     return (
                                         <tr key={f.id} className="sm-catalogue-row" style={{ backgroundColor: 'var(--surface)' }}>
                                             <td>
-                                                <div className="sm-filament-dot" style={{ '--spool-color': color }} />
+                                                <div className="sm-filament-dot" style={buildColorStyle(f)} />
                                             </td>
                                             <td className="sm-catalogue-name">{f.name}</td>
                                             <td className="sm-catalogue-muted">{f.vendor?.name || '—'}</td>
@@ -177,12 +177,11 @@ export default function FilamentsPage() {
                         marginTop: '16px'
                     }}>
                         {filtered.map(f => {
-                            const color = `#${f.color_hex || '888888'}`;
                             const ralMatch = f.color_hex ? findClosestRal(f.color_hex) : null;
                             return (
                                 <div key={f.id} className="spoolman-spool-card" style={{ backgroundColor: 'var(--surface)' }}>
                                     <div className="spool-card-header">
-                                        <div className="spool-color-circle" style={{ '--spool-color': color }} />
+                                        <div className="spool-color-circle" style={buildColorStyle(f)} />
                                         <div className="spool-card-info">
                                             <span className="spool-card-name" style={{ fontSize: '15px' }}>{f.name}</span>
                                             <span className="spool-card-material">

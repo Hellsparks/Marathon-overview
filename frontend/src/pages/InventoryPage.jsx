@@ -4,6 +4,7 @@ import { getFilaments, getSpools, getInventory, setInventoryTarget, removeInvent
 import { groupSpoolsByFilament, isSpoolLow } from '../utils/spoolStorage';
 import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
 import ViewToggle from '../components/common/ViewToggle';
+import { buildColorStyle } from '../utils/colorUtils';
 
 function countStock(spools, filamentId) {
     return spools.filter(s =>
@@ -360,11 +361,10 @@ export default function InventoryPage() {
                         const inv = inventory[f.id];
                         const current = countStock(spools, f.id);
                         const status = current < inv.min_qty ? 'LOW' : 'OK';
-                        const color = `#${f.color_hex || '888888'}`;
                         return (
                             <div key={f.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                    <div className="sm-filament-dot" style={{ '--spool-color': color, flexShrink: 0 }} />
+                                    <div className="sm-filament-dot" style={{ ...buildColorStyle(f), flexShrink: 0 }} />
                                     <div>
                                         <div style={{ fontWeight: 600, fontSize: '13px' }}>{f.name}</div>
                                         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{[f.vendor?.name, f.material].filter(Boolean).join(' · ')}</div>
@@ -407,13 +407,12 @@ export default function InventoryPage() {
                                 const current = countStock(spools, f.id);
                                 const p = pending[f.id] || {};
                                 const isDirty = pending[f.id] !== undefined;
-                                const color = `#${f.color_hex || '888888'}`;
                                 const status = current < inv.min_qty ? 'LOW' : 'OK';
                                 const statusClass = status === 'LOW' ? 'inv-status-low' : 'inv-status-ok';
 
                                 return (
                                     <tr key={f.id} className="sm-catalogue-row">
-                                        <td><div className="sm-filament-dot" style={{ '--spool-color': color }} /></td>
+                                        <td><div className="sm-filament-dot" style={buildColorStyle(f)} /></td>
                                         <td className="sm-catalogue-name">{f.name}</td>
                                         <td className="sm-catalogue-muted">{f.vendor?.name || '—'}</td>
                                         <td className="sm-catalogue-muted">{f.material || '—'}</td>
@@ -462,12 +461,11 @@ export default function InventoryPage() {
                     <h2 className="inv-shopping-title">Shopping List</h2>
                     <div className="inv-shopping-list">
                         {shoppingList.map(({ filament: f, current, buyCount }) => {
-                            const color = `#${f.color_hex || '888888'}`;
                             const storeUrl = toAbsUrl(f.extra?.url);
                             const price = f.price;
                             return (
                                 <div key={f.id} className="inv-shopping-item">
-                                    <div className="sm-filament-dot" style={{ '--spool-color': color, flexShrink: 0 }} />
+                                    <div className="sm-filament-dot" style={{ ...buildColorStyle(f), flexShrink: 0 }} />
                                     <div className="inv-shopping-info">
                                         <span className="inv-shopping-name">
                                             {f.name}
@@ -551,14 +549,13 @@ export default function InventoryPage() {
 
                             <div className="inv-storage-list">
                                 {storageRows.map(({ filament: f, storageSpools, activeSpools }) => {
-                                    const color = `#${f.color_hex || '888888'}`;
                                     const hasLowActive = activeSpools.some(isSpoolLow);
                                     const showAlert = hasLowActive && storageSpools.length > 0;
                                     const topStorageSpool = storageSpools[0];
                                     const isOpening = topStorageSpool && openBusy[topStorageSpool.id];
                                     return (
                                         <div key={f.id} className={`inv-storage-row${showAlert ? ' inv-storage-row-alert' : ''}`}>
-                                            <div className="sm-filament-dot" style={{ '--spool-color': color, flexShrink: 0 }} />
+                                            <div className="sm-filament-dot" style={{ ...buildColorStyle(f), flexShrink: 0 }} />
                                             <div className="inv-storage-info">
                                                 <span className="inv-storage-name">{f.name}</span>
                                                 <span className="inv-storage-meta">
@@ -666,10 +663,9 @@ export default function InventoryPage() {
                                 </div>
                             )}
                             {filteredUntracked.map(f => {
-                                const color = `#${f.color_hex || '888888'}`;
                                 return (
                                     <div key={f.id} className="sm-filament-row" onClick={() => handleTrack(f)}>
-                                        <div className="sm-filament-dot" style={{ '--spool-color': color }} />
+                                        <div className="sm-filament-dot" style={buildColorStyle(f)} />
                                         <div className="sm-filament-info">
                                             <span className="sm-filament-name">
                                                 {f.name}{f.weight ? ` — ${sizeLabel(f.weight)}` : ''}
