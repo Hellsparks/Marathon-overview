@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createFilament, updateFilament, getVendors, getFields } from '../../api/spoolman';
 import { getSettings } from '../../api/settings';
 import { RAL_COLORS, findClosestRal } from '../../utils/ralColors';
@@ -6,6 +6,20 @@ import { fetchSwatchStl, makeSwatchFilename, getSwatchLines, downloadBuffer } fr
 import { onReading as coloriometerOnReading, getLastReading, getStatus as coloriometerStatus } from '../../services/colorimeter';
 
 const COMMON_MATERIALS = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PLA+', 'PA', 'PC', 'HIPS', 'PVA'];
+
+function hexToRgb(hex) {
+    const h = (hex || '').replace('#', '').slice(0, 6).padEnd(6, '0');
+    return {
+        r: parseInt(h.slice(0, 2), 16) || 0,
+        g: parseInt(h.slice(2, 4), 16) || 0,
+        b: parseInt(h.slice(4, 6), 16) || 0,
+    };
+}
+
+/** TD (Transmission Distance) → translucency percentage (0 = opaque, higher = more see-through) */
+function tdToTranslucency(td) {
+    return Math.min(95, Math.round(parseFloat(td) * 5));
+}
 
 const MATERIAL_DENSITIES = {
     PLA: 1.24, 'PLA+': 1.24,
@@ -28,7 +42,7 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
     const [name, setName] = useState(filament?.name ?? '');
     const [material, setMaterial] = useState(filament?.material ?? '');
     const [density, setDensity] = useState(String(filament?.density ?? '1.24'));
-    const [colorHex, setColorHex] = useState(filament?.color_hex ? `#${filament.color_hex}` : '#ffffff');
+    const [colorHex, setColorHex] = useState(filament?.color_hex ? `#${filament.color_hex.slice(0, 6)}` : '#ffffff');
     const [colorRal, setColorRal] = useState('');
     const [diameter, setDiameter] = useState(String(filament?.diameter ?? '1.75'));
     const [weight, setWeight] = useState(String(filament?.weight ?? '1000'));
@@ -43,12 +57,33 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
         }
         return e;
     });
+    // Translucency: 0 = fully opaque, up to 95 = very transparent
+    const [translucency, setTranslucency] = useState(() => {
+        const hex = filament?.color_hex || '';
+        if (hex.length === 8) {
+            const alpha = parseInt(hex.slice(6, 8), 16) / 255;
+            return Math.round((1 - alpha) * 100);
+        }
+        return 0;
+    });
+    const [translucencyManual, setTranslucencyManual] = useState(() => (filament?.color_hex?.length === 8));
+    const colorInputRef = useRef(null);
     const [busy, setBusy] = useState(false);
     const [tdFieldKey, setTdFieldKey] = useState('');
     const [td1Reading, setTd1Reading] = useState(() => getLastReading());
 
     // Track live TD1 readings while dialog is open
     useEffect(() => coloriometerOnReading(setTd1Reading), []);
+
+    // Auto-infer translucency from TD extra field when not manually overridden
+    useEffect(() => {
+        if (!tdFieldKey || translucencyManual) return;
+        const tdVal = parseFloat(extra[tdFieldKey]);
+        if (!isNaN(tdVal) && tdVal > 0) {
+            setTranslucency(tdToTranslucency(tdVal));
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [extra, tdFieldKey]);
 
     useEffect(() => {
         Promise.all([getVendors(), getFields('filament'), getSettings()])
@@ -101,8 +136,9 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
 
     function handleColoriometerReading({ hex, td }) {
         if (hex) setColorHex(`#${hex}`);
-        if (td !== null && td !== undefined && tdFieldKey) {
-            setExtraVal(tdFieldKey, String(td));
+        if (td !== null && td !== undefined) {
+            if (tdFieldKey) setExtraVal(tdFieldKey, String(td));
+            if (!translucencyManual) setTranslucency(tdToTranslucency(td));
         }
     }
 
@@ -119,7 +155,15 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
             if (vendorId) body.vendor_id = parseInt(vendorId);
             else if (isEdit) body.vendor_id = null;
             if (material.trim()) body.material = material.trim();
-            if (colorHex) body.color_hex = colorHex.replace(/^#/, '');
+            if (colorHex) {
+                const baseHex = colorHex.replace(/^#/, '').slice(0, 6);
+                if (translucency > 0) {
+                    const alpha = Math.round((1 - translucency / 100) * 255);
+                    body.color_hex = baseHex + alpha.toString(16).padStart(2, '0');
+                } else {
+                    body.color_hex = baseHex;
+                }
+            }
             if (weight) body.weight = parseFloat(weight);
             if (spoolWeight) body.spool_weight = parseFloat(spoolWeight);
             if (comment.trim()) body.comment = comment.trim();
@@ -241,12 +285,23 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                     <div className="sm-field">
                         <label className="sm-label">Color</label>
                         <div className="sm-color-row">
-                            <input
-                                type="color"
-                                className="sm-color-picker"
-                                value={colorHex.match(/^#[0-9a-fA-F]{6}$/) ? colorHex : '#ffffff'}
-                                onChange={e => setColorHex(e.target.value)}
-                            />
+                            {/* Custom preview circle with checkerboard so translucency is visible */}
+                            <div className="sm-color-preview" onClick={() => colorInputRef.current?.click()}>
+                                <div
+                                    className="sm-color-preview-fill"
+                                    style={(() => {
+                                        const { r, g, b } = hexToRgb(colorHex);
+                                        return { background: `rgba(${r},${g},${b},${(100 - translucency) / 100})` };
+                                    })()}
+                                />
+                                <input
+                                    ref={colorInputRef}
+                                    type="color"
+                                    className="sm-color-picker-overlay"
+                                    value={colorHex.match(/^#[0-9a-fA-F]{6}$/) ? colorHex : '#ffffff'}
+                                    onChange={e => setColorHex(e.target.value)}
+                                />
+                            </div>
                             <input
                                 className="sm-input sm-color-hex"
                                 type="text"
@@ -265,6 +320,29 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                                 style={{ width: '100px' }}
                                 title="e.g. 1004 or RAL 1004"
                             />
+                        </div>
+                        {/* Translucency slider — auto-inferred from TD, manually overridable */}
+                        <div className="sm-translucency-row">
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Translucency</span>
+                            <input
+                                type="range"
+                                min="0" max="95" step="1"
+                                value={translucency}
+                                onChange={e => { setTranslucency(+e.target.value); setTranslucencyManual(true); }}
+                            />
+                            <span className="sm-translucency-val">{translucency}%</span>
+                            {translucencyManual && (
+                                <button
+                                    type="button"
+                                    className="sm-hint-use"
+                                    title="Reset to TD-inferred value"
+                                    onClick={() => {
+                                        setTranslucencyManual(false);
+                                        const tdVal = parseFloat(extra[tdFieldKey]);
+                                        setTranslucency(!isNaN(tdVal) && tdVal > 0 ? tdToTranslucency(tdVal) : 0);
+                                    }}
+                                >Reset</button>
+                            )}
                         </div>
                     </div>
 
