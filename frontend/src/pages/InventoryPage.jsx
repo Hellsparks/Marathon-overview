@@ -183,6 +183,14 @@ export default function InventoryPage() {
 
     const storageGroups = groupSpoolsByFilament(spools, storageLocation);
 
+    // All filaments merged with their spool counts — shown in the storage section
+    const storageRows = [...filaments]
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        .map(f => {
+            const group = storageGroups.find(g => g.filament.id === f.id);
+            return { filament: f, storageSpools: group?.storageSpools || [], activeSpools: group?.activeSpools || [] };
+        });
+
     async function handleOpenSpool(group) {
         const spool = group.storageSpools[0];
         if (!spool) return;
@@ -497,7 +505,7 @@ export default function InventoryPage() {
             )}
 
             {/* ── Spool Storage ──────────────────────────────────────── */}
-            {storageGroups.length > 0 && (
+            {storageRows.length > 0 && (
                 <div className="inv-storage-section">
                     <button
                         className="inv-storage-toggle"
@@ -505,7 +513,9 @@ export default function InventoryPage() {
                     >
                         <span className="inv-storage-toggle-label">
                             Spool Storage
-                            <span className="inv-storage-count">{storageGroups.length}</span>
+                            <span className="inv-storage-count">
+                                {storageRows.reduce((n, r) => n + r.storageSpools.length, 0)} stored
+                            </span>
                         </span>
                         <span className="inv-storage-chevron">{storageOpen ? '▲' : '▼'}</span>
                     </button>
@@ -540,7 +550,7 @@ export default function InventoryPage() {
                             </div>
 
                             <div className="inv-storage-list">
-                                {storageGroups.map(({ filament: f, storageSpools, activeSpools }) => {
+                                {storageRows.map(({ filament: f, storageSpools, activeSpools }) => {
                                     const color = `#${f.color_hex || '888888'}`;
                                     const hasLowActive = activeSpools.some(isSpoolLow);
                                     const showAlert = hasLowActive && storageSpools.length > 0;
@@ -571,18 +581,20 @@ export default function InventoryPage() {
                                                 </span>
                                             )}
                                             <div className="inv-storage-actions">
+                                                {storageSpools.length > 0 && (
+                                                    <button
+                                                        className="btn inv-storage-open-btn"
+                                                        disabled={isOpening}
+                                                        title={`Open spool #${topStorageSpool?.id} (oldest first)`}
+                                                        onClick={() => handleOpenSpool({ storageSpools })}
+                                                    >
+                                                        {isOpening ? '…' : 'Open Spool'}
+                                                    </button>
+                                                )}
                                                 <button
-                                                    className="btn inv-storage-open-btn"
-                                                    disabled={storageSpools.length === 0 || isOpening}
-                                                    title={storageSpools.length === 0 ? 'No spools in storage' : `Open spool #${topStorageSpool?.id} (oldest first)`}
-                                                    onClick={() => handleOpenSpool({ storageSpools })}
-                                                >
-                                                    {isOpening ? '…' : 'Open Spool'}
-                                                </button>
-                                                <button
-                                                    className="btn btn-primary inv-storage-add-btn"
-                                                    title="Add a new sealed spool to storage"
-                                                    onClick={() => { setAddSpoolFilamentId(f.id); setShowAddSpool(true); }}
+                                                    className="btn inv-storage-add-btn"
+                                                    title="Add spools to storage"
+                                                    onClick={() => setStorePrompt({ filamentId: f.id, filamentName: f.name, qty: 1 })}
                                                 >
                                                     + Store
                                                 </button>
