@@ -120,7 +120,7 @@ export default function FilamentsPage() {
                                     return (
                                         <tr key={f.id} className="sm-catalogue-row" style={{ backgroundColor: 'var(--surface)' }}>
                                             <td>
-                                                <div className="sm-filament-dot" style={{ backgroundColor: color }} />
+                                                <div className="sm-filament-dot" style={{ '--spool-color': color }} />
                                             </td>
                                             <td className="sm-catalogue-name">{f.name}</td>
                                             <td className="sm-catalogue-muted">{f.vendor?.name || '—'}</td>
@@ -182,7 +182,7 @@ export default function FilamentsPage() {
                             return (
                                 <div key={f.id} className="spoolman-spool-card" style={{ backgroundColor: 'var(--surface)' }}>
                                     <div className="spool-card-header">
-                                        <div className="spool-color-circle" style={{ backgroundColor: color }} />
+                                        <div className="spool-color-circle" style={{ '--spool-color': color }} />
                                         <div className="spool-card-info">
                                             <span className="spool-card-name" style={{ fontSize: '15px' }}>{f.name}</span>
                                             <span className="spool-card-material">

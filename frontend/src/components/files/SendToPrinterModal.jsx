@@ -245,7 +245,7 @@ export default function SendToPrinterModal({ file, onClose }) {
                     className={`mini-spool-card ${spoolAction === spool.id ? 'selected' : ''} ${activeSpool?.id === spool.id && spoolAction !== spool.id ? 'active-spool-marker' : ''}`}
                     onClick={() => setSpoolAction(spool.id)}
                   >
-                    <div className="spool-color-dot" style={{ backgroundColor: `#${spool.filament?.color_hex || '888'}` }}></div>
+                    <div className="spool-color-dot" style={{ '--spool-color': `#${spool.filament?.color_hex || '888'}` }}></div>
                     <div className="mini-spool-info">
                       <div className="mini-spool-name">{spool.filament?.name || 'Unnamed Filament'}</div>
                       <div className="mini-spool-vendor">{spool.filament?.vendor?.name || 'Unknown Vendor'}</div>

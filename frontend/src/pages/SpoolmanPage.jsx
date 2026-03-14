@@ -620,7 +620,7 @@ export default function SpoolmanPage() {
                                             >
                                                 <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                        <div className="spool-color-circle" style={{ backgroundColor: color, width: '12px', height: '12px' }} />
+                                                        <div className="spool-color-circle" style={{ '--spool-color': color, width: '12px', height: '12px' }} />
                                                         {bambuWarnings?.some(w => w.spool_id === spool.id) && <span title="Bambu Warning">📦</span>}
                                                     </div>
                                                 </td>
@@ -664,7 +664,7 @@ export default function SpoolmanPage() {
                                             style={{ backgroundColor: 'var(--surface)' }}
                                         >
                                             <div className="spool-card-header">
-                                                <div className="spool-color-circle" style={{ backgroundColor: color }} />
+                                                <div className="spool-color-circle" style={{ '--spool-color': color }} />
                                                 <div className="spool-card-info">
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                         <span className="spool-card-name">{f.name || `Spool #${spool.id}`}</span>
@@ -743,7 +743,7 @@ export default function SpoolmanPage() {
                                             style={{ backgroundColor: 'var(--surface)' }}
                                         >
                                             <div className="spool-card-header">
-                                                <div className="spool-color-circle" style={{ backgroundColor: color }} />
+                                                <div className="spool-color-circle" style={{ '--spool-color': color }} />
                                                 <div className="spool-card-info">
                                                     <span className="spool-card-name">{f.name || `Filament #${f.id}`}</span>
                                                     <span className="spool-card-material">

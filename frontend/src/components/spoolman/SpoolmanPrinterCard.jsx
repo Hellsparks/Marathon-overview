@@ -198,7 +198,7 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                             <div className="spool-info" style={{ margin: 0 }}>
                                 <span
                                     className="spool-color-dot"
-                                    style={{ backgroundColor: `#${activeSpool.color_hex || '888'}` }}
+                                    style={{ '--spool-color': `#${activeSpool.color_hex || '888'}` }}
                                 />
                                 <span className="spool-details" style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     <span className="spool-material">{activeSpool.material}</span>

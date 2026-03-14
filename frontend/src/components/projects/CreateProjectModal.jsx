@@ -307,7 +307,7 @@ export default function CreateProjectModal({ onClose, onSave, filaments = [] }) 
                                     }}
                                 >
                                     <div className="spool-card-header">
-                                        <div className="spool-color-circle" style={{ backgroundColor: color, width: '24px', height: '24px' }} />
+                                        <div className="spool-color-circle" style={{ '--spool-color': color, width: '24px', height: '24px' }} />
                                         <div className="spool-card-info">
                                             <span className="spool-card-name" style={{ fontSize: '13px' }}>{f.name || `Spool #${s.id}`}</span>
                                             <span className="spool-card-material" style={{ fontSize: '10px' }}>
