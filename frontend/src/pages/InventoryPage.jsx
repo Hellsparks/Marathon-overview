@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getFilaments, getSpools, getInventory, setInventoryTarget, removeInventoryTarget, getSpoolmanSettings, getStorageLocation, setStorageLocation, patchSpool } from '../api/spoolman';
+import { createPortal } from 'react-dom';
+import { getFilaments, getSpools, getInventory, setInventoryTarget, removeInventoryTarget, getSpoolmanSettings, getStorageLocation, setStorageLocation, patchSpool, createSpool } from '../api/spoolman';
 import { groupSpoolsByFilament, isSpoolLow } from '../utils/spoolStorage';
 import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
 import ViewToggle from '../components/common/ViewToggle';
@@ -40,6 +41,8 @@ export default function InventoryPage() {
     const [openBusy, setOpenBusy] = useState({});
     const [showAddSpool, setShowAddSpool] = useState(false);
     const [addSpoolFilamentId, setAddSpoolFilamentId] = useState(null);
+    const [storePrompt, setStorePrompt] = useState(null); // { filamentId, filamentName, qty }
+    const [storeBusy, setStoreBusy] = useState(false);
     const [showTracker, setShowTracker] = useState(false);
     const [trackSearch, setTrackSearch] = useState('');
     const [search, setSearch] = useState('');
@@ -206,6 +209,22 @@ export default function InventoryPage() {
         }
     }
 
+    async function handleStoreConfirm() {
+        if (!storePrompt) return;
+        const qty = Math.max(1, storePrompt.qty || 1);
+        setStoreBusy(true);
+        try {
+            for (let i = 0; i < qty; i++)
+                await createSpool({ filament_id: storePrompt.filamentId, location: storageLocation });
+            setStorePrompt(null);
+            await load();
+        } catch (e) {
+            alert(e.message);
+        } finally {
+            setStoreBusy(false);
+        }
+    }
+
     if (loading) return <div className="loading">Loading inventory…</div>;
     if (error) return <div className="error">{error}</div>;
 
@@ -349,7 +368,7 @@ export default function InventoryPage() {
                                 </div>
                                 <div style={{ marginTop: '8px', textAlign: 'right' }}>
                                     <button className="btn inv-storage-add-btn" title="Add to storage"
-                                        onClick={() => { setAddSpoolFilamentId(f.id); setShowAddSpool(true); }}>
+                                        onClick={() => setStorePrompt({ filamentId: f.id, filamentName: f.name, qty: 1 })}>
                                         📦 Store
                                     </button>
                                 </div>
@@ -415,7 +434,7 @@ export default function InventoryPage() {
                                                 </button>
                                             )}
                                             <button className="sm-action-btn" title="Add to storage"
-                                                onClick={() => { setAddSpoolFilamentId(f.id); setShowAddSpool(true); }}>
+                                                onClick={() => setStorePrompt({ filamentId: f.id, filamentName: f.name, qty: 1 })}>
                                                 📦
                                             </button>
                                             <button className="sm-action-btn sm-action-danger"
@@ -575,6 +594,34 @@ export default function InventoryPage() {
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* ── Quick store prompt (from tracked list) ─────────────── */}
+            {storePrompt && createPortal(
+                <div className="dialog-overlay" onClick={() => !storeBusy && setStorePrompt(null)}>
+                    <div className="dialog" onClick={e => e.stopPropagation()} style={{ maxWidth: '320px' }}>
+                        <p style={{ marginBottom: '16px' }}>
+                            How many <strong>{storePrompt.filamentName}</strong> spools to add to storage?
+                        </p>
+                        <input
+                            type="number"
+                            className="input"
+                            min="1" max="50"
+                            value={storePrompt.qty}
+                            onChange={e => setStorePrompt(p => ({ ...p, qty: Math.max(1, parseInt(e.target.value) || 1) }))}
+                            onKeyDown={e => { if (e.key === 'Enter') handleStoreConfirm(); if (e.key === 'Escape') setStorePrompt(null); }}
+                            autoFocus
+                            style={{ width: '100%', marginBottom: '16px', textAlign: 'center', fontSize: '20px', padding: '8px' }}
+                        />
+                        <div className="dialog-actions">
+                            <button className="btn btn-primary" onClick={handleStoreConfirm} disabled={storeBusy}>
+                                {storeBusy ? 'Saving…' : `Add ${storePrompt.qty} to storage`}
+                            </button>
+                            <button className="btn" onClick={() => setStorePrompt(null)} disabled={storeBusy}>Cancel</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
 
             {/* ── Add Spool to storage dialog ─────────────────────────── */}
