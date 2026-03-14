@@ -21,7 +21,7 @@ services:
     volumes:
       - backend_data:/app/data
       - gcode_uploads:/app/uploads
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     expose:
       - "3000"
     networks:

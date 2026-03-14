@@ -37,4 +37,16 @@ function runMigrations(db) {
   }
 }
 
-module.exports = { getDb };
+function closeDb() {
+  if (db) {
+    db.close();
+    db = null;
+  }
+}
+
+function reopenDb() {
+  closeDb();
+  return getDb();
+}
+
+module.exports = { getDb, closeDb, reopenDb, DB_PATH };
