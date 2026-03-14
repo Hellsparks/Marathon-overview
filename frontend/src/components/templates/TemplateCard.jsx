@@ -1,3 +1,5 @@
+import { normalizeFilamentType } from '../../utils/materialUtils';
+
 export default function TemplateCard({ template, filaments, onEdit, onDelete, onClick }) {
     // Badges for what filaments/colors are used
     const renderSlots = () => {
@@ -55,7 +57,7 @@ export default function TemplateCard({ template, filaments, onEdit, onDelete, on
                                 }}
                             />
                             {materialText ? (
-                                <span className={`badge badge-filament filament-${materialText}`} style={{ padding: '0px 6px', fontSize: '10px' }}>
+                                <span className={`badge badge-filament filament-${normalizeFilamentType(materialText)}`} style={{ padding: '0px 6px', fontSize: '10px' }}>
                                     {materialText}
                                 </span>
                             ) : null}
