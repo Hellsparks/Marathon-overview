@@ -67,7 +67,18 @@ export default function ColoriometerPanel() {
         catch (err) { setError(err.message); }
     }
 
-    if (!isSupported()) return null;
+    if (!isSupported()) return (
+        <button
+            type="button"
+            className="btn colorimeter-trigger"
+            disabled
+            title="TD1 colorimeter requires Chrome or Edge (Web Serial API)"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.45, cursor: 'not-allowed' }}
+        >
+            <span className="colorimeter-dot colorimeter-dot--disconnected" />
+            <span>TD1</span>
+        </button>
+    );
 
     const isConnected  = status === 'connected';
     const isConnecting = status === 'connecting';
