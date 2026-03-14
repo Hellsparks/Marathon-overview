@@ -420,6 +420,7 @@ router.post('/filaments', async (req, res) => {
 });
 
 // POST /api/spoolman/spools — create a spool
+// Also ensures the filament is tracked in spoolman_inventory (INSERT OR IGNORE with defaults).
 router.post('/spools', async (req, res) => {
     const url = getSpoolmanUrl();
     if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
@@ -434,7 +435,17 @@ router.post('/spools', async (req, res) => {
             const err = await r.json().catch(() => ({ message: r.statusText }));
             return res.status(r.status).json({ error: err.message || r.statusText });
         }
-        res.json(await r.json());
+        const created = await r.json();
+        // Auto-track the filament so it appears in the Inventory page
+        try {
+            const filamentId = created.filament?.id ?? req.body.filament_id;
+            if (filamentId) {
+                getDb().prepare(
+                    'INSERT OR IGNORE INTO spoolman_inventory (filament_id, target_qty, min_qty) VALUES (?, 1, 0)'
+                ).run(filamentId);
+            }
+        } catch { /* non-critical — spool was still created */ }
+        res.json(created);
     } catch (err) {
         res.status(502).json({ error: err.message });
     }
