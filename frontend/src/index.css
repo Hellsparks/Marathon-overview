@@ -2264,6 +2264,38 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   transform: scale(.97);
 }
 
+/* Storage placeholder cards — not draggable, distinct dashed border */
+.spool-card-storage {
+  border-style: dashed;
+  opacity: .85;
+  cursor: default;
+}
+
+.spool-card-storage:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  opacity: 1;
+}
+
+.spool-card-storage:active {
+  transform: none;
+  cursor: default;
+}
+
+.spool-card-storage-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 4px 0 8px;
+}
+
+.spool-card-open-btn {
+  width: 100%;
+  font-size: 12px;
+  padding: 6px 10px;
+  margin-top: 4px;
+}
+
 .spool-card-header {
   display: flex;
   align-items: center;
