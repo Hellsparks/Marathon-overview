@@ -67,18 +67,25 @@ export default function ColoriometerPanel() {
         catch (err) { setError(err.message); }
     }
 
-    if (!isSupported()) return (
-        <button
-            type="button"
-            className="btn colorimeter-trigger"
-            disabled
-            title="TD1 colorimeter requires Chrome or Edge (Web Serial API)"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.45, cursor: 'not-allowed' }}
-        >
-            <span className="colorimeter-dot colorimeter-dot--disconnected" />
-            <span>TD1</span>
-        </button>
-    );
+    if (!isSupported()) {
+        const isSecure = typeof window !== 'undefined' && window.isSecureContext;
+        const tip = isSecure
+            ? 'TD1 colorimeter requires Chrome or Edge (Web Serial API not available in this browser)'
+            : 'TD1 colorimeter requires a secure context — access Marathon via HTTPS or use localhost instead of an IP address';
+        return (
+            <button
+                type="button"
+                className="btn colorimeter-trigger"
+                disabled
+                title={tip}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.45, cursor: 'not-allowed' }}
+            >
+                <span className="colorimeter-dot colorimeter-dot--disconnected" />
+                <span>TD1</span>
+                <span style={{ fontSize: 11, color: 'var(--danger, #ef4444)' }}>{isSecure ? '✕' : '🔒'}</span>
+            </button>
+        );
+    }
 
     const isConnected  = status === 'connected';
     const isConnecting = status === 'connecting';
