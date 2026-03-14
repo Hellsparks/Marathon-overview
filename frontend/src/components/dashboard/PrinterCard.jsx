@@ -340,7 +340,7 @@ ${cardSel} .printer-card {
               <div className="spool-info">
                 <span
                   className="spool-color-dot"
-                  style={{ backgroundColor: `#${status._active_spool.color_hex || '888'}` }}
+                  style={{ '--spool-color': `#${status._active_spool.color_hex || '888'}` }}
                 />
                 <span className="spool-details">
                   <span className="spool-material">{status._active_spool.material}</span>

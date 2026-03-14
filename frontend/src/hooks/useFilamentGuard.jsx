@@ -151,7 +151,7 @@ export function useFilamentGuard({ onConfirm, onWeighSpool, onClearBambuWarning,
                     <div className="pending-drop-spool-info">
                         <span
                             className="spool-color-dot"
-                            style={{ backgroundColor: `#${pendingAssignment.spool.filament?.color_hex || '888'}` }}
+                            style={{ '--spool-color': `#${pendingAssignment.spool.filament?.color_hex || '888'}` }}
                         />
                         <span>
                             <strong>{pendingAssignment.spool.filament?.name || `Spool #${pendingAssignment.spool.id}`}</strong>

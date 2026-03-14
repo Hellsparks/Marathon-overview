@@ -510,7 +510,7 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                         }}
                                     >
                                         <div className="spool-card-header" style={{ marginBottom: '4px' }}>
-                                            <div className="spool-color-circle" style={{ backgroundColor: color, width: '24px', height: '24px', borderRadius: '50%' }} />
+                                            <div className="spool-color-circle" style={{ '--spool-color': color, width: '24px', height: '24px', borderRadius: '50%' }} />
                                             <div className="spool-card-info" style={{ flex: 1 }}>
                                                 <span className="spool-card-name" style={{ fontSize: '13px' }}>{ca.slot_key}</span>
                                                 <span className="spool-card-material" style={{ fontSize: '10px' }}>
@@ -660,7 +660,7 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                                     style={{ padding: '10px', cursor: 'pointer', borderColor: showSpoolPicker.currentSpoolId === s.id ? 'var(--primary)' : 'var(--border)' }}
                                                 >
                                                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                                        <div className="spool-color-circle" style={{ backgroundColor: color, width: '24px', height: '24px' }} />
+                                                        <div className="spool-color-circle" style={{ '--spool-color': color, width: '24px', height: '24px' }} />
                                                         <div style={{ flex: 1 }}>
                                                             <div style={{ fontSize: '13px', fontWeight: 600 }}>{f.name || `Spool #${s.id}`}</div>
                                                             <div style={{ fontSize: '11px', opacity: 0.7 }}>{f.material} · {f.vendor?.name} · {Math.round(s.remaining_weight || 0)}g</div>
