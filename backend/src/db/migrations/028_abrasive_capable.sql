@@ -1,0 +1,1 @@
+ALTER TABLE printers ADD COLUMN abrasive_capable INTEGER NOT NULL DEFAULT 0;

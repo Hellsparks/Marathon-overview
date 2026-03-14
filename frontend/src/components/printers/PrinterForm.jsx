@@ -19,6 +19,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
     bed_height: printer?.bed_height ?? '',
     filament_types: printer?.filament_types ?? [],
     toolhead_count: printer?.toolhead_count ?? 1,
+    abrasive_capable: printer?.abrasive_capable ? true : false,
     preset_id: printer?.preset_id ?? '',
     custom_css: printer?.custom_css ?? '',
     theme_mode: printer?.theme_mode ?? 'global',
@@ -97,6 +98,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
         bed_depth: form.bed_depth || null,
         bed_height: form.bed_height || null,
         filament_types: JSON.stringify(form.filament_types || []),
+        abrasive_capable: form.abrasive_capable ? 1 : 0,
         scrape_css_path: form.scrape_css_path || null,
         // If scrape mode was set but firmware changed away from Moonraker, reset to global
         theme_mode: form.firmware_type !== 'moonraker' && form.theme_mode === 'scrape'
@@ -251,6 +253,13 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                 Toolheads
                 <input className="form-input" type="number" value={form.toolhead_count}
                   onChange={e => set('toolhead_count', Number(e.target.value))} min={1} max={16} />
+              </label>
+
+              <label className="checkbox-label" style={{ marginTop: '4px' }}>
+                <input type="checkbox"
+                  checked={form.abrasive_capable}
+                  onChange={e => set('abrasive_capable', e.target.checked)} />
+                Abrasive capable (hardened nozzle)
               </label>
 
               <fieldset className="form-fieldset">

@@ -7,6 +7,7 @@ import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
 import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
 import { useRightPanel } from '../contexts/RightPanelContext';
 import ViewToggle from '../components/common/ViewToggle';
+import { normalizeFilamentType, isAbrasiveFilament } from '../utils/materialUtils';
 
 const COLOR_NAMES = {
     red: [255, 0, 0],
@@ -186,7 +187,9 @@ export default function SpoolmanPage() {
 
 
 
-    const uniqueMaterials = Array.from(new Set(spools.map(s => s.filament?.material).filter(Boolean))).sort();
+    const uniqueMaterials = Array.from(new Set(
+        spools.map(s => normalizeFilamentType(s.filament?.material)).filter(Boolean)
+    )).sort();
     const uniqueVendors = Array.from(new Set(spools.map(s => s.filament?.vendor?.name).filter(Boolean))).sort();
 
     const storageLoc = storageLocation.toLowerCase();
@@ -199,7 +202,7 @@ export default function SpoolmanPage() {
     const filtered = activeSpools.filter(s => {
         const f = s.filament || {};
         // If materials are selected, spool's material must be in the selected list
-        if (materialFilter.length > 0 && !materialFilter.includes(f.material)) return false;
+        if (materialFilter.length > 0 && !materialFilter.includes(normalizeFilamentType(f.material))) return false;
         // If vendors are selected, spool's vendor must be in the selected list
         if (vendorFilter.length > 0 && !vendorFilter.includes(f.vendor?.name)) return false;
 
@@ -683,6 +686,9 @@ export default function SpoolmanPage() {
                                                     </div>
                                                     <span className="spool-card-material">
                                                         {f.material || '—'}
+                                                        {isAbrasiveFilament(f.material) && (
+                                                            <span className="spool-card-abrasive-badge" title="Abrasive filler — requires hardened nozzle">⬡ HN</span>
+                                                        )}
                                                         {f.color_hex && (
                                                             <span className="spool-card-hex">#{f.color_hex.toUpperCase()}</span>
                                                         )}
@@ -748,6 +754,9 @@ export default function SpoolmanPage() {
                                                     <span className="spool-card-name">{f.name || `Filament #${f.id}`}</span>
                                                     <span className="spool-card-material">
                                                         {f.material || '—'}
+                                                        {isAbrasiveFilament(f.material) && (
+                                                            <span className="spool-card-abrasive-badge" title="Abrasive filler — requires hardened nozzle">⬡ HN</span>
+                                                        )}
                                                         {f.color_hex && <span className="spool-card-hex">#{f.color_hex.toUpperCase()}</span>}
                                                     </span>
                                                 </div>

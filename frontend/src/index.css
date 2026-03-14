@@ -2374,6 +2374,20 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   color: var(--text-muted);
 }
 
+.spool-card-abrasive-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, .12);
+  border: 1px solid rgba(245, 158, 11, .3);
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 .spool-card-vendor {
   display: block;
   font-size: 12px;
@@ -3169,6 +3183,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border-radius: 50%;
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, .15);
+  background-color: #888;
+  background-image:
+    linear-gradient(var(--spool-color, #888888), var(--spool-color, #888888)),
+    linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: auto, 6px 6px, 6px 6px, 6px 6px, 6px 6px;
+  background-position: 0 0, 0 0, 0 3px, 3px -3px, -3px 0;
 }
 
 .sm-filament-info {

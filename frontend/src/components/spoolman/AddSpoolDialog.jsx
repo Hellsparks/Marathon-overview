@@ -193,7 +193,7 @@ export default function AddSpoolDialog({
                                         className={`sm-filament-row${selected ? ' selected' : ''}`}
                                         onClick={() => setFilamentId(String(f.id))}
                                     >
-                                        <div className="sm-filament-dot" style={{ backgroundColor: color }} />
+                                        <div className="sm-filament-dot" style={{ '--spool-color': color }} />
                                         <div className="sm-filament-info">
                                             <span className="sm-filament-name">{f.name}</span>
                                             <span className="sm-filament-meta">
