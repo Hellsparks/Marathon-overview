@@ -1538,6 +1538,22 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   flex-wrap: wrap;
 }
 
+/* Multi-toolhead: tools group + bed group side by side, each wrapping internally */
+.printer-temps-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+}
+
+.printer-temps-bed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .temp-control {
   display: flex;
   flex-direction: column;
