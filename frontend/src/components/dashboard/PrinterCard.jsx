@@ -285,7 +285,7 @@ ${cardSel} .printer-card {
           <>
             {/* Temperature controls */}
             <div className="printer-temps">
-              {toolExtruders ? (
+              {toolExtruders && toolExtruders.length >= 5 ? (
                 <>
                   <div className="printer-temps-tools">
                     {toolExtruders.map(({ label, key }) => (
@@ -306,6 +306,24 @@ ${cardSel} .printer-card {
                       onSet={temp => handleSetTemp('heater_bed', temp)}
                     />
                   </div>
+                </>
+              ) : toolExtruders ? (
+                <>
+                  {toolExtruders.map(({ label, key }) => (
+                    <TempControl
+                      key={key}
+                      label={label}
+                      actual={status?.[key]?.temperature}
+                      target={status?.[key]?.target}
+                      onSet={temp => handleSetTemp(key, temp)}
+                    />
+                  ))}
+                  <TempControl
+                    label="Bed"
+                    actual={bed?.temperature}
+                    target={bed?.target}
+                    onSet={temp => handleSetTemp('heater_bed', temp)}
+                  />
                 </>
               ) : (
                 <>
