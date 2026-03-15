@@ -52,6 +52,7 @@ export default function SpoolmanPrinterCard({
     amsSlots, amsSpools, dropTargetTray, onTrayDragOver, onTrayDragLeave, onTrayDrop, onClearTray,
     // Multi-toolhead Moonraker props
     toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onClearToolSlot,
+    onToolSlotDragStart, isDragging,
 }) {
     const [scrapedCss, setScrapedCss] = useState(
         () => scrapedCssCache.get(`${printer.host}:${printer.port}`) || null
@@ -207,9 +208,21 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                     <div
                                         key={i}
                                         className={`ams-drop-slot${isSlotTarget ? ' ams-drop-hover' : ''}${spool ? ' ams-slot-filled' : ''}`}
+                                        draggable={!!spool && !isDragging}
+                                        onDragStart={spool ? (e) => {
+                                            console.log('[Component] onDragStart fired', { spool, printerId: printer.id, toolIndex: i });
+                                            onToolSlotDragStart?.(e, spool, printer.id, i);
+                                        } : undefined}
+                                        onDragEnd={(e) => console.log('[Component] onDragEnd', e.dataTransfer.dropEffect)}
+                                        onDragEnter={e => e.preventDefault()}
                                         onDragOver={e => onToolSlotDragOver?.(e, printer.id, i)}
                                         onDragLeave={() => onToolSlotDragLeave?.()}
-                                        onDrop={e => onToolSlotDrop?.(e, printer, i)}
+                                        onDrop={e => {
+                                            console.log('[Component] onDrop fired', { printerId: printer.id, toolIndex: i });
+                                            onToolSlotDrop?.(e, printer, i);
+                                        }}
+                                        style={{ cursor: spool ? 'grab' : 'default' }}
+                                        onClick={() => spool && console.log('[Component] Slot clicked - draggable:', !!spool, 'handler:', !!onToolSlotDragStart)}
                                     >
                                         <div className="ams-slot-header">
                                             <span className="ams-slot-num">T{i}</span>
@@ -222,6 +235,7 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                                 <button
                                                     className="ams-slot-clear"
                                                     onClick={e => { e.stopPropagation(); onClearToolSlot?.(printer.id, i); }}
+                                                    onMouseDown={e => e.stopPropagation()}
                                                     title="Unload slot"
                                                 >✕</button>
                                             </>

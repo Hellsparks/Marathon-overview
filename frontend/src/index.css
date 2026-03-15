@@ -1995,6 +1995,14 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   overflow: hidden;
 }
 
+.ams-drop-slot > * {
+  pointer-events: none;
+}
+
+.ams-drop-slot .ams-slot-clear {
+  pointer-events: auto;
+}
+
 .ams-drop-slot.ams-drop-hover {
   border-color: var(--primary);
   border-style: solid;

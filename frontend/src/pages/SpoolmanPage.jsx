@@ -96,6 +96,7 @@ export default function SpoolmanPage() {
     const [toolSlots, setToolSlots] = useState({});           // { printerId: { 0: spoolId|null, ... } }
     const [toolSlotSpools, setToolSlotSpools] = useState({}); // { spoolId: spoolObject }
     const [dropTargetToolSlot, setDropTargetToolSlot] = useState(null); // { printerId, toolIndex }
+    const [dragSourceToolSlot, setDragSourceToolSlot] = useState(null); // { printerId, toolIndex } - track where drag started
 
     // Extracted shared guard hook for compatibility & 'in use' warnings
     const { startGuard, renderGuardDialog, bambuWarnings, fetchWarningsIfNeeded, pendingAssignment, confirmGuard } = useFilamentGuard({
@@ -359,9 +360,17 @@ export default function SpoolmanPage() {
     }
 
     // Multi-toolhead tool slot drag-drop handlers
+    function onToolSlotDragStart(e, spool, printerId, toolIndex) {
+        console.log('[ToolSlotDragStart]', { spool, printerId, toolIndex });
+        setDragSpool(spool);
+        setDragSourceToolSlot({ printerId, toolIndex });
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', spool.id.toString());
+    }
+
     function onToolSlotDragOver(e, printerId, toolIndex) {
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
+        e.dataTransfer.dropEffect = dragSourceToolSlot ? 'move' : 'copy';
         setDropTargetToolSlot({ printerId, toolIndex });
     }
 
@@ -373,15 +382,45 @@ export default function SpoolmanPage() {
         e.preventDefault();
         setDropTargetToolSlot(null);
         const spool = dragSpool;
-        if (!spool) return;
+        const source = dragSourceToolSlot;
+        setDragSpool(null);
+        setDragSourceToolSlot(null);
+        
+        console.log('[ToolSlotDrop]', { spool, source, printer: printer.id, toolIndex });
+        
+        if (!spool) {
+            console.warn('[ToolSlotDrop] No spool - aborting');
+            return;
+        }
+        
+        // Don't drop on the same slot
+        if (source && source.printerId === printer.id && source.toolIndex === toolIndex) {
+            console.log('[ToolSlotDrop] Same slot - aborting');
+            return;
+        }
+        
         try {
+            console.log('[ToolSlotDrop] Assigning spool', spool.id, 'to printer', printer.id, 'tool', toolIndex);
+            // Assign spool to target slot
             await setToolSlot(printer.id, toolIndex, spool.id);
             setToolSlots(prev => ({
                 ...prev,
                 [printer.id]: { ...(prev[printer.id] || {}), [toolIndex]: spool.id },
             }));
             setToolSlotSpools(prev => ({ ...prev, [spool.id]: spool }));
+            console.log('[ToolSlotDrop] Assignment successful');
+            
+            // If dragged from another tool slot, clear the source
+            if (source) {
+                console.log('[ToolSlotDrop] Clearing source slot', source.printerId, source.toolIndex);
+                await setToolSlot(source.printerId, source.toolIndex, null);
+                setToolSlots(prev => ({
+                    ...prev,
+                    [source.printerId]: { ...(prev[source.printerId] || {}), [source.toolIndex]: null },
+                }));
+            }
         } catch (err) {
+            console.error('[ToolSlotDrop] Error:', err);
             alert(`Failed to assign spool: ${err.message}`);
         }
     }
@@ -960,10 +999,12 @@ export default function SpoolmanPage() {
                                 toolSlots={toolSlots[p.id] || {}}
                                 toolSlotSpools={toolSlotSpools}
                                 dropTargetToolSlot={dropTargetToolSlot}
+                                onToolSlotDragStart={onToolSlotDragStart}
                                 onToolSlotDragOver={onToolSlotDragOver}
                                 onToolSlotDragLeave={onToolSlotDragLeave}
                                 onToolSlotDrop={onToolSlotDrop}
                                 onClearToolSlot={handleClearToolSlot}
+                                isDragging={!!dragSpool}
                             />
                         );
                     })}
