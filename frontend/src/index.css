@@ -1561,11 +1561,23 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* Multi-toolhead: tool extruders side by side, separated from bed by a vertical divider */
 .printer-temps-tools {
   display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
+  flex-direction: column;
+  gap: 8px;
   flex: 1;
   padding-right: 24px;
   border-right: 1px solid var(--border);
+}
+
+/* Inline label for tool slots so they stack tighter vertically */
+.printer-temps-tools .temp-control {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-width: unset;
+}
+
+.printer-temps-tools .temp-label {
+  min-width: 18px;
 }
 
 .printer-temps-bed {
