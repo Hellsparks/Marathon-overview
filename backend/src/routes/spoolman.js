@@ -850,9 +850,19 @@ router.post('/import', async (req, res) => {
         return r.json();
     };
 
+    const spoolmanGet = async (path) => {
+        const r = await fetch(`${url}${path}`, { signal: AbortSignal.timeout(10000) });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+    };
+
     try {
         const vendorIdMap = {};
         const filamentIdMap = {};
+
+        // Pre-fetch existing vendors so we can remap IDs even if creation fails (already exists)
+        const existingVendors = await spoolmanGet('/api/v1/vendor').catch(() => []);
+        const existingVendorByName = Object.fromEntries(existingVendors.map(v => [v.name.toLowerCase(), v.id]));
 
         // Vendors
         push(`Importing ${data.vendors?.length || 0} vendors…`);
@@ -862,8 +872,15 @@ router.post('/import', async (req, res) => {
             try {
                 const created = await spoolmanPost('/api/v1/vendor', fields);
                 vendorIdMap[id] = created.id;
-            } catch (err) {
-                push(`  Vendor "${v.name}" skipped: ${err.message}`);
+            } catch {
+                // Already exists — remap to the existing vendor's ID so filaments link correctly
+                const existingId = existingVendorByName[v.name?.toLowerCase()];
+                if (existingId) {
+                    vendorIdMap[id] = existingId;
+                    push(`  Vendor "${v.name}" already exists, remapped to id=${existingId}`);
+                } else {
+                    push(`  Vendor "${v.name}" skipped (could not find existing match)`);
+                }
             }
         }
 
@@ -871,7 +888,11 @@ router.post('/import', async (req, res) => {
         push(`Importing ${data.filaments?.length || 0} filaments…`);
         for (const f of (data.filaments || [])) {
             const { id, registered, vendor, extra, ...fields } = f;
-            if (vendor?.id !== undefined) fields.vendor_id = vendorIdMap[vendor.id] ?? null;
+            if (vendor?.id !== undefined) {
+                const newVendorId = vendorIdMap[vendor.id];
+                if (newVendorId) fields.vendor_id = newVendorId;
+                // If vendor couldn't be mapped, omit vendor_id (create filament without vendor)
+            }
             if (extra && Object.keys(extra).length) fields.extra = extra;
             try {
                 const created = await spoolmanPost('/api/v1/filament', fields);
@@ -1123,38 +1144,27 @@ router.delete('/docker/uninstall', async (req, res) => {
 
 // ── Native (Python venv) Spoolman management ─────────────────────────────────
 
-// Install directory lives alongside the Marathon SQLite database
+// NATIVE_DIR: parent folder for native Spoolman install (alongside Marathon DB)
 const NATIVE_DIR = process.env.DB_PATH
     ? path.join(path.dirname(process.env.DB_PATH), 'spoolman')
     : path.join(process.cwd(), 'data', 'spoolman');
+// SPOOLMAN_INSTALL_DIR: where the official Spoolman installer extracts to
+const SPOOLMAN_INSTALL_DIR = path.join(NATIVE_DIR, 'Spoolman');
 const NATIVE_PID_FILE  = path.join(NATIVE_DIR, 'spoolman.pid');
 const NATIVE_PORT_FILE = path.join(NATIVE_DIR, 'spoolman.port');
 const NATIVE_LOG_FILE  = path.join(NATIVE_DIR, 'spoolman.log');
 
 function nativeVenv() {
     const isWin = process.platform === 'win32';
-    const venv  = path.join(NATIVE_DIR, 'venv');
+    // Official install.sh creates .venv inside the extracted Spoolman folder
+    const venv  = path.join(SPOOLMAN_INSTALL_DIR, '.venv');
     const scriptsDir = isWin ? path.join(venv, 'Scripts') : path.join(venv, 'bin');
     const python = path.join(scriptsDir, isWin ? 'python.exe' : 'python');
-    // pip may create spoolman.exe, spoolman (no ext), or only a .bat — resolve whichever exists.
     const candidates = isWin
         ? [path.join(scriptsDir, 'spoolman.exe'), path.join(scriptsDir, 'spoolman')]
         : [path.join(scriptsDir, 'spoolman')];
     const spoolman = candidates.find(p => fs.existsSync(p)) || null;
     return { dir: venv, python, spoolman, scriptsDir };
-}
-
-/** Try python3 / python / py and return the first that resolves to Python 3.8+. */
-async function findPython() {
-    for (const cmd of ['python3', 'python', 'py']) {
-        try {
-            const out = await cliRun(`${cmd} --version`, 5000);
-            const m = out.match(/Python (\d+)\.(\d+)/);
-            if (m && (parseInt(m[1]) > 3 || (parseInt(m[1]) === 3 && parseInt(m[2]) >= 8)))
-                return { cmd, version: `${m[1]}.${m[2]}` };
-        } catch { /* not found */ }
-    }
-    return null;
 }
 
 function nativePid() {
@@ -1175,7 +1185,10 @@ function spawnSpoolman(port) {
     fs.mkdirSync(dataDir, { recursive: true });
     const logFd = fs.openSync(NATIVE_LOG_FILE, 'a');
     const spoolmanEnv = { ...process.env, SPOOLMAN_HOST: '0.0.0.0', SPOOLMAN_PORT: String(port), SPOOLMAN_DATA_DIR: dataDir };
-    const [cmd, args] = venv.spoolman ? [venv.spoolman, []] : [venv.python, ['-m', 'spoolman']];
+    // Prefer the spoolman entry-point script; fall back to uvicorn (how Spoolman actually runs)
+    const [cmd, args] = venv.spoolman
+        ? [venv.spoolman, []]
+        : [venv.python, ['-m', 'uvicorn', 'spoolman.main:app', '--host', '0.0.0.0', '--port', String(port)]];
     const child = spawn(cmd, args, {
         detached: true,
         stdio: ['ignore', logFd, logFd],
@@ -1188,26 +1201,21 @@ function spawnSpoolman(port) {
 
 // GET /api/spoolman/native/status
 router.get('/native/status', async (_req, res) => {
-    const py        = await findPython();
-    const venv      = nativeVenv();
-    let installed = false;
-    if (fs.existsSync(venv.python)) {
-        try { require('child_process').execSync(`"${venv.python}" -c "import spoolman"`, { timeout: 5000, stdio: 'pipe' }); installed = true; } catch { installed = false; }
-    }
-    const pid       = nativePid();
-    const running   = installed && pidAlive(pid);
+    const venv = nativeVenv();
+    const installed = fs.existsSync(venv.python);
+    const pid     = nativePid();
+    const running = installed && pidAlive(pid);
     res.json({
-        pythonAvailable: !!py,
-        pythonVersion:   py?.version || null,
         installed,
         running,
         pid:     running ? pid : null,
         port:    nativePort(),
-        installDir: NATIVE_DIR,
+        installDir: SPOOLMAN_INSTALL_DIR,
     });
 });
 
 // POST /api/spoolman/native/install — body: { port: 7912 }
+// Uses the official Spoolman bash install script from GitHub releases.
 router.post('/native/install', async (req, res) => {
     const port = parseInt(req.body?.port) || 7912;
     if (port < 1025 || port > 65535) return res.status(400).json({ error: 'port must be between 1025 and 65535' });
@@ -1215,47 +1223,40 @@ router.post('/native/install', async (req, res) => {
     const push = msg => { log.push(msg); console.log('[spoolman-native]', msg); };
 
     try {
-        const py = await findPython();
-        if (!py) return res.status(400).json({ error: 'Python 3.8+ not found. Please install Python first.', log });
-        push(`Python ${py.version} found (${py.cmd})`);
-
         fs.mkdirSync(NATIVE_DIR, { recursive: true });
 
-        const venv = nativeVenv();
-        if (!fs.existsSync(venv.dir)) {
-            push('Creating virtual environment…');
-            await cliRun(`"${py.cmd}" -m venv "${venv.dir}"`);
-            push('Virtual environment created.');
-        } else {
-            push('Virtual environment already exists.');
-        }
+        push('Fetching latest Spoolman release…');
+        // Official install: download zip from GitHub releases, extract, run install.sh
+        const shellCmd = 'curl -s https://api.github.com/repos/Donkie/Spoolman/releases/latest'
+            + ' | grep -o \'https://[^"]*spoolman.zip\''
+            + ' | xargs curl -sSL -o temp.zip'
+            + ' && unzip -o temp.zip -d ./Spoolman'
+            + ' && rm temp.zip'
+            + ' && cd ./Spoolman && bash ./scripts/install.sh';
 
-        push('Installing Spoolman (this may take a minute)…');
-        const pipOut = await cliRun(`"${venv.python}" -m pip install --upgrade spoolman`);
-        push(pipOut.trim().split('\n').pop()); // show last pip line
-        push('Spoolman installed.');
+        await new Promise((resolve, reject) => {
+            const proc = spawn('bash', ['-c', shellCmd], {
+                cwd: NATIVE_DIR,
+                stdio: ['ignore', 'pipe', 'pipe'],
+            });
+            proc.stdout.on('data', d => {
+                for (const line of d.toString().split('\n')) if (line.trim()) push(line.trimEnd());
+            });
+            proc.stderr.on('data', d => {
+                for (const line of d.toString().split('\n')) if (line.trim()) push(line.trimEnd());
+            });
+            proc.on('close', code => code === 0 ? resolve() : reject(new Error(`Install script exited with code ${code}`)));
+            proc.on('error', err => reject(new Error(`Failed to run bash: ${err.message}. Is bash/Git Bash available?`)));
+        });
 
-        // Verify by importing — more reliable than checking for .exe on Windows
-        try {
-            await cliRun(`"${venv.python}" -c "import spoolman"`, 15000);
-        } catch {
-            try {
-                const entries = fs.readdirSync(venv.scriptsDir).filter(f => /spoolman/i.test(f));
-                push(`Scripts dir (spoolman entries): ${entries.join(', ') || '(none)'}`);
-            } catch { /* ignore */ }
-            throw new Error('Spoolman package not importable after install.');
-        }
-        // Re-resolve executable path now that install succeeded
-        Object.assign(venv, nativeVenv());
-
+        push('Spoolman installed successfully.');
         fs.writeFileSync(NATIVE_PORT_FILE, String(port));
 
         push('Starting Spoolman…');
         const pid = spawnSpoolman(port);
         if (!pid) throw new Error('Process failed to start.');
 
-        // Brief check that the process didn't exit immediately
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 1500));
         if (!pidAlive(pid)) throw new Error('Spoolman exited immediately. Check ' + NATIVE_LOG_FILE);
 
         fs.writeFileSync(NATIVE_PID_FILE, String(pid));
@@ -1279,7 +1280,7 @@ router.post('/native/start', async (req, res) => {
     const push = msg => { log.push(msg); console.log('[spoolman-native]', msg); };
     try {
         const venv = nativeVenv();
-        if (!fs.existsSync(venv.spoolman))
+        if (!fs.existsSync(venv.python))
             return res.status(400).json({ error: 'Spoolman is not installed. Use /native/install first.', log });
 
         const existingPid = nativePid();
@@ -1333,14 +1334,13 @@ router.delete('/native/uninstall', async (req, res) => {
             fs.rmSync(NATIVE_DIR, { recursive: true, force: true });
             push('Removed.');
         } else {
-            // Keep the data subfolder, remove only the venv
-            const venv = nativeVenv();
-            if (fs.existsSync(venv.dir)) {
-                push('Removing virtual environment…');
-                fs.rmSync(venv.dir, { recursive: true, force: true });
+            // Remove the install directory (contains .venv and app code), preserve data files
+            if (fs.existsSync(SPOOLMAN_INSTALL_DIR)) {
+                push(`Removing ${SPOOLMAN_INSTALL_DIR}…`);
+                fs.rmSync(SPOOLMAN_INSTALL_DIR, { recursive: true, force: true });
             }
             try { fs.unlinkSync(NATIVE_PID_FILE); } catch { /* ok */ }
-            push('Spoolman uninstalled (data directory preserved).');
+            push('Spoolman uninstalled (data files preserved).');
         }
 
         res.json({ ok: true, log });

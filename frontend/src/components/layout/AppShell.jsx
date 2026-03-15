@@ -12,6 +12,7 @@ import ProjectStatusPanel from '../rightpanel/ProjectStatusPanel';
 import { RightPanelContext } from '../../contexts/RightPanelContext';
 import { PrinterStatusContext } from '../../contexts/PrinterStatusContext';
 import { ToastProvider } from '../../contexts/ToastContext';
+import { PrintersProvider } from '../../contexts/PrintersContext';
 import { useStatus } from '../../hooks/useStatus';
 
 export default function AppShell() {
@@ -45,6 +46,7 @@ export default function AppShell() {
 
   return (
     <ToastProvider>
+      <PrintersProvider>
       <PrinterStatusContext.Provider value={status}>
         <RightPanelContext.Provider value={{ selected, setSelected }}>
           <div className="app-shell">
@@ -68,6 +70,7 @@ export default function AppShell() {
           </div>
         </RightPanelContext.Provider>
       </PrinterStatusContext.Provider>
+      </PrintersProvider>
     </ToastProvider>
   );
 }
