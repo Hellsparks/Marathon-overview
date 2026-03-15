@@ -108,6 +108,21 @@ export default function PrinterCard({ printer, status }) {
   const isPrinting = state === 'printing';
   const isPaused = state === 'paused';
 
+  // Multi-toolhead: build extruder list from toolhead_count
+  // Klipper names: extruder (T0), extruder1 (T1), extruder2 (T2)…
+  // Bambu printers use AMS (multi-filament, single hotend) — never multi-toolhead
+  const toolheadCount = printer.toolhead_count || 1;
+  const toolExtruders = printer.firmware_type !== 'bambu' && toolheadCount > 1
+    ? Array.from({ length: toolheadCount }, (_, i) => {
+        const key = i === 0 ? 'extruder' : `extruder${i}`;
+        return { label: `T${i}`, key };
+      })
+    : null;
+
+  // Active tool: Klipper reports toolhead.extruder as "extruder" | "extruder1" | …
+  const activeExtruderKey = status?.toolhead?.extruder ?? null;
+  const activeTool = toolExtruders?.findIndex(t => t.key === activeExtruderKey) ?? -1;
+
   // Per-printer CSS: scrape mode fetches from Moonraker, custom uses stored CSS
   const rawCss = printer.theme_mode === 'custom' ? printer.custom_css
     : printer.theme_mode === 'scrape' ? scrapedCss
@@ -270,19 +285,62 @@ ${cardSel} .printer-card {
           <>
             {/* Temperature controls */}
             <div className="printer-temps">
-              <TempControl
-                label="Hotend"
-                actual={extruder?.temperature}
-                target={extruder?.target}
-                onSet={temp => handleSetTemp('extruder', temp)}
-              />
-              <TempControl
-                label="Bed"
-                actual={bed?.temperature}
-                target={bed?.target}
-                onSet={temp => handleSetTemp('heater_bed', temp)}
-              />
+              {toolExtruders ? (
+                <>
+                  <div className="printer-temps-tools">
+                    {toolExtruders.map(({ label, key }) => (
+                      <TempControl
+                        key={key}
+                        label={label}
+                        actual={status?.[key]?.temperature}
+                        target={status?.[key]?.target}
+                        onSet={temp => handleSetTemp(key, temp)}
+                      />
+                    ))}
+                  </div>
+                  <div className="printer-temps-bed">
+                    <TempControl
+                      label="Bed"
+                      actual={bed?.temperature}
+                      target={bed?.target}
+                      onSet={temp => handleSetTemp('heater_bed', temp)}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <TempControl
+                    label="Hotend"
+                    actual={extruder?.temperature}
+                    target={extruder?.target}
+                    onSet={temp => handleSetTemp('extruder', temp)}
+                  />
+                  <TempControl
+                    label="Bed"
+                    actual={bed?.temperature}
+                    target={bed?.target}
+                    onSet={temp => handleSetTemp('heater_bed', temp)}
+                  />
+                </>
+              )}
             </div>
+
+            {/* Tool selector — multi-toolhead Klipper only */}
+            {toolExtruders && (
+              <div className="tool-selector">
+                {toolExtruders.map(({ label }, i) => (
+                  <button
+                    key={i}
+                    className={`btn btn-sm v-btn tool-selector-btn${activeTool === i ? ' btn-primary active' : ''}`}
+                    onClick={() => run(() => sendGcode(printer.id, `T${i}`))}
+                    disabled={busy || isPrinting}
+                    title={`Select ${label}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Printer actions */}
             <div className="printer-actions">
