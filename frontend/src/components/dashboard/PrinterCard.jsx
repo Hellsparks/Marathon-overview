@@ -119,6 +119,10 @@ export default function PrinterCard({ printer, status }) {
       })
     : null;
 
+  // Active tool: Klipper reports toolhead.extruder as "extruder" | "extruder1" | …
+  const activeExtruderKey = status?.toolhead?.extruder ?? null;
+  const activeTool = toolExtruders?.findIndex(t => t.key === activeExtruderKey) ?? -1;
+
   // Per-printer CSS: scrape mode fetches from Moonraker, custom uses stored CSS
   const rawCss = printer.theme_mode === 'custom' ? printer.custom_css
     : printer.theme_mode === 'scrape' ? scrapedCss
@@ -320,6 +324,23 @@ ${cardSel} .printer-card {
                 </>
               )}
             </div>
+
+            {/* Tool selector — multi-toolhead Klipper only */}
+            {toolExtruders && (
+              <div className="tool-selector">
+                {toolExtruders.map(({ label }, i) => (
+                  <button
+                    key={i}
+                    className={`btn btn-sm v-btn tool-selector-btn${activeTool === i ? ' btn-primary active' : ''}`}
+                    onClick={() => run(() => sendGcode(printer.id, `T${i}`))}
+                    disabled={busy || isPrinting}
+                    title={`Select ${label}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Printer actions */}
             <div className="printer-actions">
