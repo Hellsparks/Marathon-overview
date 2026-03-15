@@ -1534,7 +1534,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* ─── Temp Control ──────────────────────────────────────────────── */
 .printer-temps {
   display: flex;
-  gap: 12px;
+  flex-direction: row;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
@@ -1557,20 +1558,18 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   box-shadow: 0 0 0 2px var(--primary);
 }
 
-/* Multi-toolhead: tools group + bed group side by side, each wrapping internally */
+/* Multi-toolhead: tool extruders side by side, separated from bed by a vertical divider */
 .printer-temps-tools {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 16px;
   flex: 1;
-  padding-right: 12px;
+  padding-right: 16px;
   border-right: 1px solid var(--border);
 }
 
 .printer-temps-bed {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .temp-control {
@@ -1578,42 +1577,69 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   flex-direction: column;
   gap: 4px;
   flex: 1;
-  min-width: 110px;
+  min-width: 100px;
 }
 
-.temp-control-display {
+.temp-control-row {
   display: flex;
-  flex-direction: column;
-}
-
-.temp-control-set {
-  display: flex;
-  gap: 4px;
   align-items: center;
+  gap: 6px;
 }
 
-.temp-input {
-  width: 54px;
-  padding: 3px 6px;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  color: var(--text);
-  font-size: 12px;
-  /* hide number spinners */
+/* The target value is an inline input disguised as part of the readout */
+.temp-target-sep {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.temp-target-input {
+  display: inline;
+  width: 2.8ch;
+  padding: 1px 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
+  font-family: inherit;
+  text-align: right;
+  cursor: pointer;
   -moz-appearance: textfield;
   appearance: textfield;
+  transition: border-color .15s, color .15s, width .15s;
 }
 
-.temp-input::-webkit-outer-spin-button,
-.temp-input::-webkit-inner-spin-button {
+.temp-target-input::-webkit-outer-spin-button,
+.temp-target-input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.temp-input:focus {
-  outline: none;
+.temp-target-input:hover {
+  border-color: var(--border);
+}
+
+.temp-target-input.focused {
+  width: 3.6ch;
+  color: var(--primary);
   border-color: var(--primary);
+  cursor: text;
+  outline: none;
+}
+
+.temp-off-btn {
+  padding: 2px 7px !important;
+  font-size: 11px !important;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.temp-off-btn:hover {
+  opacity: 1;
+  color: var(--danger) !important;
+  border-color: var(--danger) !important;
 }
 
 /* ─── Webcam ─────────────────────────────────────────────────────── */
