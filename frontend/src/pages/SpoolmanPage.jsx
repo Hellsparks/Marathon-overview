@@ -10,6 +10,9 @@ import ViewToggle from '../components/common/ViewToggle';
 import { normalizeFilamentType, isAbrasiveFilament } from '../utils/materialUtils';
 import { buildColorStyle, isMultiColor } from '../utils/colorUtils';
 
+// Module-level drag source — lives outside React, no closure staleness possible
+let _dragSlotSource = null;
+
 const COLOR_NAMES = {
     red: [255, 0, 0],
     green: [0, 128, 0],
@@ -181,55 +184,59 @@ export default function SpoolmanPage() {
 
     // Fetch AMS slot mappings for Bambu printers + resolve spool details
     const bambuPrinters = printers.filter(p => p.firmware_type === 'bambu');
+    const bambuPrinterIds = bambuPrinters.map(p => p.id).join(',');
     useEffect(() => {
         if (bambuPrinters.length === 0) return;
+        const spoolById = new Map(spools.map(s => [s.id, s]));
         async function fetchAms() {
+            const results = await Promise.all(
+                bambuPrinters.map(async p => {
+                    try { return { id: p.id, slots: await getAmsSlots(p.id) }; }
+                    catch { return { id: p.id, slots: {} }; }
+                })
+            );
             const slotMap = {};
-            const spoolMap = { ...amsSpools };
-            for (const p of bambuPrinters) {
-                try {
-                    const slots = await getAmsSlots(p.id);
-                    slotMap[p.id] = slots;
-                    // Resolve spool data for any assigned spoolIds we don't have yet
-                    for (const spoolId of Object.values(slots)) {
-                        if (spoolId && !spoolMap[spoolId]) {
-                            const found = spools.find(s => s.id === spoolId);
-                            if (found) spoolMap[spoolId] = found;
-                        }
-                    }
-                } catch { }
+            const spoolMap = {};
+            for (const { id, slots } of results) {
+                slotMap[id] = slots;
+                for (const spoolId of Object.values(slots)) {
+                    if (spoolId) { const s = spoolById.get(spoolId); if (s) spoolMap[spoolId] = s; }
+                }
             }
             setAmsSlots(slotMap);
             setAmsSpools(spoolMap);
         }
         fetchAms();
-    }, [bambuPrinters.length, spools]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bambuPrinterIds, spools]);
 
     // Fetch tool slot mappings for multi-toolhead non-Bambu printers
     const multiToolPrinters = printers.filter(p => p.firmware_type !== 'bambu' && (p.toolhead_count || 1) > 1);
+    const multiToolPrinterIds = multiToolPrinters.map(p => p.id).join(',');
     useEffect(() => {
         if (multiToolPrinters.length === 0) return;
+        const spoolById = new Map(spools.map(s => [s.id, s]));
         async function fetchSlots() {
+            const results = await Promise.all(
+                multiToolPrinters.map(async p => {
+                    try { return { id: p.id, slots: await getToolSlots(p.id) }; }
+                    catch { return { id: p.id, slots: {} }; }
+                })
+            );
             const slotMap = {};
-            const spoolMap = { ...toolSlotSpools };
-            for (const p of multiToolPrinters) {
-                try {
-                    const slots = await getToolSlots(p.id);
-                    slotMap[p.id] = slots;
-                    for (const spoolId of Object.values(slots)) {
-                        if (spoolId && !spoolMap[spoolId]) {
-                            const found = spools.find(s => s.id === spoolId);
-                            if (found) spoolMap[spoolId] = found;
-                        }
-                    }
-                } catch { /* offline ok */ }
+            const spoolMap = {};
+            for (const { id, slots } of results) {
+                slotMap[id] = slots;
+                for (const spoolId of Object.values(slots)) {
+                    if (spoolId) { const s = spoolById.get(spoolId); if (s) spoolMap[spoolId] = s; }
+                }
             }
             setToolSlots(slotMap);
             setToolSlotSpools(spoolMap);
         }
         fetchSlots();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [multiToolPrinters.length, spools]);
+    }, [multiToolPrinterIds, spools]);
 
 
 
@@ -298,7 +305,20 @@ export default function SpoolmanPage() {
     // Drag handlers
     function onDragStart(e, spool) {
         setDragSpool(spool);
+        _dragSlotSource = null; // dragging from inventory, not a slot
         e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', spool.id.toString());
+    }
+
+    // mousedown fires before dragstart — guarantees _dragSlotSource is set even if dragstart handler is skipped
+    function onToolSlotMouseDown(printerId, toolIndex, spool) {
+        _dragSlotSource = { printerId, toolIndex, spoolId: spool.id };
+    }
+
+    function onToolSlotDragStart(e, printerId, toolIndex, spool) {
+        setDragSpool(spool);
+        _dragSlotSource = { printerId, toolIndex, spoolId: spool.id };
+        e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', spool.id.toString());
     }
 
@@ -361,7 +381,8 @@ export default function SpoolmanPage() {
     // Multi-toolhead tool slot drag-drop handlers
     function onToolSlotDragOver(e, printerId, toolIndex) {
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
+        // Accept both 'move' (slot-to-slot) and 'copy' (inventory) drags
+        e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed === 'move' ? 'move' : 'copy';
         setDropTargetToolSlot({ printerId, toolIndex });
     }
 
@@ -372,7 +393,40 @@ export default function SpoolmanPage() {
     async function onToolSlotDrop(e, printer, toolIndex) {
         e.preventDefault();
         setDropTargetToolSlot(null);
-        const spool = dragSpool;
+
+        const sourceSlot = _dragSlotSource;
+        _dragSlotSource = null;
+
+        // Prefer spoolId from dataTransfer; fall back to mousedown-recorded source
+        let spoolId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        if (!spoolId && sourceSlot) spoolId = sourceSlot.spoolId;
+        if (!spoolId) return;
+
+        // Slot-to-slot: came from a recorded slot source on this printer
+        if (sourceSlot && Number(sourceSlot.printerId) === Number(printer.id) && sourceSlot.toolIndex !== toolIndex) {
+            const printerSlots = toolSlots[printer.id] || {};
+            const displacedSpoolId = printerSlots[toolIndex] ?? null;
+            try {
+                await setToolSlot(printer.id, toolIndex, spoolId);
+                await setToolSlot(printer.id, sourceSlot.toolIndex, displacedSpoolId);
+                setToolSlots(prev => ({
+                    ...prev,
+                    [printer.id]: {
+                        ...(prev[printer.id] || {}),
+                        [toolIndex]: spoolId,
+                        [sourceSlot.toolIndex]: displacedSpoolId,
+                    },
+                }));
+            } catch (err) {
+                alert(`Failed to move spool: ${err.message}`);
+            }
+            setDragSpool(null);
+            return;
+        }
+
+        // Dragging from inventory — regular assign
+        const spool = dragSpool || spools.find(s => s.id === spoolId) || toolSlotSpools[spoolId];
+        setDragSpool(null);
         if (!spool) return;
         try {
             await setToolSlot(printer.id, toolIndex, spool.id);
@@ -960,6 +1014,8 @@ export default function SpoolmanPage() {
                                 toolSlots={toolSlots[p.id] || {}}
                                 toolSlotSpools={toolSlotSpools}
                                 dropTargetToolSlot={dropTargetToolSlot}
+                                onToolSlotMouseDown={onToolSlotMouseDown}
+                                onToolSlotDragStart={onToolSlotDragStart}
                                 onToolSlotDragOver={onToolSlotDragOver}
                                 onToolSlotDragLeave={onToolSlotDragLeave}
                                 onToolSlotDrop={onToolSlotDrop}

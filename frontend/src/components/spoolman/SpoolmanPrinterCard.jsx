@@ -51,7 +51,7 @@ export default function SpoolmanPrinterCard({
     // Bambu AMS props
     amsSlots, amsSpools, dropTargetTray, onTrayDragOver, onTrayDragLeave, onTrayDrop, onClearTray,
     // Multi-toolhead Moonraker props
-    toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onClearToolSlot,
+    toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotMouseDown, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot,
 }) {
     const [scrapedCss, setScrapedCss] = useState(
         () => scrapedCssCache.get(`${printer.host}:${printer.port}`) || null
@@ -145,7 +145,7 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                 const spoolId = amsSlots?.[trayId];
                                 const spool = spoolId ? amsSpools?.[spoolId] : null;
                                 const f = spool?.filament || {};
-                                const color = f.color_hex ? `#${f.color_hex}` : null;
+                                const color = f.color_hex ? `#${f.color_hex.slice(0, 6)}` : null;
 
                                 const physicalTray = printerStatus?._bambu?.ams?.ams?.[0]?.tray?.find(t => parseInt(t.id, 10) === trayId);
                                 const hasPhysical = !!(physicalTray && physicalTray.tray_color);
@@ -207,15 +207,25 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                     <div
                                         key={i}
                                         className={`ams-drop-slot${isSlotTarget ? ' ams-drop-hover' : ''}${spool ? ' ams-slot-filled' : ''}`}
-                                        onDragOver={e => onToolSlotDragOver?.(e, printer.id, i)}
+                                        onDragEnter={e => { e.preventDefault(); e.stopPropagation(); }}
+                                        onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; onToolSlotDragOver?.(e, printer.id, i); }}
                                         onDragLeave={() => onToolSlotDragLeave?.()}
-                                        onDrop={e => onToolSlotDrop?.(e, printer, i)}
+                                        onDrop={e => { e.preventDefault(); e.stopPropagation(); onToolSlotDrop?.(e, printer, i); }}
                                     >
                                         <div className="ams-slot-header">
                                             <span className="ams-slot-num">T{i}</span>
                                         </div>
                                         {spool ? (
                                             <>
+                                                {/* Transparent drag overlay — covers slot body, unambiguously draggable */}
+                                                <div
+                                                    className="ams-slot-drag-overlay"
+                                                    draggable
+                                                    onDragStart={e => {
+                                                        e.stopPropagation();
+                                                        onToolSlotDragStart?.(e, printer.id, i, spool);
+                                                    }}
+                                                />
                                                 <div className="ams-slot-swatch" style={{ backgroundColor: color || '#888' }} />
                                                 <span className="ams-slot-material">{f.material || '—'}</span>
                                                 <span className="ams-slot-name">{f.name || `#${spool.id}`}</span>

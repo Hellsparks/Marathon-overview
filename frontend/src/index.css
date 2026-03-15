@@ -2046,6 +2046,23 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border-color: var(--border);
 }
 
+.ams-slot-drag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+.ams-slot-drag-overlay:active {
+  cursor: grabbing;
+}
+
+.ams-drop-slot.ams-slot-filled .ams-slot-clear {
+  z-index: 2;
+}
+
 .ams-slot-header {
   width: 100%;
   text-align: center;
