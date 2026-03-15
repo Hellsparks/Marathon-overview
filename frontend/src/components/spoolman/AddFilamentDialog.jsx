@@ -169,7 +169,13 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
             if (vendorId) body.vendor_id = parseInt(vendorId);
             else if (isEdit) body.vendor_id = null;
             if (material.trim()) body.material = material.trim();
-            if (colorHex) {
+            if (multiColorEnabled && multiColorHexes.length > 1) {
+                // Spoolman rejects color_hex when multi_color_hexes is set
+                body.multi_color_hexes = multiColorHexes
+                    .map(h => h.replace(/^#/, '').slice(0, 8))
+                    .join(',');
+                body.multi_color_direction = multiColorDirection;
+            } else if (colorHex) {
                 const baseHex = colorHex.replace(/^#/, '').slice(0, 6);
                 if (translucency > 0) {
                     const alpha = Math.round((1 - translucency / 100) * 255);
@@ -177,12 +183,6 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                 } else {
                     body.color_hex = baseHex;
                 }
-            }
-            if (multiColorEnabled && multiColorHexes.length > 1) {
-                body.multi_color_hexes = multiColorHexes
-                    .map(h => h.replace(/^#/, '').slice(0, 8))
-                    .join(',');
-                body.multi_color_direction = multiColorDirection;
             }
             if (weight) body.weight = parseFloat(weight);
             if (spoolWeight) body.spool_weight = parseFloat(spoolWeight);
@@ -394,13 +394,13 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                                         }} />
                                         Longitudinal
                                     </label>
-                                    <label className={`sm-multicolor-dir-btn${multiColorDirection === 'coextrusion' ? ' active' : ''}`}>
-                                        <input type="radio" name="mc-direction" value="coextrusion"
-                                            checked={multiColorDirection === 'coextrusion'}
-                                            onChange={() => setMultiColorDirection('coextrusion')}
+                                    <label className={`sm-multicolor-dir-btn${multiColorDirection === 'coaxial' ? ' active' : ''}`}>
+                                        <input type="radio" name="mc-direction" value="coaxial"
+                                            checked={multiColorDirection === 'coaxial'}
+                                            onChange={() => setMultiColorDirection('coaxial')}
                                         />
                                         <span className="sm-multicolor-dir-preview" style={{
-                                            ...buildColorStyle({ multi_color_hexes: multiColorHexes.map(h => h.replace('#', '')).join(','), multi_color_direction: 'coextrusion' }),
+                                            ...buildColorStyle({ multi_color_hexes: multiColorHexes.map(h => h.replace('#', '')).join(','), multi_color_direction: 'coaxial' }),
                                             borderRadius: '50%',
                                         }} />
                                         Coextruded

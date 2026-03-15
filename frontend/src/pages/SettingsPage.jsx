@@ -3,7 +3,7 @@ import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
-import { testConnection, getFields, createField, exportSpoolman, importSpoolman, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative } from '../api/spoolman';
+import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate } from '../api/updates';
 import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
@@ -15,6 +15,15 @@ export default function SettingsPage() {
   const [spoolmanSaved, setSpoolmanSaved] = useState('');
   const [spoolmanStatus, setSpoolmanStatus] = useState(null); // 'ok' | 'error' | null
   const [spoolmanMsg, setSpoolmanMsg] = useState('');
+  const [teamsterUrl, setTeamsterUrl] = useState('');
+  const [teamsterSaved, setTeamsterSaved] = useState('');
+  const [teamsterStatus, setTeamsterStatus] = useState(null);
+  const [teamsterMsg, setTeamsterMsg] = useState('');
+  const [teamsterLive, setTeamsterLive] = useState(null);
+  const [teamsterPolling, setTeamsterPolling] = useState(false);
+  const [teamsterTareBusy, setTeamsterTareBusy] = useState(false);
+  const [teamsterCalGrams, setTeamsterCalGrams] = useState('');
+  const [teamsterCalBusy, setTeamsterCalBusy] = useState(false);
   const [urlField, setUrlField] = useState('');
   const [urlFieldSaved, setUrlFieldSaved] = useState('');
   const [hueforgeField, setHueforgeField] = useState('');
@@ -74,6 +83,8 @@ export default function SettingsPage() {
     getSettings().then(s => {
       setSpoolmanUrl(s.spoolman_url || '');
       setSpoolmanSaved(s.spoolman_url || '');
+      setTeamsterUrl(s.teamster_url || '');
+      setTeamsterSaved(s.teamster_url || '');
       setProjectWarning(s.project_deadline_warning_percent || '50');
       setProjectSaved(s.project_deadline_warning_percent || '50');
       setUrlField(s.url_extra_field || '');
@@ -156,6 +167,73 @@ export default function SettingsPage() {
     } catch (e) {
       setSpoolmanStatus('error');
       setSpoolmanMsg(e.message);
+    }
+  }
+
+  async function handleTeamsterSave() {
+    await updateSetting('teamster_url', teamsterUrl.replace(/\/+$/, ''));
+    setTeamsterSaved(teamsterUrl);
+    setTeamsterStatus(null);
+    setTeamsterMsg('Saved.');
+  }
+
+  async function handleTeamsterTest() {
+    setTeamsterStatus(null);
+    setTeamsterMsg('Testing...');
+    try {
+      if (teamsterUrl !== teamsterSaved) {
+        await updateSetting('teamster_url', teamsterUrl.replace(/\/+$/, ''));
+        setTeamsterSaved(teamsterUrl);
+      }
+      const result = await testTeamsterConnection();
+      if (result.ok) {
+        setTeamsterStatus('ok');
+        setTeamsterMsg(`Connected ✓  Weight: ${result.weight_g?.toFixed(1) ?? '?'} g`);
+      } else {
+        setTeamsterStatus('error');
+        setTeamsterMsg(`Connection failed: ${result.error || 'Unknown error'}`);
+      }
+    } catch (e) {
+      setTeamsterStatus('error');
+      setTeamsterMsg(e.message);
+    }
+  }
+
+  // Live scale polling in settings — controlled by teamsterPolling toggle
+  useEffect(() => {
+    if (!teamsterPolling) { setTeamsterLive(null); return; }
+    let cancelled = false;
+    async function poll() {
+      try {
+        const data = await fetchTeamsterWeight();
+        if (!cancelled) setTeamsterLive(data);
+      } catch {
+        if (!cancelled) setTeamsterLive(null);
+      }
+    }
+    poll();
+    const id = setInterval(poll, 1500);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [teamsterPolling]);
+
+  async function handleTeamsterTare() {
+    setTeamsterTareBusy(true);
+    try { await tareTeamster(); } catch { /* ignore */ } finally { setTeamsterTareBusy(false); }
+  }
+
+  async function handleTeamsterCalibrate() {
+    const g = parseFloat(teamsterCalGrams);
+    if (!g || g <= 0) return;
+    setTeamsterCalBusy(true);
+    try {
+      await calibrateTeamster(g);
+      setTeamsterMsg('Calibration saved ✓');
+      setTeamsterStatus('ok');
+    } catch (e) {
+      setTeamsterMsg(`Calibration failed: ${e.message}`);
+      setTeamsterStatus('error');
+    } finally {
+      setTeamsterCalBusy(false);
     }
   }
 
@@ -912,6 +990,74 @@ export default function SettingsPage() {
             </p>
           </div>
         )}
+      </section>
+
+      <section className="page-section">
+        <h2 className="section-title">Teamster Scale</h2>
+        <p>Connect to a <strong>Teamster</strong> ESP32 load cell device to auto-measure spool weights.</p>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
+          <input
+            type="url"
+            className="form-input"
+            placeholder="http://192.168.1.50"
+            value={teamsterUrl}
+            onChange={e => setTeamsterUrl(e.target.value)}
+            style={{ flex: 1, minWidth: '200px', maxWidth: '400px', fontSize: '14px', padding: '10px 14px' }}
+          />
+          <button className="btn btn-sm btn-primary" onClick={handleTeamsterSave}>Save</button>
+          <button className="btn btn-sm" onClick={handleTeamsterTest}>Test Connection</button>
+        </div>
+        {teamsterMsg && (
+          <p style={{
+            marginTop: '8px',
+            fontSize: '13px',
+            fontWeight: 500,
+            color: teamsterStatus === 'ok' ? 'var(--success)' : teamsterStatus === 'error' ? 'var(--danger)' : 'var(--text-muted)',
+          }}>
+            {teamsterMsg}
+          </p>
+        )}
+
+        {/* Live readout + controls */}
+        <div style={{ marginTop: '20px', padding: '16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', minWidth: '130px' }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Scale:</span>
+              <span style={{ fontSize: '22px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: teamsterLive?.ready ? 'var(--text)' : 'var(--text-muted)' }}>
+                {teamsterLive ? (teamsterLive.ready ? `${teamsterLive.weight_g.toFixed(1)} g` : 'Not ready') : '—'}
+              </span>
+            </div>
+            <button
+              className={`btn btn-sm${teamsterPolling ? ' btn-primary' : ''}`}
+              onClick={() => setTeamsterPolling(p => !p)}
+            >
+              {teamsterPolling ? 'Stop' : 'Live Read'}
+            </button>
+            <button className="btn btn-sm" onClick={handleTeamsterTare} disabled={teamsterTareBusy}>
+              {teamsterTareBusy ? 'Taring…' : 'Tare'}
+            </button>
+          </div>
+
+          {/* Calibrate */}
+          <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '13px', color: 'var(--text-muted)', flexShrink: 0 }}>Calibrate with known weight:</label>
+            <input
+              type="number"
+              className="form-input"
+              placeholder="grams"
+              value={teamsterCalGrams}
+              onChange={e => setTeamsterCalGrams(e.target.value)}
+              style={{ width: '100px', padding: '6px 10px', fontSize: '13px' }}
+            />
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>g</span>
+            <button className="btn btn-sm" onClick={handleTeamsterCalibrate} disabled={teamsterCalBusy || !teamsterCalGrams}>
+              {teamsterCalBusy ? 'Calibrating…' : 'Calibrate'}
+            </button>
+          </div>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>
+            Place a known-weight object on the scale, enter its weight, then click Calibrate.
+          </p>
+        </div>
       </section>
 
       <section className="page-section">

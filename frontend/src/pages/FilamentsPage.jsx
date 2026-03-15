@@ -126,7 +126,7 @@ export default function FilamentsPage() {
                                             <td className="sm-catalogue-muted">{f.vendor?.name || '—'}</td>
                                             <td className="sm-catalogue-muted">{f.material || '—'}</td>
                                             <td className="sm-catalogue-muted" style={{ fontFamily: 'monospace' }}>
-                                                {f.color_hex ? `#${f.color_hex.toUpperCase()}` : '—'}
+                                                {f.color_hex ? `#${f.color_hex.slice(0, 6).toUpperCase()}` : '—'}
                                             </td>
                                             <td className="sm-catalogue-muted" style={{ whiteSpace: 'nowrap' }}>
                                                 {ralMatch ? (ralMatch.exact ? `RAL ${ralMatch.ral}` : `~ RAL ${ralMatch.ral}`) : '—'}

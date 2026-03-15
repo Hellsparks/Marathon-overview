@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-03-15
+
+### 🚀 Features & Enhancements
+- **Teamster Scale Integration**: Live load-cell readout in the spool measure dialog — polls the Teamster ESP32 device, shows weight in amber while stabilising and white when stable, disables the **Use** button until settled. Tare button available inline.
+- **Teamster Settings Panel**: New Settings section to configure the Teamster URL, test connectivity, live-read toggle, inline tare, and calibration with a known weight.
+- **Pressure Advance Auto-Apply**: Store a `pressure_advance` value on any Spoolman filament (via MCP or manually). When a spool is assigned to a Klipper printer, `SET_PRESSURE_ADVANCE ADVANCE=x.xxxx` is sent automatically via Moonraker.
+- **MCP: filamentcolors.xyz colour lookup**: MCP server instructions now direct Claude to query `filamentcolors.xyz/api/swatch/` when the colour hex of a new filament is unknown.
+- **MCP: pressure_advance field**: `create_filament` and `update_filament` tools expose `pressure_advance` stored in Spoolman's extra field.
+- **Multi-colour Bambu colour mapping**: `set-active` now returns `bambu_colors` — an array of nearest Bambu colour approximations, one per colour in `multi_color_hexes`, instead of only the first.
+
+### 🐛 Bug Fixes
+- **RAL approximation with alpha hex**: `findClosestRal` and `buildColorStyle` now strip the alpha byte from 8-char `RRGGBBAA` values before comparison and CSS output; the hex column in the filament catalogue no longer shows `#FF5652D6`.
+- **RAL approximation for multi-colour filaments**: `multi_color_hexes` is now preferred over `color_hex` when both are set, preventing a placeholder `color_hex` from shadowing the real colours.
+- **Drag-and-drop spool assignment stale UI**: Spool assignment and clear now apply an optimistic local state update so the printer card reflects the change immediately without waiting for the next poll cycle.
+- **TPU95A material compatibility false warning**: Filament guard now normalises both the spool material and printer's supported list (e.g. `TPU95A` → `TPU`) before comparing, eliminating spurious incompatibility warnings.
+
+### 💅 Styling & Organisation
+- Spool measure dialog: live scale readout row with amber/white colour state and inline stabilising label.
+
 ## [1.1.0] - 2026-03-07
 
 ### 🚀 Features & Enhancements
