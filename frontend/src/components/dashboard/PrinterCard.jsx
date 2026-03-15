@@ -110,8 +110,9 @@ export default function PrinterCard({ printer, status }) {
 
   // Multi-toolhead: build extruder list from toolhead_count
   // Klipper names: extruder (T0), extruder1 (T1), extruder2 (T2)…
+  // Bambu printers use AMS (multi-filament, single hotend) — never multi-toolhead
   const toolheadCount = printer.toolhead_count || 1;
-  const toolExtruders = toolheadCount > 1
+  const toolExtruders = printer.firmware_type !== 'bambu' && toolheadCount > 1
     ? Array.from({ length: toolheadCount }, (_, i) => {
         const key = i === 0 ? 'extruder' : `extruder${i}`;
         return { label: `T${i}`, key };
