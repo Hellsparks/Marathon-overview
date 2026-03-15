@@ -218,6 +218,22 @@ export async function getAmsSlots(printerId) {
     return r.json();
 }
 
+export async function getToolSlots(printerId) {
+    const r = await fetch(`${API}/tool-slots/${printerId}`);
+    if (!r.ok) throw new Error(`Failed to fetch tool slots: ${r.status}`);
+    return r.json();
+}
+
+export async function setToolSlot(printerId, toolIndex, spoolId) {
+    const r = await fetch(`${API}/tool-slots/${printerId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolIndex, spoolId }),
+    });
+    if (!r.ok) throw new Error(`Failed to set tool slot: ${r.status}`);
+    return r.json();
+}
+
 export async function getBambuWarnings() {
     const r = await fetch(`${API}/bambu-warnings`);
     if (!r.ok) throw new Error(`Failed to fetch Bambu warnings: ${r.status}`);

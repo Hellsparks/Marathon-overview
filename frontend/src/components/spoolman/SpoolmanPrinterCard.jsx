@@ -50,6 +50,8 @@ export default function SpoolmanPrinterCard({
     printer, activeSpool, isTarget, onDragOver, onDragLeave, onDrop, onClearSpool, printerStatus,
     // Bambu AMS props
     amsSlots, amsSpools, dropTargetTray, onTrayDragOver, onTrayDragLeave, onTrayDrop, onClearTray,
+    // Multi-toolhead Moonraker props
+    toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onClearToolSlot,
 }) {
     const [scrapedCss, setScrapedCss] = useState(
         () => scrapedCssCache.get(`${printer.host}:${printer.port}`) || null
@@ -192,8 +194,46 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                 );
                             })}
                         </div>
+                    ) : (printer.toolhead_count || 1) > 1 ? (
+                        /* ── Multi-toolhead: N-slot grid ─────────────────── */
+                        <div className="ams-slot-grid" style={{ gridTemplateColumns: `repeat(${Math.min(printer.toolhead_count, 4)}, 1fr)` }}>
+                            {Array.from({ length: printer.toolhead_count }, (_, i) => {
+                                const spoolId = toolSlots?.[i];
+                                const spool = spoolId ? toolSlotSpools?.[spoolId] : null;
+                                const f = spool?.filament || {};
+                                const color = f.color_hex ? `#${f.color_hex.slice(0, 6)}` : null;
+                                const isSlotTarget = dropTargetToolSlot?.printerId === printer.id && dropTargetToolSlot?.toolIndex === i;
+                                return (
+                                    <div
+                                        key={i}
+                                        className={`ams-drop-slot${isSlotTarget ? ' ams-drop-hover' : ''}${spool ? ' ams-slot-filled' : ''}`}
+                                        onDragOver={e => onToolSlotDragOver?.(e, printer.id, i)}
+                                        onDragLeave={() => onToolSlotDragLeave?.()}
+                                        onDrop={e => onToolSlotDrop?.(e, printer, i)}
+                                    >
+                                        <div className="ams-slot-header">
+                                            <span className="ams-slot-num">T{i}</span>
+                                        </div>
+                                        {spool ? (
+                                            <>
+                                                <div className="ams-slot-swatch" style={{ backgroundColor: color || '#888' }} />
+                                                <span className="ams-slot-material">{f.material || '—'}</span>
+                                                <span className="ams-slot-name">{f.name || `#${spool.id}`}</span>
+                                                <button
+                                                    className="ams-slot-clear"
+                                                    onClick={e => { e.stopPropagation(); onClearToolSlot?.(printer.id, i); }}
+                                                    title="Unload slot"
+                                                >✕</button>
+                                            </>
+                                        ) : (
+                                            <span className="ams-slot-empty">Drop spool</span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     ) : (
-                        /* ── Moonraker: single spool display ─────────────── */
+                        /* ── Single-toolhead: active spool display ────────── */
                         activeSpool ? (
                             <div className="spool-info" style={{ margin: 0 }}>
                                 <span
