@@ -1951,8 +1951,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   gap: 2px;
   padding: 4px;
   border: 1px dashed var(--border);
-  border-radius: 6px;
-  background: var(--surface2);
+  border-radius: var(--radius);
+  background: var(--surface);
   transition: border-color .2s, background .2s, box-shadow .2s;
   position: relative;
   min-height: 64px;
