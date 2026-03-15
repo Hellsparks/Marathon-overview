@@ -1135,9 +1135,8 @@ function nativeVenv() {
     const isWin = process.platform === 'win32';
     const venv  = path.join(NATIVE_DIR, 'venv');
     const scriptsDir = isWin ? path.join(venv, 'Scripts') : path.join(venv, 'bin');
-    const python = isWin ? path.join(scriptsDir, 'python.exe') : path.join(scriptsDir, 'python');
-    // On Windows pip may create spoolman.exe, spoolman, or just a .bat wrapper.
-    // Resolve whichever exists; fall back to module invocation (always works).
+    const python = path.join(scriptsDir, isWin ? 'python.exe' : 'python');
+    // pip may create spoolman.exe, spoolman (no ext), or only a .bat — resolve whichever exists.
     const candidates = isWin
         ? [path.join(scriptsDir, 'spoolman.exe'), path.join(scriptsDir, 'spoolman')]
         : [path.join(scriptsDir, 'spoolman')];
@@ -1176,10 +1175,7 @@ function spawnSpoolman(port) {
     fs.mkdirSync(dataDir, { recursive: true });
     const logFd = fs.openSync(NATIVE_LOG_FILE, 'a');
     const spoolmanEnv = { ...process.env, SPOOLMAN_HOST: '0.0.0.0', SPOOLMAN_PORT: String(port), SPOOLMAN_DATA_DIR: dataDir };
-    // Prefer the resolved executable; fall back to `python -m spoolman` if not found.
-    const [cmd, args] = venv.spoolman
-        ? [venv.spoolman, []]
-        : [venv.python, ['-m', 'spoolman']];
+    const [cmd, args] = venv.spoolman ? [venv.spoolman, []] : [venv.python, ['-m', 'spoolman']];
     const child = spawn(cmd, args, {
         detached: true,
         stdio: ['ignore', logFd, logFd],
@@ -1194,10 +1190,10 @@ function spawnSpoolman(port) {
 router.get('/native/status', async (_req, res) => {
     const py        = await findPython();
     const venv      = nativeVenv();
-    // Installed = venv python exists AND spoolman package is importable
-    const installed = fs.existsSync(venv.python) && (() => {
-        try { require('child_process').execSync(`"${venv.python}" -c "import spoolman"`, { timeout: 5000, stdio: 'ignore' }); return true; } catch { return false; }
-    })();
+    let installed = false;
+    if (fs.existsSync(venv.python)) {
+        try { require('child_process').execSync(`"${venv.python}" -c "import spoolman"`, { timeout: 5000, stdio: 'pipe' }); installed = true; } catch { installed = false; }
+    }
     const pid       = nativePid();
     const running   = installed && pidAlive(pid);
     res.json({
@@ -1236,21 +1232,20 @@ router.post('/native/install', async (req, res) => {
 
         push('Installing Spoolman (this may take a minute)…');
         const pipOut = await cliRun(`"${venv.python}" -m pip install --upgrade spoolman`);
-        push(pipOut.trim().split('\n').pop()); // last pip line (e.g. "Successfully installed spoolman-x.x.x")
+        push(pipOut.trim().split('\n').pop()); // show last pip line
         push('Spoolman installed.');
 
-        // Verify by importing the module — more reliable than checking for a .exe on Windows.
+        // Verify by importing — more reliable than checking for .exe on Windows
         try {
             await cliRun(`"${venv.python}" -c "import spoolman"`, 15000);
         } catch {
-            // Log what's actually in Scripts/bin to help diagnose
             try {
-                const entries = fs.readdirSync(venv.scriptsDir).filter(f => f.toLowerCase().includes('spoolman'));
-                push(`Scripts dir contents matching spoolman: ${entries.join(', ') || '(none)'}`);
+                const entries = fs.readdirSync(venv.scriptsDir).filter(f => /spoolman/i.test(f));
+                push(`Scripts dir (spoolman entries): ${entries.join(', ') || '(none)'}`);
             } catch { /* ignore */ }
-            throw new Error('Spoolman package not importable after install — pip may have failed silently.');
+            throw new Error('Spoolman package not importable after install.');
         }
-        // Refresh venv so spoolman path is resolved now that install succeeded
+        // Re-resolve executable path now that install succeeded
         Object.assign(venv, nativeVenv());
 
         fs.writeFileSync(NATIVE_PORT_FILE, String(port));
