@@ -1538,6 +1538,25 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   flex-wrap: wrap;
 }
 
+/* ─── Tool Selector (multi-toolhead) ───────────────────────────── */
+.tool-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--border);
+}
+
+.tool-selector-btn {
+  min-width: 40px;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+.tool-selector-btn.active {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
 /* Multi-toolhead: tools group + bed group side by side, each wrapping internally */
 .printer-temps-tools {
   display: flex;
