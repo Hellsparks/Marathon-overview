@@ -358,6 +358,7 @@ router.post('/tool-slots/:printerId', async (req, res) => {
     if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
     try {
+        const client = new MoonrakerClient(printer);
         if (spoolId) {
             db.prepare(`
                 INSERT INTO printer_tool_slots (printer_id, tool_index, spool_id)
@@ -367,13 +368,11 @@ router.post('/tool-slots/:printerId', async (req, res) => {
 
             // Tell Klipper to update the macro variable so SET_ACTIVE_SPOOL works on tool change
             try {
-                const client = new MoonrakerClient(printer);
                 await client.sendGcode(`SET_GCODE_VARIABLE MACRO=T${toolIndex} VARIABLE=spool_id VALUE=${spoolId}`);
             } catch { /* printer may be offline — slot is still saved */ }
         } else {
             db.prepare('DELETE FROM printer_tool_slots WHERE printer_id = ? AND tool_index = ?').run(printerId, toolIndex);
             try {
-                const client = new MoonrakerClient(printer);
                 await client.sendGcode(`SET_GCODE_VARIABLE MACRO=T${toolIndex} VARIABLE=spool_id VALUE=None`);
             } catch { /* offline ok */ }
         }
@@ -391,10 +390,11 @@ router.post('/activate-tool', async (req, res) => {
     if (printerId === undefined || toolIndex === undefined)
         return res.status(400).json({ error: 'printerId and toolIndex required' });
     const db = getDb();
-    const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(parseInt(printerId, 10));
+    const pid = parseInt(printerId, 10);
+    const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(pid);
     if (!printer) return res.status(404).json({ error: 'Printer not found' });
     const row = db.prepare('SELECT spool_id FROM printer_tool_slots WHERE printer_id = ? AND tool_index = ?')
-        .get(parseInt(printerId, 10), parseInt(toolIndex, 10));
+        .get(pid, parseInt(toolIndex, 10));
     const spoolId = row?.spool_id ?? null;
     try {
         const client = new MoonrakerClient(printer);
