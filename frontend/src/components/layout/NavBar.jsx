@@ -1,4 +1,5 @@
 import ThemePicker from './ThemePicker';
+import GitHubLinks from './GitHubLinks';
 import UpdateNotification from './UpdateNotification';
 import { useUpdateCheck } from '../../hooks/useUpdateCheck';
 
@@ -18,6 +19,7 @@ export default function NavBar({ onlineCount, totalCount }) {
         </div>
         <UpdateNotification updateInfo={updateInfo} onDismiss={dismiss} />
         <ThemePicker />
+        <GitHubLinks />
       </div>
     </header>
   );
