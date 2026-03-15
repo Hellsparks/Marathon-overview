@@ -1535,7 +1535,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .printer-temps {
   display: flex;
   flex-direction: row;
-  gap: 16px;
+  gap: 24px;
   flex-wrap: wrap;
 }
 
@@ -1562,9 +1562,9 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .printer-temps-tools {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 24px;
   flex: 1;
-  padding-right: 16px;
+  padding-right: 24px;
   border-right: 1px solid var(--border);
 }
 
@@ -1575,15 +1575,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .temp-control {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
-  min-width: 100px;
+  min-width: 110px;
 }
 
 .temp-control-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
 }
 
 /* The target value is an inline input disguised as part of the readout */
@@ -1595,8 +1595,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
 .temp-target-input {
   display: inline;
-  width: 2.8ch;
-  padding: 1px 3px;
+  width: 4.4ch;
+  padding: 2px 4px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 3px;
   background: transparent;
@@ -1622,7 +1622,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .temp-target-input.focused {
-  width: 3.6ch;
+  width: 5ch;
   color: var(--primary);
   border-color: var(--primary);
   cursor: text;
