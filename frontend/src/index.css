@@ -1558,14 +1558,20 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   box-shadow: 0 0 0 2px var(--primary);
 }
 
-/* Multi-toolhead: tool extruders side by side, separated from bed by a vertical divider */
+/* Multi-toolhead: stacked layout with tools on top, bed below */
+.printer-temps-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
 .printer-temps-tools {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 1;
-  padding-right: 24px;
-  border-right: 1px solid var(--border);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
 
 /* Inline label for tool slots so they stack tighter vertically */
@@ -1596,6 +1602,26 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.temp-sparkline {
+  display: inline-block;
+  width: 30px;
+  height: 14px;
+  vertical-align: middle;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  margin: 0 4px;
+}
+
+.temp-sparkline:hover {
+  opacity: 1;
+}
+
+.temp-sparkline svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* The target value is an inline input disguised as part of the readout */

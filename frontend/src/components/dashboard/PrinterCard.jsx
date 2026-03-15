@@ -75,10 +75,18 @@ export default function PrinterCard({ printer, status }) {
   const [webcamOpen, setWebcamOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
   const [macrosOpen, setMacrosOpen] = useState(false);
-  const [lightOn, setLightOn] = useState(false);
   const [macros, setMacros] = useState([]);
   const [scrapedCss, setScrapedCss] = useState(() => getCachedCss(printer));
   const [scrapeError, setScrapeError] = useState(() => getScrapeError(printer));
+  const [tempHistory, setTempHistory] = useState({
+    extruder: [],
+    bed: [],
+    extruder1: [],
+    extruder2: [],
+    extruder3: [],
+    extruder4: [],
+    extruder5: [],
+  });
   const navigate = useNavigate();
 
   // Fetch the printer's own Mainsail CSS when theme_mode === 'scrape'.
@@ -98,6 +106,43 @@ export default function PrinterCard({ printer, status }) {
         .catch(err => console.error('Failed to fetch macros:', err));
     }
   }, [macrosOpen, status?._online, printer.id, macros.length]);
+
+  // Track temperature history for sparklines (keep last 30 data points)
+  useEffect(() => {
+    if (!status?._online) return;
+    
+    setTempHistory(prev => {
+      const maxPoints = 30;
+      const newHistory = { ...prev };
+      
+      // Track extruder(s)
+      if (status?.extruder?.temperature != null) {
+        newHistory.extruder = [...prev.extruder, status.extruder.temperature].slice(-maxPoints);
+      }
+      if (status?.extruder1?.temperature != null) {
+        newHistory.extruder1 = [...prev.extruder1, status.extruder1.temperature].slice(-maxPoints);
+      }
+      if (status?.extruder2?.temperature != null) {
+        newHistory.extruder2 = [...prev.extruder2, status.extruder2.temperature].slice(-maxPoints);
+      }
+      if (status?.extruder3?.temperature != null) {
+        newHistory.extruder3 = [...prev.extruder3, status.extruder3.temperature].slice(-maxPoints);
+      }
+      if (status?.extruder4?.temperature != null) {
+        newHistory.extruder4 = [...prev.extruder4, status.extruder4.temperature].slice(-maxPoints);
+      }
+      if (status?.extruder5?.temperature != null) {
+        newHistory.extruder5 = [...prev.extruder5, status.extruder5.temperature].slice(-maxPoints);
+      }
+      
+      // Track bed
+      if (status?.heater_bed?.temperature != null) {
+        newHistory.bed = [...prev.bed, status.heater_bed.temperature].slice(-maxPoints);
+      }
+      
+      return newHistory;
+    });
+  }, [status?.extruder?.temperature, status?.extruder1?.temperature, status?.extruder2?.temperature, status?.extruder3?.temperature, status?.extruder4?.temperature, status?.extruder5?.temperature, status?.heater_bed?.temperature, status?._online]);
 
   const online = status?._online;
   const state = online ? (status?.print_stats?.state ?? 'standby') : 'offline';
@@ -286,7 +331,7 @@ ${cardSel} .printer-card {
             {/* Temperature controls */}
             <div className="printer-temps">
               {toolExtruders ? (
-                <>
+                <div className="printer-temps-stacked">
                   <div className="printer-temps-tools">
                     {toolExtruders.map(({ label, key }) => (
                       <TempControl
@@ -295,18 +340,18 @@ ${cardSel} .printer-card {
                         actual={status?.[key]?.temperature}
                         target={status?.[key]?.target}
                         onSet={temp => handleSetTemp(key, temp)}
+                        history={tempHistory[key] || []}
                       />
                     ))}
                   </div>
-                  <div className="printer-temps-bed">
-                    <TempControl
-                      label="Bed"
-                      actual={bed?.temperature}
-                      target={bed?.target}
-                      onSet={temp => handleSetTemp('heater_bed', temp)}
-                    />
-                  </div>
-                </>
+                  <TempControl
+                    label="Bed"
+                    actual={bed?.temperature}
+                    target={bed?.target}
+                    onSet={temp => handleSetTemp('heater_bed', temp)}
+                    history={tempHistory.bed}
+                  />
+                </div>
               ) : (
                 <>
                   <TempControl
@@ -314,12 +359,14 @@ ${cardSel} .printer-card {
                     actual={extruder?.temperature}
                     target={extruder?.target}
                     onSet={temp => handleSetTemp('extruder', temp)}
+                    history={tempHistory.extruder}
                   />
                   <TempControl
                     label="Bed"
                     actual={bed?.temperature}
                     target={bed?.target}
                     onSet={temp => handleSetTemp('heater_bed', temp)}
+                    history={tempHistory.bed}
                   />
                 </>
               )}
