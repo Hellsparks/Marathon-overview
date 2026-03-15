@@ -196,7 +196,7 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                         </div>
                     ) : (printer.toolhead_count || 1) > 1 ? (
                         /* ── Multi-toolhead: N-slot grid ─────────────────── */
-                        <div className="ams-slot-grid" style={{ gridTemplateColumns: `repeat(${Math.min(printer.toolhead_count, 4)}, 1fr)` }}>
+                        <div className="ams-slot-grid" style={{ gridTemplateColumns: `repeat(${Math.min(printer.toolhead_count, 3)}, 1fr)` }}>
                             {Array.from({ length: printer.toolhead_count }, (_, i) => {
                                 const spoolId = toolSlots?.[i];
                                 const spool = spoolId ? toolSlotSpools?.[spoolId] : null;
