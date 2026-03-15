@@ -34,11 +34,11 @@ describe('buildColorStyle', () => {
         expect(style.background).toContain('#9B59B6');
     });
 
-    it('returns coextrusion pie chart for 2 colors', () => {
+    it('returns coaxial pie chart for 2 colors', () => {
         const style = buildColorStyle({
             color_hex: '00FF00',
             multi_color_hexes: '00FF00,9B59B6',
-            multi_color_direction: 'coextrusion',
+            multi_color_direction: 'coaxial',
         });
         expect(style.background).toContain('conic-gradient');
         expect(style.background).toContain('#00FF00');

@@ -6,7 +6,7 @@
  * @returns {object} React inline style
  */
 export function buildColorStyle(filament) {
-    const hexRaw = filament?.color_hex || '888888';
+    const hexRaw = (filament?.color_hex || '888888').slice(0, 6);
     const multiHexes = filament?.multi_color_hexes;
     const direction = filament?.multi_color_direction;
 
@@ -15,11 +15,11 @@ export function buildColorStyle(filament) {
         return { '--spool-color': `#${hexRaw}` };
     }
 
-    const colors = multiHexes.split(',').map(h => `#${h.trim()}`).filter(h => h.length >= 4);
+    const colors = multiHexes.split(',').map(h => `#${h.trim().slice(0, 6)}`).filter(h => h.length >= 4);
     if (colors.length === 0) return { '--spool-color': `#${hexRaw}` };
     if (colors.length === 1) return { '--spool-color': colors[0] };
 
-    if (direction === 'coextrusion') {
+    if (direction === 'coaxial') {
         // Equal pie-chart slices using conic-gradient
         const sliceDeg = 360 / colors.length;
         const stops = colors.map((c, i) =>

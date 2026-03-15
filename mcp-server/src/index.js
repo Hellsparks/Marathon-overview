@@ -44,11 +44,11 @@ async function api(method, path, body) {
   return data;
 }
 
-const get  = (path)        => api('GET',    path);
-const post = (path, body)  => api('POST',   path, body);
-const put  = (path, body)  => api('PUT',    path, body);
-const del  = (path)        => api('DELETE', path);
-const patch = (path, body) => api('PATCH',  path, body);
+const get = (path) => api('GET', path);
+const post = (path, body) => api('POST', path, body);
+const put = (path, body) => api('PUT', path, body);
+const del = (path) => api('DELETE', path);
+const patch = (path, body) => api('PATCH', path, body);
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -79,8 +79,8 @@ const TOOLS = [
       type: 'object',
       properties: {
         printer_id: { type: 'number' },
-        heater:     { type: 'string', description: 'e.g. "extruder", "heater_bed", "extruder1"' },
-        temp:       { type: 'number', description: 'Target temperature in °C (0 to turn off)' },
+        heater: { type: 'string', description: 'e.g. "extruder", "heater_bed", "extruder1"' },
+        temp: { type: 'number', description: 'Target temperature in °C (0 to turn off)' },
       },
       required: ['printer_id', 'heater', 'temp'],
     },
@@ -92,7 +92,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         printer_id: { type: 'number' },
-        script:     { type: 'string', description: 'G-code command(s), newline-separated' },
+        script: { type: 'string', description: 'G-code command(s), newline-separated' },
       },
       required: ['printer_id', 'script'],
     },
@@ -115,8 +115,8 @@ const TOOLS = [
       type: 'object',
       properties: {
         printer_id: { type: 'number' },
-        macro:      { type: 'string', description: 'Macro name, e.g. "START_PRINT"' },
-        params:     { type: 'string', description: 'Optional macro parameters, e.g. "BED_TEMP=60 EXTRUDER_TEMP=215"' },
+        macro: { type: 'string', description: 'Macro name, e.g. "START_PRINT"' },
+        params: { type: 'string', description: 'Optional macro parameters, e.g. "BED_TEMP=60 EXTRUDER_TEMP=215"' },
       },
       required: ['printer_id', 'macro'],
     },
@@ -130,7 +130,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         printer_id: { type: 'number' },
-        filename:   { type: 'string', description: 'Filename on the printer (as returned by send_file or list_printer_files)' },
+        filename: { type: 'string', description: 'Filename on the printer (as returned by send_file or list_printer_files)' },
       },
       required: ['printer_id', 'filename'],
     },
@@ -175,7 +175,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        file_id:    { type: 'number' },
+        file_id: { type: 'number' },
         printer_id: { type: 'number' },
       },
       required: ['file_id', 'printer_id'],
@@ -187,7 +187,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        file_id:    { type: 'number', description: 'File ID from the Marathon library' },
+        file_id: { type: 'number', description: 'File ID from the Marathon library' },
         printer_id: { type: 'number' },
       },
       required: ['file_id', 'printer_id'],
@@ -211,7 +211,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         printer_id: { type: 'number' },
-        filenames:  { type: 'array', items: { type: 'string' }, description: 'Filenames already on the printer' },
+        filenames: { type: 'array', items: { type: 'string' }, description: 'Filenames already on the printer' },
       },
       required: ['printer_id', 'filenames'],
     },
@@ -223,7 +223,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         printer_id: { type: 'number' },
-        job_id:     { type: 'string', description: 'Queue job ID (from get_queue)' },
+        job_id: { type: 'string', description: 'Queue job ID (from get_queue)' },
       },
       required: ['printer_id', 'job_id'],
     },
@@ -262,7 +262,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         project_id: { type: 'number' },
-        plate_id:   { type: 'number' },
+        plate_id: { type: 'number' },
         printer_id: { type: 'number' },
       },
       required: ['project_id', 'plate_id', 'printer_id'],
@@ -275,8 +275,8 @@ const TOOLS = [
       type: 'object',
       properties: {
         project_id: { type: 'number' },
-        spool_id:   { type: 'number', description: 'Spoolman spool ID' },
-        toolhead:   { type: 'number', description: 'Toolhead/extruder index (0-based)', default: 0 },
+        spool_id: { type: 'number', description: 'Spoolman spool ID' },
+        toolhead: { type: 'number', description: 'Toolhead/extruder index (0-based)', default: 0 },
       },
       required: ['project_id', 'spool_id'],
     },
@@ -311,8 +311,8 @@ const TOOLS = [
       type: 'object',
       properties: {
         printer_id: { type: 'number' },
-        spool_id:   { type: 'number', description: 'Spoolman spool ID' },
-        toolhead:   { type: 'number', description: 'Toolhead index (0-based). For Bambu, this is the AMS tray number.', default: 0 },
+        spool_id: { type: 'number', description: 'Spoolman spool ID' },
+        toolhead: { type: 'number', description: 'Toolhead index (0-based). For Bambu, this is the AMS tray number.', default: 0 },
       },
       required: ['printer_id', 'spool_id'],
     },
@@ -323,9 +323,9 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        spool_id:   { type: 'number' },
-        length_mm:  { type: 'number', description: 'Length consumed in mm (optional)' },
-        weight_g:   { type: 'number', description: 'Weight consumed in grams (optional)' },
+        spool_id: { type: 'number' },
+        length_mm: { type: 'number', description: 'Length consumed in mm (optional)' },
+        weight_g: { type: 'number', description: 'Weight consumed in grams (optional)' },
       },
       required: ['spool_id'],
     },
@@ -359,8 +359,8 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        name:        { type: 'string', description: 'Manufacturer name, e.g. "Bambu Lab"' },
-        comment:     { type: 'string', description: 'Optional notes' },
+        name: { type: 'string', description: 'Manufacturer name, e.g. "Bambu Lab"' },
+        comment: { type: 'string', description: 'Optional notes' },
         external_id: { type: 'string', description: 'Optional external reference ID' },
       },
       required: ['name'],
@@ -372,9 +372,9 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        vendor_id:   { type: 'number' },
-        name:        { type: 'string' },
-        comment:     { type: 'string' },
+        vendor_id: { type: 'number' },
+        name: { type: 'string' },
+        comment: { type: 'string' },
         external_id: { type: 'string' },
       },
       required: ['vendor_id'],
@@ -395,45 +395,74 @@ const TOOLS = [
   // ── Spoolman — Filament Profiles ──────────────────────────────────────────
   {
     name: 'create_filament',
-    description: 'Create a new filament profile in Spoolman (defines brand, material, color, temps). A filament profile is the template — spools are individual rolls of that profile.',
+    description: `Create a new filament profile in Spoolman. A filament profile is the template; spools are individual rolls of that profile.
+
+NAMING RULES — follow these exactly:
+- name = color/variant only. Do NOT include the material type or brand. e.g. "Blue Green", "Silk Gold", "Bicolor Red Blue". Wrong: "PLA Blue Green", "PolyTerra Matte Black".
+- material = the polymer type only, e.g. "PLA", "PETG", "TPU". Do not put color or brand here.
+
+COLOR RULES:
+- For single-color filaments: use color_hex only.
+- For multi-color/bicolor filaments: use multi_color_hexes (comma-separated, no #) + multi_color_direction. Do NOT set color_hex when using multi_color_hexes.
+- Always ask or infer each individual color for multicolor filaments — never blend them into one hex.
+
+SPOOL WEIGHT: Always include spool_weight when it is known or can be found — it is required for accurate remaining-filament calculations after weighing.`,
     inputSchema: {
       type: 'object',
       properties: {
-        name:          { type: 'string', description: 'Filament name / product line, e.g. "Basic PLA"' },
-        vendor_id:     { type: 'number', description: 'Vendor/manufacturer ID (from list_vendors)' },
-        material:      { type: 'string', description: 'Material type, e.g. "PLA", "PETG", "ABS", "TPU"' },
-        density:       { type: 'number', description: 'Density in g/cm³, e.g. 1.24 for PLA' },
-        diameter:      { type: 'number', description: 'Filament diameter in mm, e.g. 1.75' },
-        weight:        { type: 'number', description: 'Net filament weight per spool in grams, e.g. 1000' },
-        spool_weight:  { type: 'number', description: 'Empty spool weight in grams (optional)' },
-        color_hex:     { type: 'string', description: 'Color as hex without #, e.g. "FF0000" for red' },
+        name: { type: 'string', description: 'Color/variant only — no material or brand. e.g. "Blue Green", "Silk Gold", "Bicolor Red Blue"' },
+        vendor_id: { type: 'number', description: 'Vendor/manufacturer ID (from list_vendors)' },
+        material: { type: 'string', description: 'Polymer type only, e.g. "PLA", "PETG", "TPU95A". No color or brand.' },
+        density: { type: 'number', description: 'Density in g/cm³, e.g. 1.24 for PLA' },
+        diameter: { type: 'number', description: 'Filament diameter in mm, e.g. 1.75' },
+        weight: { type: 'number', description: 'Net filament weight per spool in grams, e.g. 1000' },
+        spool_weight: { type: 'number', description: 'Empty spool weight in grams — always include when known' },
+        color_hex: { type: 'string', description: 'Single color as hex without #. Omit entirely when using multi_color_hexes.' },
+        multi_color_hexes: { type: 'string', description: 'Comma-separated individual hex colors without # for multicolor filaments, e.g. "0000FF,FF0000". Use this for any bicolor/multicolor filament. Do NOT also set color_hex.' },
+        multi_color_direction: { type: 'string', description: '"longitudinal" (stripes along length) or "coaxial" (concentric rings). Required when multi_color_hexes is set.' },
         extruder_temp: { type: 'number', description: 'Recommended extruder temperature °C' },
-        bed_temp:      { type: 'number', description: 'Recommended bed temperature °C' },
-        article_number:{ type: 'string', description: 'Manufacturer article/SKU number (optional)' },
-        comment:       { type: 'string', description: 'Optional notes' },
+        bed_temp: { type: 'number', description: 'Recommended bed temperature °C' },
+        article_number: { type: 'string', description: 'Manufacturer article/SKU number' },
+        price: { type: 'number', description: 'Price in local currency. ALWAYS include if known/mentioned, e.g. if the user provides it.' },
+        comment: { type: 'string', description: 'Optional notes' },
+        url: { type: 'string', description: 'Product page URL. ALWAYS include when available — extracted from product links or pages the user provides.' },
+        swatch: { type: 'boolean', description: 'Whether a physical swatch has been printed for this filament' },
+        pressure_advance: { type: 'number', description: 'Klipper pressure advance value for this filament, e.g. 0.04. Automatically applied when spool is assigned to a Klipper printer.' },
       },
       required: ['material', 'density', 'diameter'],
     },
   },
   {
     name: 'update_filament',
-    description: 'Update an existing filament profile in Spoolman.',
+    description: `Update an existing filament profile in Spoolman.
+
+Same naming and color rules as create_filament:
+- name = color/variant only, no material/brand prefix.
+- For multicolor: set multi_color_hexes (comma-separated hex, no #) + multi_color_direction. Do NOT set color_hex at the same time.
+- For single-color: set color_hex only.
+- ALWAYS include price and url if the user mentions them.`,
     inputSchema: {
       type: 'object',
       properties: {
-        filament_id:   { type: 'number' },
-        name:          { type: 'string' },
-        vendor_id:     { type: 'number' },
-        material:      { type: 'string' },
-        density:       { type: 'number' },
-        diameter:      { type: 'number' },
-        weight:        { type: 'number' },
-        spool_weight:  { type: 'number' },
-        color_hex:     { type: 'string', description: 'Hex color without #' },
+        filament_id: { type: 'number', description: 'ID of the filament profile to update' },
+        name: { type: 'string', description: 'Color/variant only — no material or brand prefix' },
+        vendor_id: { type: 'number' },
+        material: { type: 'string', description: 'Polymer type only, e.g. "PLA", "TPU95A"' },
+        density: { type: 'number' },
+        diameter: { type: 'number' },
+        weight: { type: 'number' },
+        spool_weight: { type: 'number', description: 'Empty spool weight in grams' },
+        color_hex: { type: 'string', description: 'Single color hex without #. Omit when using multi_color_hexes.' },
+        multi_color_hexes: { type: 'string', description: 'Comma-separated individual hex colors without # for multicolor filaments. Do NOT also set color_hex.' },
+        multi_color_direction: { type: 'string', description: '"longitudinal" (stripes) or "coaxial" (rings). Required with multi_color_hexes.' },
         extruder_temp: { type: 'number' },
-        bed_temp:      { type: 'number' },
-        article_number:{ type: 'string' },
-        comment:       { type: 'string' },
+        bed_temp: { type: 'number' },
+        article_number: { type: 'string' },
+        price: { type: 'number', description: 'Price in local currency' },
+        comment: { type: 'string' },
+        url: { type: 'string', description: 'Product page URL' },
+        swatch: { type: 'boolean', description: 'Whether a physical swatch has been printed for this filament' },
+        pressure_advance: { type: 'number', description: 'Klipper pressure advance value, e.g. 0.04' },
       },
       required: ['filament_id'],
     },
@@ -452,20 +481,37 @@ const TOOLS = [
 
   // ── Spoolman — Spool Management ───────────────────────────────────────────
   {
+    name: 'update_spool',
+    description: 'Update metadata on an existing spool (lot number, location, comment, archive status). Use measure_spool to update remaining weight instead.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spool_id: { type: 'number', description: 'Spool ID to update' },
+        lot_nr: { type: 'string', description: 'Lot/batch number from spool label' },
+        comment: { type: 'string', description: 'Notes about this spool' },
+        location: { type: 'string', description: 'Physical storage location' },
+        archived: { type: 'boolean', description: 'Whether this spool is archived/retired' },
+        first_used: { type: 'string', description: 'ISO 8601 datetime when spool was first used' },
+        last_used: { type: 'string', description: 'ISO 8601 datetime of last use' },
+      },
+      required: ['spool_id'],
+    },
+  },
+  {
     name: 'create_spool',
     description: 'Register a new spool in Spoolman. Requires a filament profile ID. Specify either initial_weight (net filament) or remaining_weight to set the starting amount.',
     inputSchema: {
       type: 'object',
       properties: {
-        filament_id:      { type: 'number', description: 'Filament profile ID (from list_filaments or create_filament)' },
-        initial_weight:   { type: 'number', description: 'Starting net filament weight in grams (new spool). If omitted, uses filament profile default.' },
+        filament_id: { type: 'number', description: 'Filament profile ID (from list_filaments or create_filament)' },
+        initial_weight: { type: 'number', description: 'Starting net filament weight in grams (new spool). If omitted, uses filament profile default.' },
         remaining_weight: { type: 'number', description: 'Current remaining filament weight in grams (for a partially used spool)' },
-        used_weight:      { type: 'number', description: 'Amount already consumed in grams (alternative to remaining_weight)' },
-        spool_weight:     { type: 'number', description: 'Override empty spool weight in grams' },
-        lot_nr:           { type: 'string', description: 'Lot/batch number from spool label' },
-        comment:          { type: 'string', description: 'Optional notes' },
-        first_used:       { type: 'string', description: 'ISO 8601 datetime when spool was first used' },
-        last_used:        { type: 'string', description: 'ISO 8601 datetime of last use' },
+        used_weight: { type: 'number', description: 'Amount already consumed in grams (alternative to remaining_weight)' },
+        spool_weight: { type: 'number', description: 'Override empty spool weight in grams' },
+        lot_nr: { type: 'string', description: 'Lot/batch number from spool label' },
+        comment: { type: 'string', description: 'Optional notes' },
+        first_used: { type: 'string', description: 'ISO 8601 datetime when spool was first used' },
+        last_used: { type: 'string', description: 'ISO 8601 datetime of last use' },
       },
       required: ['filament_id'],
     },
@@ -476,7 +522,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        spool_id:     { type: 'number' },
+        spool_id: { type: 'number' },
         total_weight: { type: 'number', description: 'Gross weight in grams (spool + remaining filament)' },
       },
       required: ['spool_id', 'total_weight'],
@@ -494,6 +540,18 @@ const TOOLS = [
     },
   },
 
+  {
+    name: 'generate_swatch',
+    description: 'Generate a swatch STL file for a filament and save it to the Marathon data directory. Returns the saved file path. Use list_filaments to find filaments where extra.swatch is not "true", then call this for each one to batch-generate swatches.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filament_id: { type: 'number', description: 'Filament ID to generate swatch for' },
+      },
+      required: ['filament_id'],
+    },
+  },
+
   // ── Maintenance ───────────────────────────────────────────────────────────
   {
     name: 'list_maintenance',
@@ -506,7 +564,7 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        task_id:    { type: 'number' },
+        task_id: { type: 'number' },
         printer_id: { type: 'number' },
       },
       required: ['task_id', 'printer_id'],
@@ -684,14 +742,14 @@ async function handleTool(name, args) {
     case 'assign_spool_to_printer':
       return post('/api/spoolman/set-active', {
         printer_id: args.printer_id,
-        spool_id:   args.spool_id,
-        toolhead:   args.toolhead ?? 0,
+        spool_id: args.spool_id,
+        toolhead: args.toolhead ?? 0,
       });
 
     case 'use_filament': {
       const body = {};
       if (args.length_mm !== undefined) body.use_length = args.length_mm;
-      if (args.weight_g  !== undefined) body.use_weight = args.weight_g;
+      if (args.weight_g !== undefined) body.use_weight = args.weight_g;
       return put(`/api/spoolman/spool/${args.spool_id}/use`, body);
     }
 
@@ -708,7 +766,7 @@ async function handleTool(name, args) {
     case 'create_vendor': {
       const { name, comment, external_id } = args;
       const body = { name };
-      if (comment     !== undefined) body.comment     = comment;
+      if (comment !== undefined) body.comment = comment;
       if (external_id !== undefined) body.external_id = external_id;
       return post('/api/spoolman/vendors', body);
     }
@@ -722,23 +780,43 @@ async function handleTool(name, args) {
       return del(`/api/spoolman/vendors/${args.vendor_id}`);
 
     // ── Spoolman — Filament Profiles ───────────────────────────────────────
-    case 'create_filament': {
-      const { filament_id: _fid, ...body } = args; // filament_id not needed for create
-      return post('/api/spoolman/filaments', body);
-    }
-
+    case 'create_filament':
     case 'update_filament': {
-      const { filament_id, ...fields } = args;
-      return patch(`/api/spoolman/filaments/${filament_id}`, fields);
+      const isUpdate = name === 'update_filament';
+      const { filament_id, url, swatch, pressure_advance, extruder_temp, bed_temp, ...body } = args;
+      // Spoolman stores temps under settings_ prefix
+      if (extruder_temp !== undefined) body.settings_extruder_temp = extruder_temp;
+      if (bed_temp !== undefined) body.settings_bed_temp = bed_temp;
+
+      // Fetch settings to map url and swatch to the correct extra fields configured in Marathon
+      let settings = {};
+      try { settings = await get('/api/settings'); } catch (e) { /* ignore */ }
+      const urlKey = settings.url_extra_field || 'url';
+      const swatchKey = settings.swatch_extra_field || 'swatch';
+
+      // Extra fields
+      const extra = { ...(body.extra || {}) };
+      if (url !== undefined) extra[urlKey] = `"${url}"`;
+      if (swatch !== undefined) extra[swatchKey] = String(swatch);
+      if (pressure_advance !== undefined) extra['pressure_advance'] = String(pressure_advance);
+      if (Object.keys(extra).length) body.extra = extra;
+      return isUpdate
+        ? patch(`/api/spoolman/filaments/${filament_id}`, body)
+        : post('/api/spoolman/filaments', body);
     }
 
     case 'delete_filament':
       return del(`/api/spoolman/filaments/${args.filament_id}`);
 
     // ── Spoolman — Spool Management ────────────────────────────────────────
+    case 'update_spool': {
+      const { spool_id, ...fields } = args;
+      return patch(`/api/spoolman/spools/${spool_id}`, fields);
+    }
+
     case 'create_spool': {
       const body = { filament_id: args.filament_id };
-      for (const k of ['initial_weight','remaining_weight','used_weight','spool_weight','lot_nr','comment','first_used','last_used']) {
+      for (const k of ['initial_weight', 'remaining_weight', 'used_weight', 'spool_weight', 'lot_nr', 'comment', 'first_used', 'last_used']) {
         if (args[k] !== undefined) body[k] = args[k];
       }
       return post('/api/spoolman/spools', body);
@@ -751,6 +829,9 @@ async function handleTool(name, args) {
 
     case 'delete_spool':
       return del(`/api/spoolman/spools/${args.spool_id}`);
+
+    case 'generate_swatch':
+      return post(`/api/spoolman/filaments/${args.filament_id}/swatch`, {});
 
     // ── Maintenance ───────────────────────────────────────────────────────
     case 'list_maintenance':
@@ -781,10 +862,42 @@ async function handleTool(name, args) {
 // Transport — stdio (default) or HTTP (MCP_TRANSPORT=http)
 // ---------------------------------------------------------------------------
 
+const SERVER_INSTRUCTIONS = `\
+You are connected to Marathon, a 3D printer fleet management system. Use the provided MCP tools for ALL operations — never suggest or use curl commands, raw HTTP requests, or direct API calls.
+
+══ FILAMENT RULES — FOLLOW THESE EXACTLY, NO EXCEPTIONS ══
+
+NAME: Color/variant only. Strip the material type and brand completely.
+  ✓ "White Brown"   ✓ "Silk Gold"   ✓ "Blue Green"
+  ✗ "PLA Bicolor White/Brown"   ✗ "PolyTerra Matte Black"
+
+MATERIAL: Polymer type only — "PLA", "PETG", "TPU95A". No color, no brand.
+
+COLOR — THIS IS CRITICAL:
+  • If the filament is described as bicolor, multicolor, dual-color, or color-shifting in ANY way:
+    → You MUST use multi_color_hexes (comma-separated hex values without #, e.g. "FFFFFF,8B4513")
+    → You MUST set multi_color_direction. Default to "coaxial" unless the product explicitly says stripes/longitudinal.
+    → You MUST NOT set color_hex — leave it out entirely
+  • Only use color_hex for plain single-color filaments.
+
+URL: Always set the url parameter when a product page URL is known or was given by the user.
+
+SPOOL WEIGHT: Always include spool_weight when known.
+
+When registering a new spool, always use the filament profile's spool_weight.
+
+COLOR HEX LOOKUP — use filamentcolors.xyz when the color hex is unknown:
+  1. Fetch: https://filamentcolors.xyz/api/swatch/?search=<color_name>&manufacturer=<brand>
+     (omit manufacturer if unknown; use filament_type_parent_type_name=PLA/PETG/etc to narrow results)
+  2. Pick the best matching result from the "results" array.
+  3. Use the "hex_color" field (already without #) as the color_hex or inside multi_color_hexes.
+  4. If no good match is found, make your best estimate and note it.
+`;
+
 function buildServer() {
   const s = new Server(
     { name: 'marathon-mcp', version: '1.0.0' },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS },
   );
   s.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
   s.setRequestHandler(CallToolRequestSchema, async (request) => {

@@ -240,7 +240,7 @@ export function colorDistance(rgb1, rgb2) {
  */
 export function findClosestRal(hex) {
     if (!hex) return null;
-    let cleanHex = hex.replace(/^#/, '').toUpperCase();
+    let cleanHex = hex.replace(/^#/, '').toUpperCase().slice(0, 6);
     if (cleanHex.length === 3) {
         cleanHex = cleanHex.split('').map(c => c + c).join('');
     }

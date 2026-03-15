@@ -723,6 +723,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   width: 12px;
   height: 12px;
   border-radius: 50%;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, .2);
   grid-row: 1;
   background-color: #888;
@@ -2325,6 +2326,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   height: 32px;
   border-radius: 50%;
   flex-shrink: 0;
+  overflow: hidden;
   border: 2px solid rgba(255, 255, 255, .15);
   box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
   /* checkerboard shows through translucent colors */
@@ -3250,6 +3252,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   height: 14px;
   border-radius: 50%;
   flex-shrink: 0;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, .15);
   background-color: #888;
   background-image:

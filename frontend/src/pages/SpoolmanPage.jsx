@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePrinters } from '../hooks/usePrinters';
-import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool, getAmsSlots, getBambuWarnings, dismissBambuWarning, getStorageLocation, patchSpool } from '../api/spoolman';
+import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool, getAmsSlots, getBambuWarnings, dismissBambuWarning, getStorageLocation, patchSpool, fetchTeamsterWeight, tareTeamster } from '../api/spoolman';
 import { groupSpoolsByFilament } from '../utils/spoolStorage';
 import { useFilamentGuard } from '../hooks/useFilamentGuard';
 import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
@@ -78,6 +78,10 @@ export default function SpoolmanPage() {
     const [adjustType, setAdjustType] = useState('length');
     const [adjustAmount, setAdjustAmount] = useState('');
     const [adjustBusy, setAdjustBusy] = useState(false);
+    const [scaleFetching, setScaleFetching] = useState(false);
+    const [scaleError, setScaleError] = useState('');
+    const [scaleLive, setScaleLive] = useState(null);   // { weight_g, ready } from polling
+    const [tareBusy, setTareBusy] = useState(false);
 
     const [showAddSpool, setShowAddSpool] = useState(false);
     const [storageLocation, setStorageLocationState] = useState('Storage');
@@ -94,6 +98,7 @@ export default function SpoolmanPage() {
             setAdjustSpool(spool);
             setAdjustType('measured');
             setAdjustAmount('');
+            setScaleError('');
         },
         onClearBambuWarning: (spoolId) => {
             dismissBambuWarning(spoolId).then(fetchWarningsIfNeeded).catch(() => { });
@@ -112,8 +117,17 @@ export default function SpoolmanPage() {
                     setAmsSpools(prev => ({ ...prev, [spool.id]: spool }));
                 } else {
                     await setActiveSpool(printer.id, spool.id);
-                    const r = await fetch('/api/status');
-                    if (r.ok) setStatuses(await r.json());
+                    // Optimistic update — printerCache won't reflect the change until next poll
+                    setStatuses(prev => ({
+                        ...prev,
+                        printers: {
+                            ...(prev?.printers || {}),
+                            [printer.id]: {
+                                ...(prev?.printers?.[printer.id] || {}),
+                                _active_spool: spool,
+                            },
+                        },
+                    }));
                 }
             } catch (err) {
                 alert(`Failed to assign spool: ${err.message}`);
@@ -187,6 +201,26 @@ export default function SpoolmanPage() {
     }, [bambuPrinters.length, spools]);
 
 
+
+    // Live scale polling — active only while the measured-weight dialog is open
+    useEffect(() => {
+        if (!adjustSpool || adjustType !== 'measured') {
+            setScaleLive(null);
+            return;
+        }
+        let cancelled = false;
+        async function poll() {
+            try {
+                const data = await fetchTeamsterWeight();
+                if (!cancelled) setScaleLive(data);
+            } catch {
+                if (!cancelled) setScaleLive(null);
+            }
+        }
+        poll();
+        const id = setInterval(poll, 1500);
+        return () => { cancelled = true; clearInterval(id); };
+    }, [adjustSpool, adjustType]);
 
     const uniqueMaterials = Array.from(new Set(
         spools.map(s => normalizeFilamentType(s.filament?.material)).filter(Boolean)
@@ -296,8 +330,16 @@ export default function SpoolmanPage() {
     async function handleClearSpool(printerId) {
         try {
             await setActiveSpool(printerId, null);
-            const r = await fetch('/api/status');
-            if (r.ok) setStatuses(await r.json());
+            setStatuses(prev => ({
+                ...prev,
+                printers: {
+                    ...(prev?.printers || {}),
+                    [printerId]: {
+                        ...(prev?.printers?.[printerId] || {}),
+                        _active_spool: null,
+                    },
+                },
+            }));
         } catch (err) {
             alert(`Failed to clear spool: ${err.message}`);
         }
@@ -314,6 +356,34 @@ export default function SpoolmanPage() {
             await fetchSpools();
         } catch (err) {
             alert(`Failed to delete spool: ${err.message}`);
+        }
+    }
+
+    async function handleFetchFromScale() {
+        setScaleFetching(true);
+        setScaleError('');
+        try {
+            const data = await fetchTeamsterWeight();
+            if (!data.ready) {
+                setScaleError('Scale not ready — check device');
+            } else {
+                setAdjustAmount(String(Math.round(data.weight_g * 10) / 10));
+            }
+        } catch (e) {
+            setScaleError(e.message);
+        } finally {
+            setScaleFetching(false);
+        }
+    }
+
+    async function handleTare() {
+        setTareBusy(true);
+        try {
+            await tareTeamster();
+        } catch (e) {
+            setScaleError(e.message);
+        } finally {
+            setTareBusy(false);
         }
     }
 
@@ -631,7 +701,7 @@ export default function SpoolmanPage() {
                                                 <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', fontWeight: '500' }}>{f.name || `Spool #${spool.id}`}</td>
                                                 <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
                                                     {f.material || '—'} {f.multi_color_hexes
-                                                        ? <span style={{ fontSize: '11px', opacity: 0.7 }}>({f.multi_color_hexes.split(',').length} colors, {f.multi_color_direction === 'coextrusion' ? 'coextruded' : 'longitudinal'})</span>
+                                                        ? <span style={{ fontSize: '11px', opacity: 0.7 }}>({f.multi_color_hexes.split(',').length} colors, {f.multi_color_direction === 'coaxial' ? 'coaxial' : 'longitudinal'})</span>
                                                         : f.color_hex && <span style={{ fontSize: '11px', opacity: 0.7 }}>(#{f.color_hex.toUpperCase()})</span>
                                                     }
                                                 </td>
@@ -641,7 +711,7 @@ export default function SpoolmanPage() {
                                                 </td>
                                                 <td style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', textAlign: 'right' }}>
                                                     <div className="file-actions">
-                                                        <button className="spool-list-icon-btn" onClick={e => { e.stopPropagation(); setAdjustSpool(spool); setAdjustType('length'); setAdjustAmount(''); }} title="Adjust">⚙</button>
+                                                        <button className="spool-list-icon-btn" onClick={e => { e.stopPropagation(); setAdjustSpool(spool); setAdjustType('length'); setAdjustAmount(''); setScaleError(''); }} title="Adjust">⚙</button>
                                                         <button className="spool-list-icon-btn" onClick={e => { e.stopPropagation(); handleDeleteSpool(spool); }} title="Delete">🗑</button>
                                                     </div>
                                                 </td>
@@ -694,7 +764,7 @@ export default function SpoolmanPage() {
                                                             <span className="spool-card-abrasive-badge" title="Abrasive filler — requires hardened nozzle">⬡ HN</span>
                                                         )}
                                                         {f.multi_color_hexes
-                                                            ? <span className="spool-card-hex">{f.multi_color_hexes.split(',').length} colors · {f.multi_color_direction === 'coextrusion' ? 'coextruded' : 'longitudinal'}</span>
+                                                            ? <span className="spool-card-hex">{f.multi_color_hexes.split(',').length} colors · {f.multi_color_direction === 'coaxial' ? 'coaxial' : 'longitudinal'}</span>
                                                             : f.color_hex && <span className="spool-card-hex">#{f.color_hex.slice(0,6).toUpperCase()}</span>
                                                         }
                                                     </span>
@@ -715,7 +785,7 @@ export default function SpoolmanPage() {
                                             </div>
                                             <button
                                                 className="spool-adjust-btn"
-                                                onClick={e => { e.stopPropagation(); setAdjustSpool(spool); setAdjustType('length'); setAdjustAmount(''); }}
+                                                onClick={e => { e.stopPropagation(); setAdjustSpool(spool); setAdjustType('length'); setAdjustAmount(''); setScaleError(''); }}
                                                 title="Adjust filament amount"
                                             >⚙</button>
                                             <button
@@ -763,7 +833,7 @@ export default function SpoolmanPage() {
                                                             <span className="spool-card-abrasive-badge" title="Abrasive filler — requires hardened nozzle">⬡ HN</span>
                                                         )}
                                                         {f.multi_color_hexes
-                                                            ? <span className="spool-card-hex">{f.multi_color_hexes.split(',').length} colors · {f.multi_color_direction === 'coextrusion' ? 'coextruded' : 'longitudinal'}</span>
+                                                            ? <span className="spool-card-hex">{f.multi_color_hexes.split(',').length} colors · {f.multi_color_direction === 'coaxial' ? 'coaxial' : 'longitudinal'}</span>
                                                             : f.color_hex && <span className="spool-card-hex">#{f.color_hex.slice(0,6).toUpperCase()}</span>
                                                         }
                                                     </span>
@@ -840,7 +910,7 @@ export default function SpoolmanPage() {
                                     <button
                                         key={val}
                                         className={`spool-type-tab${adjustType === val ? ' active' : ''}`}
-                                        onClick={() => { setAdjustType(val); setAdjustAmount(''); }}
+                                        onClick={() => { setAdjustType(val); setAdjustAmount(''); setScaleError(''); }}
                                     >
                                         {label}
                                     </button>
@@ -865,7 +935,35 @@ export default function SpoolmanPage() {
                                 <span className="spool-dialog-unit">{adjustType === 'length' ? 'mm' : 'g'}</span>
                             </div>
                             {adjustType === 'measured' && (
-                                <p className="spool-dialog-hint">Enter the total weight of the spool as read on a scale. Spoolman will calculate remaining filament.</p>
+                                <>
+                                    {/* Live readout */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', padding: '8px 12px', background: 'var(--surface2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                                        <span style={{ fontSize: '13px', color: 'var(--text-muted)', flexShrink: 0 }}>Scale:</span>
+                                        <span style={{ fontSize: '18px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: scaleLive?.ready ? (scaleLive.stable ? 'var(--text)' : '#f59e0b') : 'var(--text-muted)', minWidth: '70px' }}>
+                                            {scaleLive ? (scaleLive.ready ? `${scaleLive.weight_g.toFixed(1)} g` : 'Not ready') : '—'}
+                                        </span>
+                                        {scaleLive?.ready && !scaleLive?.stable && (
+                                            <span style={{ fontSize: '11px', color: '#f59e0b' }}>stabilising…</span>
+                                        )}
+                                        <button
+                                            className="btn btn-sm"
+                                            style={{ marginLeft: 'auto' }}
+                                            onClick={() => scaleLive?.ready && setAdjustAmount(String(Math.round(scaleLive.weight_g * 10) / 10))}
+                                            disabled={!scaleLive?.ready || !scaleLive?.stable || adjustBusy}
+                                        >
+                                            Use
+                                        </button>
+                                        <button
+                                            className="btn btn-sm"
+                                            onClick={handleTare}
+                                            disabled={tareBusy || adjustBusy}
+                                        >
+                                            {tareBusy ? 'Taring…' : 'Tare'}
+                                        </button>
+                                    </div>
+                                    {scaleError && <span style={{ fontSize: '12px', color: 'var(--danger)', marginTop: '4px', display: 'block' }}>{scaleError}</span>}
+                                    <p className="spool-dialog-hint">Place the spool on the scale, then click Use to copy the reading, or type the weight manually.</p>
+                                </>
                             )}
                         </div>
                         <div className="spool-dialog-actions">

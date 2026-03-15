@@ -352,6 +352,46 @@ export async function setStorageLocation(storage_location) {
     return body;
 }
 
+/** Fetch live weight reading from the Teamster load cell scale via the backend proxy. */
+export async function fetchTeamsterWeight() {
+    const r = await fetch('/api/spoolman/teamster/weight');
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json(); // { weight_g, ready }
+}
+
+/** Test connectivity to the Teamster device. */
+export async function testTeamsterConnection() {
+    const r = await fetch('/api/spoolman/teamster/test');
+    return r.json();
+}
+
+/** Zero the Teamster scale. */
+export async function tareTeamster() {
+    const r = await fetch('/api/spoolman/teamster/tare', { method: 'POST' });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+/** Calibrate the Teamster scale with a known weight in grams. */
+export async function calibrateTeamster(grams) {
+    const r = await fetch('/api/spoolman/teamster/calibrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grams }),
+    });
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
 /** Partial-update a spool in Spoolman (e.g. set/clear location field). */
 export async function patchSpool(id, data) {
     const r = await fetch(`${API}/spools/${id}`, {

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { usePrinters } from './usePrinters';
 import { useStatus } from './useStatus';
 import { getBambuWarnings } from '../api/spoolman';
+import { normalizeFilamentType } from '../utils/materialUtils';
 
 /**
  * Global hook to check if it's safe to assign a spool to a printer.
@@ -36,7 +37,8 @@ export function useFilamentGuard({ onConfirm, onWeighSpool, onClearBambuWarning,
         const warnings = [];
 
         // 1. Check material compatibility
-        const material = (spool.filament?.material || '').toUpperCase();
+        const rawMaterial = spool.filament?.material || '';
+        const material = normalizeFilamentType(rawMaterial);
         let supported = [];
         if (Array.isArray(printer.filament_types)) {
             supported = printer.filament_types;
@@ -44,11 +46,11 @@ export function useFilamentGuard({ onConfirm, onWeighSpool, onClearBambuWarning,
             try { supported = JSON.parse(printer.filament_types || '[]'); } catch { }
         }
 
-        const supportedUpper = supported.map(s => s.toUpperCase());
-        if (material && supportedUpper.length > 0 && !supportedUpper.includes(material)) {
+        const supportedNormalized = supported.map(s => normalizeFilamentType(s));
+        if (material && supportedNormalized.length > 0 && !supportedNormalized.includes(material)) {
             warnings.push({
                 type: 'incompatible',
-                message: `${printer.name} does not list "${spool.filament?.material}" as supported. Supported: ${supported.join(', ')}`
+                message: `${printer.name} does not list "${rawMaterial}" as supported. Supported: ${supported.join(', ')}`
             });
         }
 

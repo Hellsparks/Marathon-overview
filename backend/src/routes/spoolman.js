@@ -11,6 +11,22 @@ const { clearSpoolCache } = require('../services/poller');
 
 const router = express.Router();
 
+/**
+ * Extract a human-readable error string from a Spoolman API error response.
+ * FastAPI/Pydantic returns { detail: [...] } (422), simple errors use { message: "..." }.
+ */
+function spoolmanErrorText(err, statusText) {
+    if (Array.isArray(err.detail)) {
+        return err.detail.map(d => {
+            const loc = Array.isArray(d.loc) && d.loc.length > 1 ? d.loc.slice(1).join('.') + ': ' : '';
+            return loc + (d.msg || JSON.stringify(d));
+        }).join('; ');
+    }
+    if (typeof err.detail === 'string') return err.detail;
+    if (typeof err.message === 'string') return err.message;
+    return statusText;
+}
+
 /** Helper: get Spoolman URL from settings */
 function getSpoolmanUrl() {
     const db = getDb();
@@ -58,15 +74,25 @@ const MATERIAL_PROFILES = {
 };
 const DEFAULT_PROFILE = { tray_info_idx: 'GFL99', setting_id: 'GFSL99' };
 
+/** Map every color in a comma-separated multi_color_hexes string to its nearest Bambu color.
+ *  Returns an array of 8-char RRGGBBFF strings, one per input color. */
+function getNearestBambuColors(multiHexStr) {
+    if (!multiHexStr) return [];
+    return multiHexStr.split(',').map(h => getNearestBambuColor(h.trim()));
+}
+
 function getNearestBambuColor(hexStr) {
     if (!hexStr) return 'FFFFFFFF';
 
-    // Convert a hex string to an array [r, g, b]
+    // Convert a hex string to an [r, g, b] array.
+    // Handles 3-char, 6-char, and 8-char (RRGGBBAA) inputs — alpha is always ignored.
     const hexToRgb = (h) => {
-        h = h.replace(/^#/, '');
+        h = String(h).replace(/^#/, '').trim();
         if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        // Truncate to 6 chars so an alpha byte is never included in the comparison
+        h = h.slice(0, 6);
         const arr = [...h.matchAll(/[a-f0-9]{2}/gi)].map(m => parseInt(m[0], 16));
-        return arr.length >= 3 ? arr.slice(0, 3) : [255, 255, 255];
+        return arr.length >= 3 ? arr : [255, 255, 255];
     };
 
     const targetRgb = hexToRgb(hexStr);
@@ -166,8 +192,17 @@ router.post('/set-active', async (req, res) => {
                 if (!spool) return res.status(404).json({ error: 'Spool not found in Spoolman' });
 
                 const filament = spool.filament || {};
-                const colorHex = getNearestBambuColor(filament.color_hex);
-                const material = (filament.material || 'PLA').toUpperCase();
+                // For multicolor filaments: prefer first color from multi_color_hexes (color_hex may be
+                // absent OR a meaningless placeholder like "000000" when multi_color_hexes is set).
+                const resolvedColorHex = (filament.multi_color_hexes
+                    ? filament.multi_color_hexes.split(',')[0].trim()
+                    : null) || filament.color_hex || null;
+                const colorHex = getNearestBambuColor(resolvedColorHex);
+                const rawMaterial = (filament.material || 'PLA').toUpperCase();
+                // Strip trailing digits/variants so e.g. "TPU95A" → "TPU", "PA12" → "PA12" (kept if in map)
+                const material = MATERIAL_PROFILES[rawMaterial]
+                    ? rawMaterial
+                    : rawMaterial.replace(/\d+[A-Z]*$/, '').trim() || rawMaterial;
                 const profile = MATERIAL_PROFILES[material] || DEFAULT_PROFILE;
                 const nozzleTempMin = filament.settings_nozzle_temperature
                     ? Math.max(150, filament.settings_nozzle_temperature - 20)
@@ -185,7 +220,7 @@ router.post('/set-active', async (req, res) => {
                     nozzle_temp_min: nozzleTempMin,
                     nozzle_temp_max: nozzleTempMax,
                 });
-                console.log(`[Bambu] setAmsTray completed for printer ${printerId} tray ${tray}`);
+                console.log(`[Bambu] setAmsTray completed for printer ${printerId} tray ${tray} colors=${filament.multi_color_hexes ? getNearestBambuColors(filament.multi_color_hexes).join(',') : colorHex}`);
 
                 // Save slot mapping
                 db.prepare(`
@@ -202,6 +237,11 @@ router.post('/set-active', async (req, res) => {
                 `).run(spoolId, printer.id);
 
                 clearSpoolCache(spoolId);
+
+                const bambuColors = filament.multi_color_hexes
+                    ? getNearestBambuColors(filament.multi_color_hexes)
+                    : [colorHex];
+                return res.json({ ok: true, bambu_colors: bambuColors });
             } else {
                 // Clear the slot
                 await client.clearAmsTray(tray);
@@ -248,6 +288,20 @@ router.post('/set-active', async (req, res) => {
             if (spoolId) {
                 db.prepare('DELETE FROM bambu_used_spools WHERE spool_id = ?').run(spoolId);
                 clearSpoolCache(spoolId);
+
+                // Auto-apply pressure advance if stored in filament extra field
+                try {
+                    const spool = await fetchSpool(spoolId);
+                    const extra = spool?.filament?.extra || {};
+                    const paRaw = extra.pressure_advance ?? extra.pa;
+                    const pa = paRaw !== undefined ? parseFloat(String(paRaw).replace(/^"|"$/g, '')) : NaN;
+                    if (!isNaN(pa) && pa >= 0) {
+                        await client.sendGcode(`SET_PRESSURE_ADVANCE ADVANCE=${pa.toFixed(4)}`);
+                        console.log(`[Moonraker] Set pressure advance ${pa} on printer ${printerId}`);
+                    }
+                } catch (paErr) {
+                    console.warn(`[Moonraker] Could not set pressure advance: ${paErr.message}`);
+                }
             }
 
             res.json(await r.json());
@@ -318,8 +372,8 @@ router.put('/spool/:id/use', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json(await r.json());
     } catch (err) {
@@ -342,8 +396,8 @@ router.put('/spool/:id/measure', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json(await r.json());
     } catch (err) {
@@ -376,8 +430,8 @@ router.post('/vendors', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json(await r.json());
     } catch (err) {
@@ -410,8 +464,9 @@ router.post('/filaments', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            console.error('Spoolman POST /filament error:', r.status, JSON.stringify(err));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json(await r.json());
     } catch (err) {
@@ -432,8 +487,8 @@ router.post('/spools', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         const created = await r.json();
         // Auto-track the filament so it appears in the Inventory page
@@ -464,8 +519,8 @@ router.patch('/spools/:id', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json(await r.json());
     } catch (err) {
@@ -483,8 +538,8 @@ router.delete('/spools/:id', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json({ ok: true });
     } catch (err) {
@@ -523,8 +578,8 @@ router.post('/fields/:entity', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json(await r.json());
     } catch (err) {
@@ -544,8 +599,9 @@ router.patch('/filaments/:id', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            console.error('Spoolman PATCH /filament error:', r.status, JSON.stringify(err));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json(await r.json());
     } catch (err) {
@@ -563,12 +619,57 @@ router.delete('/filaments/:id', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json({ ok: true });
     } catch (err) {
         res.status(502).json({ error: err.message });
+    }
+});
+
+// POST /api/spoolman/filaments/:id/swatch — generate swatch STL, save to data/swatches/, return path
+const SWATCH_SCRIPT = path.join(__dirname, '../services/swatch_generator.py');
+const PYTHON_BINS = process.env.PYTHON_BIN ? [process.env.PYTHON_BIN] : ['python3', 'python', 'py'];
+
+router.post('/filaments/:id/swatch', async (req, res) => {
+    const spoolmanUrl = getSpoolmanUrl();
+    if (!spoolmanUrl) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const r = await fetch(`${spoolmanUrl}/api/v1/filament/${req.params.id}`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) return res.status(404).json({ error: `Filament not found (${r.status})` });
+        const filament = await r.json();
+
+        const vendorName = filament.vendor?.name || '';
+        const line1 = [vendorName, filament.material].filter(Boolean).join(' ').substring(0, 28);
+        const line2 = (filament.name || '').substring(0, 20);
+        const safeName = [filament.material, vendorName, filament.name || `swatch_${filament.id}`]
+            .filter(Boolean).join(' ').replace(/[^\w\s-]/g, '').replace(/\s+/g, '_').trim();
+        const filename = `${safeName}.stl`;
+
+        const DATA_DIR = process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, '../../data');
+        const swatchDir = path.join(DATA_DIR, 'swatches');
+        if (!fs.existsSync(swatchDir)) fs.mkdirSync(swatchDir, { recursive: true });
+        const outPath = path.join(swatchDir, filename);
+        const arg = JSON.stringify({ line1, line2 });
+
+        const bins = [...PYTHON_BINS];
+        function trySpawn() {
+            const bin = bins.shift();
+            if (!bin) return res.status(500).json({ error: 'Python not found' });
+            const proc = spawn(bin, [SWATCH_SCRIPT, arg, outPath]);
+            const stderr = [];
+            proc.stderr.on('data', d => stderr.push(d.toString()));
+            proc.on('error', err => err.code === 'ENOENT' ? trySpawn() : res.status(500).json({ error: err.message }));
+            proc.on('close', code => {
+                if (code === 9009) return trySpawn();
+                if (code !== 0) return res.status(500).json({ error: `exit ${code}: ${stderr.join('')}` });
+                res.json({ ok: true, path: outPath, filename });
+            });
+        }
+        trySpawn();
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -584,8 +685,8 @@ router.patch('/vendors/:id', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json(await r.json());
     } catch (err) {
@@ -603,8 +704,8 @@ router.delete('/vendors/:id', async (req, res) => {
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
-            const err = await r.json().catch(() => ({ message: r.statusText }));
-            return res.status(r.status).json({ error: err.message || r.statusText });
+            const err = await r.json().catch(() => ({}));
+            return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json({ ok: true });
     } catch (err) {
@@ -1238,6 +1339,67 @@ router.get('/test', async (_req, res) => {
     try {
         const r = await fetch(`${url}/api/v1/health`, { signal: AbortSignal.timeout(5000) });
         res.json({ ok: r.ok, status: r.status });
+    } catch (err) {
+        res.json({ ok: false, error: err.message });
+    }
+});
+
+// ── Teamster (load cell scale) proxy ─────────────────────────────────────────
+
+function getTeamsterUrl() {
+    const db = getDb();
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'teamster_url'").get();
+    return row?.value || '';
+}
+
+/** GET /api/spoolman/teamster/weight — fetch live weight from the Teamster ESP device */
+router.get('/teamster/weight', async (_req, res) => {
+    const url = getTeamsterUrl();
+    if (!url) return res.status(400).json({ error: 'Teamster URL not configured' });
+    try {
+        const r = await fetch(`${url}/data`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) return res.status(502).json({ error: `Device returned ${r.status}` });
+        const data = await r.json();
+        res.json({ weight_g: data.weight_g, ready: data.ready, stable: data.stable ?? false });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+/** POST /api/spoolman/teamster/tare — zero the scale */
+router.post('/teamster/tare', async (_req, res) => {
+    const url = getTeamsterUrl();
+    if (!url) return res.status(400).json({ error: 'Teamster URL not configured' });
+    try {
+        const r = await fetch(`${url}/tare`, { method: 'POST', signal: AbortSignal.timeout(5000) });
+        res.json({ ok: r.ok });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+/** POST /api/spoolman/teamster/calibrate — calibrate with a known weight */
+router.post('/teamster/calibrate', async (req, res) => {
+    const url = getTeamsterUrl();
+    if (!url) return res.status(400).json({ error: 'Teamster URL not configured' });
+    const { grams } = req.body;
+    if (!grams || isNaN(grams)) return res.status(400).json({ error: 'grams required' });
+    try {
+        const r = await fetch(`${url}/calibrate?grams=${encodeURIComponent(grams)}`, { method: 'POST', signal: AbortSignal.timeout(5000) });
+        res.json({ ok: r.ok });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+/** GET /api/spoolman/teamster/test — check connectivity to the Teamster device */
+router.get('/teamster/test', async (_req, res) => {
+    const url = getTeamsterUrl();
+    if (!url) return res.status(400).json({ error: 'Teamster URL not configured' });
+    try {
+        const r = await fetch(`${url}/data`, { signal: AbortSignal.timeout(5000) });
+        const data = r.ok ? await r.json() : null;
+        res.json({ ok: r.ok, weight_g: data?.weight_g, ready: data?.ready });
     } catch (err) {
         res.json({ ok: false, error: err.message });
     }
