@@ -9,6 +9,7 @@ class MoonrakerClient {
       this.baseUrl = `http://${printer.host}:${printer.port}`;
     }
     this.apiKey = printer.api_key;
+    this.printer = printer;
   }
 
   _headers() {
@@ -18,8 +19,14 @@ class MoonrakerClient {
   }
 
   async getStatus() {
+    // Build extruder params: extruder (T0) + extruder1…extruderN-1 for multi-toolhead
+    const toolheadCount = this.printer?.toolhead_count || 1;
+    const extruderParams = Array.from({ length: toolheadCount }, (_, i) =>
+      i === 0 ? 'extruder' : `extruder${i}`
+    ).join('&');
+
     const url = `${this.baseUrl}/printer/objects/query` +
-      `?print_stats&display_status&virtual_sdcard&extruder&heater_bed&toolhead&idle_timeout`;
+      `?print_stats&display_status&virtual_sdcard&${extruderParams}&heater_bed&toolhead&idle_timeout`;
     const r = await fetch(url, {
       headers: this._headers(),
       signal: AbortSignal.timeout(5000),
