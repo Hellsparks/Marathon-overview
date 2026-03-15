@@ -1134,11 +1134,14 @@ const NATIVE_LOG_FILE  = path.join(NATIVE_DIR, 'spoolman.log');
 function nativeVenv() {
     const isWin = process.platform === 'win32';
     const venv  = path.join(NATIVE_DIR, 'venv');
-    return {
-        dir:      venv,
-        python:   isWin ? path.join(venv, 'Scripts', 'python.exe') : path.join(venv, 'bin', 'python'),
-        spoolman: isWin ? path.join(venv, 'Scripts', 'spoolman.exe') : path.join(venv, 'bin', 'spoolman'),
-    };
+    const scriptsDir = isWin ? path.join(venv, 'Scripts') : path.join(venv, 'bin');
+    const python = path.join(scriptsDir, isWin ? 'python.exe' : 'python');
+    // pip may create spoolman.exe, spoolman (no ext), or only a .bat — resolve whichever exists.
+    const candidates = isWin
+        ? [path.join(scriptsDir, 'spoolman.exe'), path.join(scriptsDir, 'spoolman')]
+        : [path.join(scriptsDir, 'spoolman')];
+    const spoolman = candidates.find(p => fs.existsSync(p)) || null;
+    return { dir: venv, python, spoolman, scriptsDir };
 }
 
 /** Try python3 / python / py and return the first that resolves to Python 3.8+. */
@@ -1171,10 +1174,12 @@ function spawnSpoolman(port) {
     const dataDir = path.join(NATIVE_DIR, 'data');
     fs.mkdirSync(dataDir, { recursive: true });
     const logFd = fs.openSync(NATIVE_LOG_FILE, 'a');
-    const child = spawn(venv.spoolman, [], {
+    const spoolmanEnv = { ...process.env, SPOOLMAN_HOST: '0.0.0.0', SPOOLMAN_PORT: String(port), SPOOLMAN_DATA_DIR: dataDir };
+    const [cmd, args] = venv.spoolman ? [venv.spoolman, []] : [venv.python, ['-m', 'spoolman']];
+    const child = spawn(cmd, args, {
         detached: true,
         stdio: ['ignore', logFd, logFd],
-        env: { ...process.env, SPOOLMAN_HOST: '0.0.0.0', SPOOLMAN_PORT: String(port), SPOOLMAN_DATA_DIR: dataDir },
+        env: spoolmanEnv,
     });
     child.unref();
     fs.closeSync(logFd);
@@ -1185,7 +1190,10 @@ function spawnSpoolman(port) {
 router.get('/native/status', async (_req, res) => {
     const py        = await findPython();
     const venv      = nativeVenv();
-    const installed = fs.existsSync(venv.spoolman);
+    let installed = false;
+    if (fs.existsSync(venv.python)) {
+        try { require('child_process').execSync(`"${venv.python}" -c "import spoolman"`, { timeout: 5000, stdio: 'pipe' }); installed = true; } catch { installed = false; }
+    }
     const pid       = nativePid();
     const running   = installed && pidAlive(pid);
     res.json({
@@ -1223,12 +1231,22 @@ router.post('/native/install', async (req, res) => {
         }
 
         push('Installing Spoolman (this may take a minute)…');
-        await cliRun(`"${venv.python}" -m pip install --upgrade spoolman`);
+        const pipOut = await cliRun(`"${venv.python}" -m pip install --upgrade spoolman`);
+        push(pipOut.trim().split('\n').pop()); // show last pip line
         push('Spoolman installed.');
 
-        if (!fs.existsSync(venv.spoolman)) {
-            throw new Error('Spoolman executable not found after install — check pip output above.');
+        // Verify by importing — more reliable than checking for .exe on Windows
+        try {
+            await cliRun(`"${venv.python}" -c "import spoolman"`, 15000);
+        } catch {
+            try {
+                const entries = fs.readdirSync(venv.scriptsDir).filter(f => /spoolman/i.test(f));
+                push(`Scripts dir (spoolman entries): ${entries.join(', ') || '(none)'}`);
+            } catch { /* ignore */ }
+            throw new Error('Spoolman package not importable after install.');
         }
+        // Re-resolve executable path now that install succeeded
+        Object.assign(venv, nativeVenv());
 
         fs.writeFileSync(NATIVE_PORT_FILE, String(port));
 
