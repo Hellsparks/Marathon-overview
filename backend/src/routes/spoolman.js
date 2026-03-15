@@ -1,6 +1,6 @@
 const express = require('express');
 const net = require('net');
-const { exec, spawn } = require('child_process');
+const { exec, execSync, spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { getDb } = require('../db');
@@ -654,10 +654,11 @@ router.post('/fields/:entity', async (req, res) => {
     if (!allowed.includes(req.params.entity))
         return res.status(400).json({ error: 'Invalid entity type' });
     try {
+        const { entity_type, ...fieldBody } = req.body;
         const r = await fetch(`${url}/api/v1/field/${req.params.entity}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req.body),
+            body: JSON.stringify(fieldBody),
             signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) {
@@ -905,6 +906,60 @@ router.get('/export', async (_req, res) => {
     }
 });
 
+// POST /api/spoolman/import/validate — check if backup fields exist on target
+router.post('/import/validate', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+
+    const data = req.body;
+    if (!data || data.export_version !== 1)
+        return res.status(400).json({ error: 'Invalid export file' });
+
+    try {
+        const fetchFields = async (entity) => {
+            const r = await fetch(`${url}/api/v1/field/${entity}`, { signal: AbortSignal.timeout(5000) });
+            return r.ok ? r.json() : [];
+        };
+
+        const [existingVendorFields, existingFilamentFields, existingSpoolFields] = await Promise.all([
+            fetchFields('vendor'), fetchFields('filament'), fetchFields('spool'),
+        ]);
+
+        const existing = {
+            vendor: existingVendorFields,
+            filament: existingFilamentFields,
+            spool: existingSpoolFields,
+        };
+
+        // Collect all extra field keys used in the backup data
+        const usedKeys = { vendor: new Set(), filament: new Set(), spool: new Set() };
+        for (const v of (data.vendors || [])) if (v.extra) Object.keys(v.extra).forEach(k => usedKeys.vendor.add(k));
+        for (const f of (data.filaments || [])) if (f.extra) Object.keys(f.extra).forEach(k => usedKeys.filament.add(k));
+        for (const s of (data.spools || [])) if (s.extra) Object.keys(s.extra).forEach(k => usedKeys.spool.add(k));
+
+        // Find missing fields per entity type
+        const missing = {};
+        let hasMissing = false;
+        for (const entity of ['vendor', 'filament', 'spool']) {
+            const existingKeys = new Set(existing[entity].map(f => f.key));
+            const backupFields = data.custom_fields?.[entity] || [];
+            const missingList = [];
+            for (const key of usedKeys[entity]) {
+                if (!existingKeys.has(key)) {
+                    const def = backupFields.find(f => f.key === key);
+                    missingList.push(def || { key, name: key, field_type: 'text' });
+                }
+            }
+            missing[entity] = missingList;
+            if (missingList.length > 0) hasMissing = true;
+        }
+
+        res.json({ fieldsOk: !hasMissing, missing, existing });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
 // POST /api/spoolman/import — restore from an exported JSON backup
 // Recreates vendors → filaments → spools in order, remapping IDs.
 router.post('/import', async (req, res) => {
@@ -915,6 +970,9 @@ router.post('/import', async (req, res) => {
     if (!data || data.export_version !== 1) {
         return res.status(400).json({ error: 'Invalid export file (missing export_version: 1)' });
     }
+
+    const fieldMappings = data._fieldMappings || {}; // { filament: { old_key: new_key }, ... }
+    const createFields = data._createFields || []; // [{ entity, ...fieldDef }]
 
     const log = [];
     const push = msg => { log.push(msg); console.log('[spoolman-import]', msg); };
@@ -939,7 +997,33 @@ router.post('/import', async (req, res) => {
         return r.json();
     };
 
+    /** Apply field mappings to an extra object, skipping fields mapped to '__skip__'. */
+    const applyMappings = (extra, entityType) => {
+        if (!extra) return undefined;
+        if (fieldMappings[entityType]) {
+            const mapped = {};
+            for (const [k, v] of Object.entries(extra)) {
+                const mapping = fieldMappings[entityType][k];
+                if (mapping === '__skip__') continue;
+                mapped[mapping || k] = v;
+            }
+            return Object.keys(mapped).length ? mapped : undefined;
+        }
+        return Object.keys(extra).length ? extra : undefined;
+    };
+
     try {
+        // Create missing fields first
+        for (const fieldDef of createFields) {
+            const { entity, ...def } = fieldDef;
+            try {
+                await spoolmanPost(`/api/v1/field/${entity}`, def);
+                push(`Created field "${def.name || def.key}" on ${entity}`);
+            } catch (err) {
+                push(`  Warning: could not create field "${def.key}": ${err.message}`);
+            }
+        }
+
         const vendorIdMap = {};
         const filamentIdMap = {};
 
@@ -951,7 +1035,8 @@ router.post('/import', async (req, res) => {
         push(`Importing ${data.vendors?.length || 0} vendors…`);
         for (const v of (data.vendors || [])) {
             const { id, registered, extra, ...fields } = v;
-            if (extra && Object.keys(extra).length) fields.extra = extra;
+            const mappedExtra = applyMappings(extra, 'vendor');
+            if (mappedExtra) fields.extra = mappedExtra;
             try {
                 const created = await spoolmanPost('/api/v1/vendor', fields);
                 vendorIdMap[id] = created.id;
@@ -976,7 +1061,8 @@ router.post('/import', async (req, res) => {
                 if (newVendorId) fields.vendor_id = newVendorId;
                 // If vendor couldn't be mapped, omit vendor_id (create filament without vendor)
             }
-            if (extra && Object.keys(extra).length) fields.extra = extra;
+            const mappedExtra = applyMappings(extra, 'filament');
+            if (mappedExtra) fields.extra = mappedExtra;
             try {
                 const created = await spoolmanPost('/api/v1/filament', fields);
                 filamentIdMap[id] = created.id;
@@ -995,7 +1081,8 @@ router.post('/import', async (req, res) => {
                 if (!newId) { push(`  Spool id=${id} skipped: filament not found`); continue; }
                 fields.filament_id = newId;
             }
-            if (extra && Object.keys(extra).length) fields.extra = extra;
+            const mappedExtra = applyMappings(extra, 'spool');
+            if (mappedExtra) fields.extra = mappedExtra;
             try {
                 await spoolmanPost('/api/v1/spool', fields);
                 spoolsOk++;
@@ -1288,18 +1375,40 @@ router.get('/native/status', async (_req, res) => {
     const installed = fs.existsSync(venv.python);
     const pid     = nativePid();
     const running = installed && pidAlive(pid);
+
+    // Detect system Python
+    let pythonAvailable = false;
+    let pythonVersion = null;
+    const cmds = process.platform === 'win32' ? ['python --version'] : ['python3 --version', 'python --version'];
+    for (const cmd of cmds) {
+        try {
+            const out = execSync(cmd, { encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+            const match = out.match(/Python\s+([\d.]+)/i);
+            if (match) {
+                pythonAvailable = true;
+                pythonVersion = match[1];
+                break;
+            }
+        } catch (_e) { /* not found, try next */ }
+    }
+
     res.json({
         installed,
         running,
         pid:     running ? pid : null,
         port:    nativePort(),
         installDir: SPOOLMAN_INSTALL_DIR,
+        platform: process.platform,
+        pythonAvailable,
+        pythonVersion,
     });
 });
 
 // POST /api/spoolman/native/install — body: { port: 7912 }
 // Uses the official Spoolman bash install script from GitHub releases.
 router.post('/native/install', async (req, res) => {
+    if (process.platform === 'win32')
+        return res.status(400).json({ error: 'Native Spoolman install is only supported on Linux.' });
     const port = parseInt(req.body?.port) || 7912;
     if (port < 1025 || port > 65535) return res.status(400).json({ error: 'port must be between 1025 and 65535' });
     const log  = [];

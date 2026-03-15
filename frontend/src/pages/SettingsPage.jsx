@@ -3,11 +3,12 @@ import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
-import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative } from '../api/spoolman';
+import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate } from '../api/updates';
 import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
 import UpdateDialog from '../components/layout/UpdateDialog';
+import ImportFieldMappingDialog from '../components/spoolman/ImportFieldMappingDialog';
 
 export default function SettingsPage() {
   const { printers, loading, error, refresh } = usePrinters();
@@ -54,6 +55,7 @@ export default function SettingsPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [importLog, setImportLog] = useState([]);
   const [importError, setImportError] = useState('');
+  const [importMappingData, setImportMappingData] = useState(null); // { data, missing, existing }
 
   // Docker setup
   const [dockerStatus, setDockerStatus] = useState(null); // null = loading
@@ -266,17 +268,17 @@ export default function SettingsPage() {
 
       switch (type) {
         case 'url':
-          payload = { name: 'Link', key: 'url', field_type: 'text', default_value: '""', entity_type: 'filament' };
+          payload = { name: 'Link', key: 'url', field_type: 'text' };
           settingKey = 'url_extra_field';
           setterFunc = val => { setUrlField(val); setUrlFieldSaved(val); };
           break;
         case 'hueforge':
-          payload = { name: 'Hueforge TD', key: 'hue_td', field_type: 'float', unit: 'TD', entity_type: 'filament' };
+          payload = { name: 'Hueforge TD', key: 'hue_td', field_type: 'float', unit: 'TD' };
           settingKey = 'hueforge_td_field';
           setterFunc = val => { setHueforgeField(val); setHueforgeFieldSaved(val); };
           break;
         case 'swatch':
-          payload = { name: 'Has printed swatch', key: 'swatch', field_type: 'boolean', entity_type: 'filament' };
+          payload = { name: 'Has printed swatch', key: 'swatch', field_type: 'boolean' };
           settingKey = 'swatch_extra_field';
           setterFunc = val => { setSwatchField(val); setSwatchFieldSaved(val); };
           break;
@@ -346,6 +348,31 @@ export default function SettingsPage() {
     try {
       const text = await importFile.text();
       const data = JSON.parse(text);
+      // Validate fields first
+      const validation = await validateImport(data);
+      if (!validation.fieldsOk) {
+        // Show mapping dialog — pause import
+        setImportMappingData({ data, missing: validation.missing, existing: validation.existing });
+        setImportBusy(false);
+        return;
+      }
+      // Fields are OK, proceed directly
+      const result = await importSpoolman(data);
+      setImportLog(result.log || []);
+    } catch (e) {
+      setImportError(e.message);
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function handleImportWithMappings(createFields, fieldMappings) {
+    const { data } = importMappingData;
+    setImportMappingData(null);
+    setImportBusy(true);
+    try {
+      data._createFields = createFields;
+      data._fieldMappings = fieldMappings;
       const result = await importSpoolman(data);
       setImportLog(result.log || []);
     } catch (e) {
@@ -865,7 +892,19 @@ export default function SettingsPage() {
         )}
 
         {/* ── Native (Python) Install ── */}
-        {nativeStatus && (nativeStatus.pythonAvailable || nativeStatus.installed) && (
+        {nativeStatus && nativeStatus.platform === 'win32' && (
+          <div style={{
+            marginTop: '24px', padding: '14px 20px',
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-muted)',
+          }}>
+            <strong style={{ color: 'var(--text)' }}>Native Install</strong>
+            <p style={{ marginTop: '4px' }}>
+              Native Install is only available on Linux. Use Docker instead.
+            </p>
+          </div>
+        )}
+        {nativeStatus && nativeStatus.platform !== 'win32' && (nativeStatus.pythonAvailable || nativeStatus.installed) && (
           <div style={{
             marginTop: '24px', padding: '20px',
             background: 'var(--surface2)', border: '1px solid var(--border)',
@@ -976,7 +1015,7 @@ export default function SettingsPage() {
         )}
 
         {/* Python not found note */}
-        {nativeStatus && !nativeStatus.pythonAvailable && !nativeStatus.installed && (
+        {nativeStatus && nativeStatus.platform !== 'win32' && !nativeStatus.pythonAvailable && !nativeStatus.installed && (
           <div style={{
             marginTop: '24px', padding: '14px 20px',
             background: 'var(--surface2)', border: '1px solid var(--border)',
@@ -1314,6 +1353,15 @@ export default function SettingsPage() {
           </div>
         )}
       </section>
+
+      {importMappingData && (
+        <ImportFieldMappingDialog
+          missing={importMappingData.missing}
+          existing={importMappingData.existing}
+          onConfirm={handleImportWithMappings}
+          onCancel={() => setImportMappingData(null)}
+        />
+      )}
     </div>
   );
 }
