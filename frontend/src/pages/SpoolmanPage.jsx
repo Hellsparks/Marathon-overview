@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePrinters } from '../hooks/usePrinters';
-import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool, getAmsSlots, getBambuWarnings, dismissBambuWarning, getStorageLocation, patchSpool, fetchTeamsterWeight, tareTeamster } from '../api/spoolman';
+import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool, getAmsSlots, getToolSlots, setToolSlot, getBambuWarnings, dismissBambuWarning, getStorageLocation, patchSpool, fetchTeamsterWeight, tareTeamster } from '../api/spoolman';
 import { groupSpoolsByFilament } from '../utils/spoolStorage';
 import { useFilamentGuard } from '../hooks/useFilamentGuard';
 import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
@@ -91,6 +91,11 @@ export default function SpoolmanPage() {
     const [amsSlots, setAmsSlots] = useState({});       // { printerId: { 0: spoolId, 1: spoolId, ... } }
     const [amsSpools, setAmsSpools] = useState({});     // { spoolId: spoolObject } — resolved spool data
     const [dropTargetTray, setDropTargetTray] = useState(null); // { printerId, trayId }
+
+    // Tool slot state for multi-toolhead Moonraker printers
+    const [toolSlots, setToolSlots] = useState({});           // { printerId: { 0: spoolId|null, ... } }
+    const [toolSlotSpools, setToolSlotSpools] = useState({}); // { spoolId: spoolObject }
+    const [dropTargetToolSlot, setDropTargetToolSlot] = useState(null); // { printerId, toolIndex }
 
     // Extracted shared guard hook for compatibility & 'in use' warnings
     const { startGuard, renderGuardDialog, bambuWarnings, fetchWarningsIfNeeded, pendingAssignment, confirmGuard } = useFilamentGuard({
@@ -199,6 +204,32 @@ export default function SpoolmanPage() {
         }
         fetchAms();
     }, [bambuPrinters.length, spools]);
+
+    // Fetch tool slot mappings for multi-toolhead non-Bambu printers
+    const multiToolPrinters = printers.filter(p => p.firmware_type !== 'bambu' && (p.toolhead_count || 1) > 1);
+    useEffect(() => {
+        if (multiToolPrinters.length === 0) return;
+        async function fetchSlots() {
+            const slotMap = {};
+            const spoolMap = { ...toolSlotSpools };
+            for (const p of multiToolPrinters) {
+                try {
+                    const slots = await getToolSlots(p.id);
+                    slotMap[p.id] = slots;
+                    for (const spoolId of Object.values(slots)) {
+                        if (spoolId && !spoolMap[spoolId]) {
+                            const found = spools.find(s => s.id === spoolId);
+                            if (found) spoolMap[spoolId] = found;
+                        }
+                    }
+                } catch { /* offline ok */ }
+            }
+            setToolSlots(slotMap);
+            setToolSlotSpools(spoolMap);
+        }
+        fetchSlots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [multiToolPrinters.length, spools]);
 
 
 
@@ -324,6 +355,46 @@ export default function SpoolmanPage() {
             });
         } catch (err) {
             alert(`Failed to clear AMS tray: ${err.message}`);
+        }
+    }
+
+    // Multi-toolhead tool slot drag-drop handlers
+    function onToolSlotDragOver(e, printerId, toolIndex) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        setDropTargetToolSlot({ printerId, toolIndex });
+    }
+
+    function onToolSlotDragLeave() {
+        setDropTargetToolSlot(null);
+    }
+
+    async function onToolSlotDrop(e, printer, toolIndex) {
+        e.preventDefault();
+        setDropTargetToolSlot(null);
+        const spool = dragSpool;
+        if (!spool) return;
+        try {
+            await setToolSlot(printer.id, toolIndex, spool.id);
+            setToolSlots(prev => ({
+                ...prev,
+                [printer.id]: { ...(prev[printer.id] || {}), [toolIndex]: spool.id },
+            }));
+            setToolSlotSpools(prev => ({ ...prev, [spool.id]: spool }));
+        } catch (err) {
+            alert(`Failed to assign spool: ${err.message}`);
+        }
+    }
+
+    async function handleClearToolSlot(printerId, toolIndex) {
+        try {
+            await setToolSlot(printerId, toolIndex, null);
+            setToolSlots(prev => ({
+                ...prev,
+                [printerId]: { ...(prev[printerId] || {}), [toolIndex]: null },
+            }));
+        } catch (err) {
+            alert(`Failed to clear tool slot: ${err.message}`);
         }
     }
 
@@ -886,6 +957,13 @@ export default function SpoolmanPage() {
                                 onTrayDragLeave={onTrayDragLeave}
                                 onTrayDrop={onTrayDrop}
                                 onClearTray={handleClearTray}
+                                toolSlots={toolSlots[p.id] || {}}
+                                toolSlotSpools={toolSlotSpools}
+                                dropTargetToolSlot={dropTargetToolSlot}
+                                onToolSlotDragOver={onToolSlotDragOver}
+                                onToolSlotDragLeave={onToolSlotDragLeave}
+                                onToolSlotDrop={onToolSlotDrop}
+                                onClearToolSlot={handleClearToolSlot}
                             />
                         );
                     })}

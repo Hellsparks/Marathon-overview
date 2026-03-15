@@ -328,6 +328,89 @@ router.get('/ams-slots/:printerId', (req, res) => {
     }
 });
 
+// ── Multi-tool slot management (Klipper/Moonraker multi-toolhead) ─────────────
+
+// GET /api/spoolman/tool-slots/:printerId — { 0: spoolId|null, 1: spoolId|null, … }
+router.get('/tool-slots/:printerId', (req, res) => {
+    try {
+        const db = getDb();
+        const printerId = parseInt(req.params.printerId, 10);
+        const printer = db.prepare('SELECT toolhead_count FROM printers WHERE id = ?').get(printerId);
+        if (!printer) return res.status(404).json({ error: 'Printer not found' });
+        const rows = db.prepare('SELECT tool_index, spool_id FROM printer_tool_slots WHERE printer_id = ?').all(printerId);
+        const map = {};
+        // Pre-fill all slots as null so the client always gets N keys
+        for (let i = 0; i < (printer.toolhead_count || 1); i++) map[i] = null;
+        for (const r of rows) map[r.tool_index] = r.spool_id;
+        res.json(map);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/spoolman/tool-slots/:printerId — { toolIndex, spoolId } assign or clear a slot
+router.post('/tool-slots/:printerId', async (req, res) => {
+    const printerId = parseInt(req.params.printerId, 10);
+    const { toolIndex, spoolId } = req.body;
+    if (toolIndex === undefined) return res.status(400).json({ error: 'toolIndex required' });
+    const db = getDb();
+    const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(printerId);
+    if (!printer) return res.status(404).json({ error: 'Printer not found' });
+
+    try {
+        if (spoolId) {
+            db.prepare(`
+                INSERT INTO printer_tool_slots (printer_id, tool_index, spool_id)
+                VALUES (?, ?, ?)
+                ON CONFLICT(printer_id, tool_index) DO UPDATE SET spool_id = excluded.spool_id
+            `).run(printerId, toolIndex, spoolId);
+
+            // Tell Klipper to update the macro variable so SET_ACTIVE_SPOOL works on tool change
+            try {
+                const client = new MoonrakerClient(printer);
+                await client.sendGcode(`SET_GCODE_VARIABLE MACRO=T${toolIndex} VARIABLE=spool_id VALUE=${spoolId}`);
+            } catch { /* printer may be offline — slot is still saved */ }
+        } else {
+            db.prepare('DELETE FROM printer_tool_slots WHERE printer_id = ? AND tool_index = ?').run(printerId, toolIndex);
+            try {
+                const client = new MoonrakerClient(printer);
+                await client.sendGcode(`SET_GCODE_VARIABLE MACRO=T${toolIndex} VARIABLE=spool_id VALUE=None`);
+            } catch { /* offline ok */ }
+        }
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/spoolman/activate-tool — { printerId, toolIndex }
+// Switches Moonraker's active spool to whichever spool is in that tool's slot.
+// Called by Klipper macros or Marathon UI on tool change.
+router.post('/activate-tool', async (req, res) => {
+    const { printerId, toolIndex } = req.body;
+    if (printerId === undefined || toolIndex === undefined)
+        return res.status(400).json({ error: 'printerId and toolIndex required' });
+    const db = getDb();
+    const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(parseInt(printerId, 10));
+    if (!printer) return res.status(404).json({ error: 'Printer not found' });
+    const row = db.prepare('SELECT spool_id FROM printer_tool_slots WHERE printer_id = ? AND tool_index = ?')
+        .get(parseInt(printerId, 10), parseInt(toolIndex, 10));
+    const spoolId = row?.spool_id ?? null;
+    try {
+        const client = new MoonrakerClient(printer);
+        const r = await fetch(`${client.baseUrl}/server/spoolman/spool_id`, {
+            method: 'POST',
+            headers: client._headers(),
+            body: JSON.stringify(spoolId ? { spool_id: spoolId } : {}),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) throw new Error(`Moonraker ${r.status}`);
+        res.json({ ok: true, spoolId });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
 // GET /api/spoolman/bambu-warnings — spools with untracked Bambu usage
 // Returns spool IDs + printer name for displaying warnings
 router.get('/bambu-warnings', (req, res) => {
