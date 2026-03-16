@@ -31,7 +31,7 @@ export default function TemplatePreviewModal({ template, filaments, onClose, onE
     });
 
     return (
-        <div className="template-preview-overlay" onClick={onClose}>
+        <div className="template-preview-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
             <div
                 className="template-preview-content"
                 onClick={e => e.stopPropagation()}

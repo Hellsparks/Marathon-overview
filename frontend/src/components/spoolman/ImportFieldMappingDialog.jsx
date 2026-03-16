@@ -56,10 +56,9 @@ export default function ImportFieldMappingDialog({ missing, existing, onConfirm,
   );
 
   return createPortal(
-    <div className="dialog-overlay" onClick={onCancel}>
+    <div className="dialog-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onCancel(); }}>
       <div
         className="dialog"
-        onClick={e => e.stopPropagation()}
         style={{ maxWidth: '640px', width: '90vw' }}
       >
         <h2 style={{ fontSize: '17px', marginBottom: '8px' }}>Field Mapping Required</h2>

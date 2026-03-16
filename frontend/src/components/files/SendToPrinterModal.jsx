@@ -113,8 +113,8 @@ export default function SendToPrinterModal({ file, onClose }) {
   ).sort((a, b) => b.remaining_weight - a.remaining_weight); // sort with most remaining first
 
   return (
-    <div className="dialog-overlay" onClick={onClose}>
-      <div className={`dialog ${printerId ? 'dialog-expanded' : ''}`} onClick={e => e.stopPropagation()}>
+    <div className="dialog-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={`dialog ${printerId ? 'dialog-expanded' : ''}`}>
         <div className={printerId ? 'dialog-split-pane' : ''}>
 
           <div className="dialog-left">

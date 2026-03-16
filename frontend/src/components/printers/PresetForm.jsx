@@ -43,8 +43,8 @@ export default function PresetForm({ preset, onSaved, onCancel }) {
     }
 
     return (
-        <div className="dialog-overlay" onClick={onCancel}>
-            <div className="dialog dialog-wide" onClick={e => e.stopPropagation()}>
+        <div className="dialog-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onCancel(); }}>
+            <div className="dialog dialog-wide">
                 <h2>{preset ? 'Edit Preset' : 'New Preset'}</h2>
                 <form onSubmit={handleSubmit}>
                     <label className="form-label">

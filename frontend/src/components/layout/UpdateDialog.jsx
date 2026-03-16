@@ -37,7 +37,7 @@ export default function UpdateDialog({ updateInfo, onDismiss }) {
   const { current, latest, compatible, releaseUrl, releaseNotes, publishedAt } = updateInfo;
 
   return (
-    <div className="update-dialog-overlay" onClick={e => { if (e.target === e.currentTarget && !applying) onDismiss(); }}>
+    <div className="update-dialog-overlay" onMouseDown={e => { if (e.target === e.currentTarget && !applying) onDismiss(); }}>
       <div className="update-dialog">
         <div className="update-dialog-header">
           <h2 className="update-dialog-title">Update Available</h2>

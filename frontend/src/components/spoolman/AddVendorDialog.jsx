@@ -40,8 +40,8 @@ export default function AddVendorDialog({ onClose, onCreated, vendor }) {
     }
 
     return (
-        <div className="spool-dialog-overlay" onClick={onClose}>
-            <div className="spool-dialog" onClick={e => e.stopPropagation()}>
+        <div className="spool-dialog-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="spool-dialog">
                 <div className="spool-dialog-header">
                     <h3 className="spool-dialog-title">{isEdit ? 'Edit Manufacturer' : 'Add Manufacturer'}</h3>
                     <button className="spool-dialog-close" onClick={onClose}>✕</button>

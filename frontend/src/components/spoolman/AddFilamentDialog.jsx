@@ -248,8 +248,8 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
     }
 
     return (
-        <div className="spool-dialog-overlay" onClick={onClose}>
-            <div className="spool-dialog spool-dialog-wide" onClick={e => e.stopPropagation()}>
+        <div className="spool-dialog-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="spool-dialog spool-dialog-wide">
                 <div className="spool-dialog-header">
                     <h3 className="spool-dialog-title">{isEdit ? 'Edit Filament' : isClone ? 'Clone Filament' : 'Add Filament'}</h3>
                     <button className="spool-dialog-close" onClick={onClose}>✕</button>

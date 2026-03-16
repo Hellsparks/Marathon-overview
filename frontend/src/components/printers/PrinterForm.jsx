@@ -122,8 +122,8 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
   }
 
   return (
-    <div className="dialog-overlay" onClick={onCancel}>
-      <div className="dialog dialog-wide" onClick={e => e.stopPropagation()}>
+    <div className="dialog-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div className="dialog dialog-wide">
         <h2>{printer ? 'Edit Printer' : 'Add Printer'}</h2>
 
         {/* Preset selector */}
