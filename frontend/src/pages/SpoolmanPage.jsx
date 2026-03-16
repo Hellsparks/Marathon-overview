@@ -775,6 +775,7 @@ export default function SpoolmanPage() {
                         />
                     )}
 
+                    <div className="spoolman-spool-list">
                     {loading ? (
                         <div className="loading">Loading spools…</div>
                     ) : error ? (
@@ -982,6 +983,7 @@ export default function SpoolmanPage() {
                             </div>
                         </div>
                     )}
+                    </div>
                 </div>
 
                 {/* Right column: Printer list */}

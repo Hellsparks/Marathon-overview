@@ -1954,19 +1954,25 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* ─── Spoolman Page ─────────────────────────────────────────────── */
 .spoolman-page {
   max-width: none;
+  /* Fill the app-main viewport so columns can scroll independently */
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 80px); /* subtract navbar + padding */
+  overflow: hidden;
 }
 
 .spoolman-layout {
   display: grid;
   grid-template-columns: 1fr 260px;
   gap: 24px;
-  align-items: start;
+  flex: 1;
+  min-height: 0; /* allow children to shrink and scroll */
 }
 
-/* ── Left column: Printers ── */
+/* ── Right column: Printers ── */
 .spoolman-printers {
-  position: sticky;
-  top: 16px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .spoolman-column-title {
@@ -2204,6 +2210,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 /* ── Center: Spool inventory ── */
 .spoolman-inventory {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* allow scroll */
+}
+
+.spoolman-spool-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .spoolman-filters-bar {
@@ -2212,6 +2227,12 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   gap: 12px;
   margin-bottom: 16px;
   align-items: center;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg);
+  padding: 4px 0 12px;
 }
 
 .spoolman-search-wrap {

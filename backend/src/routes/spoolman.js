@@ -472,6 +472,17 @@ router.put('/spool/:id/measure', async (req, res) => {
     const { weight } = req.body;
     if (weight === undefined) return res.status(400).json({ error: 'weight required' });
     try {
+        // First check that the spool's filament has a spool_weight set
+        const spoolR = await fetch(`${url}/api/v1/spool/${req.params.id}`, { signal: AbortSignal.timeout(5000) });
+        if (spoolR.ok) {
+            const spool = await spoolR.json();
+            const spoolWeight = spool.filament?.spool_weight;
+            if (!spoolWeight && spoolWeight !== 0) {
+                return res.status(400).json({
+                    error: `Cannot measure: the filament profile "${spool.filament?.name || 'unknown'}" has no spool_weight set. Edit the filament and add the empty spool weight first.`
+                });
+            }
+        }
         const r = await fetch(`${url}/api/v1/spool/${req.params.id}/measure`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -480,6 +491,7 @@ router.put('/spool/:id/measure', async (req, res) => {
         });
         if (!r.ok) {
             const err = await r.json().catch(() => ({}));
+            console.error('[spoolman] measure failed:', r.status, err);
             return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
         res.json(await r.json());
