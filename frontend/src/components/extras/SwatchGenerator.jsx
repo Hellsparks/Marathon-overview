@@ -102,8 +102,15 @@ export default function SwatchGenerator({ filaments }) {
         const mesh = meshRef.current;
         if (!mesh) return;
 
-        // Update colour immediately from filament hex
-        mesh.material.color.set(`#${previewFilament?.color_hex || '888888'}`);
+        // Update colour immediately from filament hex (strip alpha if present)
+        const rawHex = previewFilament?.color_hex || '888888';
+        const hex6 = rawHex.slice(0, 6);
+        const alpha = rawHex.length === 8 ? parseInt(rawHex.slice(6, 8), 16) / 255 : 1;
+        mesh.material.color.set(`#${hex6}`);
+        const clampedAlpha = alpha < 1 ? Math.max(alpha, 0.15) : 1;
+        mesh.material.transparent = clampedAlpha < 1;
+        mesh.material.opacity = clampedAlpha;
+        mesh.material.roughness = alpha < 1 ? 0.15 : 0.35;
 
         if (!previewFilament) return;
 
