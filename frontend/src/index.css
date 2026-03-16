@@ -1957,7 +1957,12 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   /* Fill the app-main viewport so columns can scroll independently */
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 80px); /* subtract navbar + padding */
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Disable outer scroll when spoolman page is active */
+.app-main:has(.spoolman-page) {
   overflow: hidden;
 }
 
