@@ -8,6 +8,7 @@ export default function PrinterList({ printers, onRefresh }) {
   const [editingPrinter, setEditingPrinter] = useState(null);
   const [addingNew, setAddingNew] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [showSensitive, setShowSensitive] = useState(false);
 
   async function handleDelete(id) {
     const printer = printers.find(p => p.id === id);
@@ -31,6 +32,11 @@ export default function PrinterList({ printers, onRefresh }) {
   return (
     <div>
       <div className="section-toolbar">
+        <button className="btn btn-sm" onClick={() => setShowSensitive(s => !s)}
+          title={showSensitive ? 'Hide sensitive info' : 'Show sensitive info'}
+          style={{ fontSize: '16px', padding: '4px 8px', lineHeight: 1 }}>
+          {showSensitive ? '\u{1F441}' : '\u{1F441}\u{200D}\u{1F5E8}'}
+        </button>
         <button className="btn btn-primary" onClick={() => setAddingNew(true)}>
           + Add Printer
         </button>
@@ -55,7 +61,9 @@ export default function PrinterList({ printers, onRefresh }) {
             {printers.map(p => (
               <tr key={p.id}>
                 <td>{p.name}</td>
-                <td>{p.host}:{p.port}</td>
+                <td style={{ fontFamily: showSensitive ? 'inherit' : 'initial', letterSpacing: showSensitive ? 'normal' : '2px' }}>
+                  {showSensitive ? `${p.host}:${p.port}` : '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}
+                </td>
                 <td>
                   {p.firmware_type === 'octoprint' && 'OctoPrint'}
                   {p.firmware_type === 'duet' && 'Duet/RRF'}

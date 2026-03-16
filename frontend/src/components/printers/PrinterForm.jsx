@@ -28,6 +28,9 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('connection');
+  const [showHost, setShowHost] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showSerial, setShowSerial] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -184,8 +187,15 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
 
               <label className="form-label">
                 Host / IP Address
-                <input className="form-input" value={form.host}
-                  onChange={e => set('host', e.target.value)} required placeholder="e.g. 192.168.1.101 or https://shared-xxx.octoeverywhere.com/" />
+                <div style={{ position: 'relative' }}>
+                  <input className="form-input" type={showHost ? 'text' : 'password'} value={form.host}
+                    onChange={e => set('host', e.target.value)} required placeholder="e.g. 192.168.1.101 or https://shared-xxx.octoeverywhere.com/"
+                    style={{ paddingRight: '36px' }} autoComplete="off" />
+                  <button type="button" onClick={() => setShowHost(s => !s)}
+                    style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '2px 4px', color: 'var(--text-muted)' }}>
+                    {showHost ? '\u{1F441}' : '\u{1F441}\u{200D}\u{1F5E8}'}
+                  </button>
+                </div>
               </label>
               {/^https?:\/\//i.test(form.host) ? (
                 <p className="text-muted" style={{ fontSize: '12px', marginTop: '-8px', marginBottom: '8px' }}>
@@ -201,22 +211,36 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
               {form.firmware_type === 'bambu' && (
                 <label className="form-label">
                   Serial Number
-                  <input className="form-input" value={form.serial_number}
-                    onChange={e => set('serial_number', e.target.value)}
-                    placeholder="e.g. 01P00A…  (shown in printer settings)" />
+                  <div style={{ position: 'relative' }}>
+                    <input className="form-input" type={showSerial ? 'text' : 'password'} value={form.serial_number}
+                      onChange={e => set('serial_number', e.target.value)}
+                      placeholder="e.g. 01P00A…  (shown in printer settings)"
+                      style={{ paddingRight: '36px' }} autoComplete="off" />
+                    <button type="button" onClick={() => setShowSerial(s => !s)}
+                      style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '2px 4px', color: 'var(--text-muted)' }}>
+                      {showSerial ? '\u{1F441}' : '\u{1F441}\u{200D}\u{1F5E8}'}
+                    </button>
+                  </div>
                 </label>
               )}
 
               <label className="form-label">
                 {form.firmware_type === 'duet' ? 'Password' : form.firmware_type === 'bambu' ? 'LAN Access Code' : 'API Key'}{' '}
                 <span className="form-optional">(optional)</span>
-                <input className="form-input" value={form.api_key}
-                  onChange={e => set('api_key', e.target.value)}
-                  placeholder={
-                    form.firmware_type === 'duet' ? 'Leave empty if no password set' :
-                    form.firmware_type === 'bambu' ? 'Access code shown in printer network settings' :
-                    'Leave empty if not set'
-                  } />
+                <div style={{ position: 'relative' }}>
+                  <input className="form-input" type={showApiKey ? 'text' : 'password'} value={form.api_key}
+                    onChange={e => set('api_key', e.target.value)}
+                    placeholder={
+                      form.firmware_type === 'duet' ? 'Leave empty if no password set' :
+                      form.firmware_type === 'bambu' ? 'Access code shown in printer network settings' :
+                      'Leave empty if not set'
+                    }
+                    style={{ paddingRight: '36px' }} autoComplete="off" />
+                  <button type="button" onClick={() => setShowApiKey(s => !s)}
+                    style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '2px 4px', color: 'var(--text-muted)' }}>
+                    {showApiKey ? '\u{1F441}' : '\u{1F441}\u{200D}\u{1F5E8}'}
+                  </button>
+                </div>
               </label>
 
               {form.firmware_type !== 'moonraker' && (
