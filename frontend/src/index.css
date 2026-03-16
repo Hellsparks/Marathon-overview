@@ -1023,6 +1023,94 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   padding: 4px;
 }
 
+/* ─── Settings Sections ─────────────────────────────────────────── */
+.settings-section {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.settings-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 16px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text);
+  text-align: left;
+}
+
+.settings-section-toggle:hover {
+  background: var(--surface2);
+}
+
+.settings-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.settings-section-chevron {
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  transform: rotate(0deg);
+}
+
+.settings-section-chevron.open {
+  transform: rotate(90deg);
+}
+
+.settings-section-body {
+  padding: 0 20px 20px;
+}
+
+.settings-card {
+  padding: 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+
+.settings-card:last-child {
+  margin-bottom: 0;
+}
+
+.settings-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.settings-card-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+.settings-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.settings-status {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-status.ok { color: var(--success, #22c55e); }
+.settings-status.error { color: var(--danger, #ef4444); }
+
 .macro-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));

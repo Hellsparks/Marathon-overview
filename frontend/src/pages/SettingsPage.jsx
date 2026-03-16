@@ -10,6 +10,19 @@ import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
 import UpdateDialog from '../components/layout/UpdateDialog';
 import ImportFieldMappingDialog from '../components/spoolman/ImportFieldMappingDialog';
 
+function Section({ title, defaultOpen = true, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="settings-section">
+      <button className="settings-section-toggle" onClick={() => setOpen(o => !o)}>
+        <h2 className="settings-section-title">{title}</h2>
+        <span className={`settings-section-chevron${open ? ' open' : ''}`}>&#9654;</span>
+      </button>
+      {open && <div className="settings-section-body">{children}</div>}
+    </section>
+  );
+}
+
 export default function SettingsPage() {
   const { printers, loading, error, refresh } = usePrinters();
   const [spoolmanUrl, setSpoolmanUrl] = useState('');
@@ -537,8 +550,8 @@ export default function SettingsPage() {
     <div className="page">
       <h1 className="page-title">Settings</h1>
 
-      <section className="page-section">
-        <h2 className="section-title">Printers</h2>
+      {/* ════════════════════ 1. Printers ════════════════════ */}
+      <Section title="Printers" defaultOpen={true}>
         {loading ? (
           <div className="loading">Loading…</div>
         ) : error ? (
@@ -546,52 +559,118 @@ export default function SettingsPage() {
         ) : (
           <PrinterList printers={printers} onRefresh={refresh} />
         )}
-      </section>
-
-      <section className="page-section">
-        <h2 className="section-title">Spoolman</h2>
-        <p>Connect to a <a href="https://github.com/Donkie/Spoolman" target="_blank" rel="noopener noreferrer">Spoolman</a> instance to track filament spools on each printer.</p>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
-          <input
-            type="url"
-            className="form-input"
-            placeholder="http://10.0.0.24:32000"
-            value={spoolmanUrl}
-            onChange={e => setSpoolmanUrl(e.target.value)}
-            style={{ flex: 1, minWidth: '200px', maxWidth: '400px', fontSize: '14px', padding: '10px 14px' }}
-          />
-          <button className="btn btn-sm btn-primary" onClick={handleSpoolmanSave}>
-            Save
-          </button>
-          <button className="btn btn-sm" onClick={handleSpoolmanTest}>
-            Test Connection
-          </button>
+        <div style={{ marginTop: '16px' }}>
+          <h3 className="settings-card-title" style={{ marginBottom: '8px' }}>Printer Presets</h3>
+          <p className="settings-card-desc">Presets let you quickly configure printers with common build volumes and filament capabilities. Built-in presets cannot be edited or deleted.</p>
+          <PresetList />
         </div>
-        {spoolmanMsg && (
-          <p style={{
-            marginTop: '8px',
-            fontSize: '13px',
-            fontWeight: 500,
-            color: spoolmanStatus === 'ok' ? 'var(--success)' : spoolmanStatus === 'error' ? 'var(--danger)' : 'var(--text-muted)',
-          }}>
-            {spoolmanMsg}
-          </p>
-        )}
+      </Section>
 
-        {/* ── Storage Location Card ── */}
-        <div style={{
-          marginTop: '24px',
-          padding: '20px',
-          background: 'var(--surface2)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-        }}>
-          <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>Storage Location</h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+      {/* ════════════════════ 2. Connections ════════════════════ */}
+      <Section title="Connections" defaultOpen={true}>
+        {/* Spoolman URL */}
+        <div className="settings-card">
+          <h3 className="settings-card-title">Spoolman URL</h3>
+          <p className="settings-card-desc">
+            Connect to a <a href="https://github.com/Donkie/Spoolman" target="_blank" rel="noopener noreferrer">Spoolman</a> instance to track filament spools on each printer.
+          </p>
+          <div className="settings-row">
+            <input
+              type="url"
+              className="form-input"
+              placeholder="http://10.0.0.24:32000"
+              value={spoolmanUrl}
+              onChange={e => setSpoolmanUrl(e.target.value)}
+              style={{ flex: 1, minWidth: '200px', maxWidth: '400px', fontSize: '14px', padding: '10px 14px' }}
+            />
+            <button className="btn btn-sm btn-primary" onClick={handleSpoolmanSave}>
+              Save
+            </button>
+            <button className="btn btn-sm" onClick={handleSpoolmanTest}>
+              Test Connection
+            </button>
+          </div>
+          {spoolmanMsg && (
+            <p className={`settings-status ${spoolmanStatus || ''}`} style={{ marginTop: '8px', color: spoolmanStatus === 'ok' ? 'var(--success)' : spoolmanStatus === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
+              {spoolmanMsg}
+            </p>
+          )}
+        </div>
+
+        {/* Teamster URL */}
+        <div className="settings-card">
+          <h3 className="settings-card-title">Teamster Scale URL</h3>
+          <p className="settings-card-desc">
+            Connect to a <strong>Teamster</strong> ESP32 load cell device to auto-measure spool weights.
+          </p>
+          <div className="settings-row">
+            <input
+              type="url"
+              className="form-input"
+              placeholder="http://192.168.1.50"
+              value={teamsterUrl}
+              onChange={e => setTeamsterUrl(e.target.value)}
+              style={{ flex: 1, minWidth: '200px', maxWidth: '400px', fontSize: '14px', padding: '10px 14px' }}
+            />
+            <button className="btn btn-sm btn-primary" onClick={handleTeamsterSave}>Save</button>
+            <button className="btn btn-sm" onClick={handleTeamsterTest}>Test Connection</button>
+          </div>
+          {teamsterMsg && (
+            <p className={`settings-status ${teamsterStatus || ''}`} style={{ marginTop: '8px', color: teamsterStatus === 'ok' ? 'var(--success)' : teamsterStatus === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
+              {teamsterMsg}
+            </p>
+          )}
+        </div>
+
+        {/* Bambu Connect */}
+        <div className="settings-card">
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+            <div style={{ fontSize: '28px', lineHeight: 1 }}>&#x1f43c;</div>
+            <div style={{ flex: 1 }}>
+              <h3 className="settings-card-title">Bambu Connect Integration</h3>
+              <p className="settings-card-desc" style={{ marginBottom: '8px' }}>
+                Cloud-based integration via the Bambu Connect desktop app is planned for a future release.
+                For now, connect your Bambu Lab printers directly using <strong>LAN Developer Mode</strong>
+                — enable it in the printer's settings under <em>Network &rarr; LAN Only Mode</em>, then add the
+                printer from the Printers section above and select "Bambu Lab (LAN Developer Mode)".
+              </p>
+              <span style={{
+                display: 'inline-block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em',
+                padding: '2px 8px', borderRadius: '9999px',
+                background: 'var(--warning, #f59e0b)', color: '#fff', opacity: 0.8,
+              }}>
+                Coming soon
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Slicer Integration */}
+        <div className="settings-card">
+          <h3 className="settings-card-title">Slicer Integration</h3>
+          <p className="settings-card-desc">
+            Configure your slicer to upload G-code to this server using the OctoPrint preset.
+            Point it at <code>{window.location.origin}</code> — no API key required by default.
+          </p>
+          <ul style={{ paddingLeft: '20px', fontSize: '13px', marginBottom: '8px' }}>
+            <li><strong>PrusaSlicer / SuperSlicer:</strong> Physical Printer &rarr; Host type: OctoPrint &rarr; Host: <code>{window.location.origin}</code></li>
+            <li><strong>OrcaSlicer:</strong> Printer Settings &rarr; "Send to" &rarr; OctoPrint &rarr; URL: <code>{window.location.origin}</code></li>
+            <li><strong>Cura:</strong> Marketplace &rarr; OctoPrint plugin &rarr; OctoPrint URL: <code>{window.location.origin}</code></li>
+          </ul>
+          <p style={{ fontSize: '13px' }}>Uploaded files will appear in the <a href="/files">Files</a> page.</p>
+        </div>
+      </Section>
+
+      {/* ════════════════════ 3. Spoolman ════════════════════ */}
+      <Section title="Spoolman" defaultOpen={false}>
+        {/* Storage Location */}
+        <div className="settings-card">
+          <h3 className="settings-card-title">Storage Location</h3>
+          <p className="settings-card-desc">
             The Spoolman location tag used to identify spools that are sealed in storage.
             Type a new name to create a location, or change the existing one.
           </p>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div className="settings-row">
             <input
               className="form-input"
               value={storageLocationVal}
@@ -622,21 +701,15 @@ export default function SettingsPage() {
                 {storageLocationBusy ? 'Saving…' : storageLocationSaved ? 'Save' : 'Create'}
               </button>
             ) : storageLocationVal ? (
-              <span style={{ fontSize: '13px', color: 'var(--success, #22c55e)' }}>✓ Saved</span>
+              <span style={{ fontSize: '13px', color: 'var(--success, #22c55e)' }}>&#10003; Saved</span>
             ) : null}
           </div>
         </div>
 
-        {/* ── Extra Fields Card ── */}
-        <div style={{
-          marginTop: '24px',
-          padding: '20px',
-          background: 'var(--surface2)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-        }}>
-          <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>Filament Extra Fields mapping</h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+        {/* Extra Fields */}
+        <div className="settings-card">
+          <h3 className="settings-card-title">Filament Extra Fields mapping</h3>
+          <p className="settings-card-desc">
             Map Spoolman custom fields to the application's interface features.
           </p>
 
@@ -646,7 +719,7 @@ export default function SettingsPage() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
                 Product Link (URL)
               </label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div className="settings-row">
                 <select
                   className="spoolman-filter-select"
                   style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
@@ -662,7 +735,7 @@ export default function SettingsPage() {
                   ))}
                 </select>
                 {urlField === urlFieldSaved && urlField && (
-                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved ✓</span>
+                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved &#10003;</span>
                 )}
                 {!urlField && (
                   <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => handleAutoCreateField('url')}>
@@ -680,7 +753,7 @@ export default function SettingsPage() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
                 HueForge Transmissivity (TD)
               </label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div className="settings-row">
                 <select
                   className="spoolman-filter-select"
                   style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
@@ -696,7 +769,7 @@ export default function SettingsPage() {
                   ))}
                 </select>
                 {hueforgeField === hueforgeFieldSaved && hueforgeField && (
-                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved ✓</span>
+                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved &#10003;</span>
                 )}
                 {!hueforgeField && (
                   <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => handleAutoCreateField('hueforge')}>
@@ -714,7 +787,7 @@ export default function SettingsPage() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
                 Color Swatch Tracking
               </label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
+              <div className="settings-row" style={{ marginBottom: '12px' }}>
                 <select
                   className="spoolman-filter-select"
                   style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
@@ -763,84 +836,10 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* ── Backup & Restore ── */}
-        <div style={{
-          marginTop: '24px',
-          padding: '20px',
-          background: 'var(--surface2)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-        }}>
-          <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>Backup &amp; Restore</h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-            Export all vendors, filaments, and spools to a JSON file, or restore from a previous export.
-          </p>
-
-          {/* Export */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={handleExport}
-              disabled={exportBusy || !spoolmanSaved}
-            >
-              {exportBusy ? 'Exporting…' : 'Download Backup JSON'}
-            </button>
-            {!spoolmanSaved && (
-              <span style={{ marginLeft: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                Configure Spoolman URL above first.
-              </span>
-            )}
-            {exportError && (
-              <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--danger)' }}>{exportError}</p>
-            )}
-          </div>
-
-          {/* Import */}
-          <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Import</label>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
-              Imports will add new entries — existing data is not deleted or overwritten.
-            </p>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                type="file"
-                accept=".json"
-                onChange={e => setImportFile(e.target.files?.[0] || null)}
-                style={{ fontSize: '13px' }}
-              />
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={handleImport}
-                disabled={importBusy || !importFile || !spoolmanSaved}
-              >
-                {importBusy ? 'Importing…' : 'Import'}
-              </button>
-            </div>
-            {importError && (
-              <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{importError}</p>
-            )}
-            {importLog.length > 0 && (
-              <div style={{
-                marginTop: '10px', padding: '10px 14px',
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px',
-                maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap',
-              }}>
-                {importLog.join('\n')}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Docker Setup ── */}
+        {/* Docker Setup */}
         {dockerStatus?.reason === 'docker_not_found' ? (
-          <div style={{
-            marginTop: '24px', padding: '16px 20px',
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-muted)',
-          }}>
-            <strong style={{ color: 'var(--text)' }}>Docker Setup</strong>
+          <div className="settings-card" style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+            <h3 className="settings-card-title">Docker Setup</h3>
             <p style={{ marginTop: '6px' }}>
               Docker was not found on this system. Install{' '}
               <a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener noreferrer">Docker Desktop</a>{' '}
@@ -848,15 +847,9 @@ export default function SettingsPage() {
             </p>
           </div>
         ) : dockerStatus?.available && (
-          <div style={{
-            marginTop: '24px',
-            padding: '20px',
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-          }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>Docker Setup</h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+          <div className="settings-card">
+            <h3 className="settings-card-title">Docker Setup</h3>
+            <p className="settings-card-desc">
               Install and manage a Spoolman container directly from Marathon.
               {dockerStatus.mode === 'docker'
                 ? <> The container joins the <code>marathon_net</code> network and exposes a port for browser access.</>
@@ -865,7 +858,7 @@ export default function SettingsPage() {
             </p>
 
             {/* Status badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <div className="settings-row" style={{ marginBottom: '16px' }}>
               <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
               {!dockerStatus.created ? (
                 <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not installed</span>
@@ -877,9 +870,8 @@ export default function SettingsPage() {
             </div>
 
             {!dockerStatus.created ? (
-              /* Install form */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div className="settings-row">
                   <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>External port:</label>
                   <input
                     type="number"
@@ -905,7 +897,6 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : (
-              /* Uninstall form */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <input
@@ -948,33 +939,25 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* ── Native (Python) Install ── */}
+        {/* Native (Python) Install */}
         {nativeStatus && nativeStatus.platform === 'win32' && (
-          <div style={{
-            marginTop: '24px', padding: '14px 20px',
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-muted)',
-          }}>
-            <strong style={{ color: 'var(--text)' }}>Native Install</strong>
+          <div className="settings-card" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+            <h3 className="settings-card-title">Native Install</h3>
             <p style={{ marginTop: '4px' }}>
               Native Install is only available on Linux. Use Docker instead.
             </p>
           </div>
         )}
         {nativeStatus && nativeStatus.platform !== 'win32' && (nativeStatus.pythonAvailable || nativeStatus.installed) && (
-          <div style={{
-            marginTop: '24px', padding: '20px',
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-          }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>Native Install (Python)</h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+          <div className="settings-card">
+            <h3 className="settings-card-title">Native Install (Python)</h3>
+            <p className="settings-card-desc">
               Install Spoolman directly alongside Marathon using a Python virtual environment.
               No Docker required — data lives in <code style={{ fontSize: '11px' }}>{nativeStatus.installDir}/data/</code>
             </p>
 
             {/* Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <div className="settings-row" style={{ marginBottom: '16px' }}>
               <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
               {!nativeStatus.installed ? (
                 <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not installed</span>
@@ -989,9 +972,8 @@ export default function SettingsPage() {
             </div>
 
             {!nativeStatus.installed ? (
-              /* Install form */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div className="settings-row">
                   <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
                   <input
                     type="number"
@@ -1017,7 +999,6 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : (
-              /* Manage form */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {nativeStatus.running ? (
@@ -1073,12 +1054,8 @@ export default function SettingsPage() {
 
         {/* Python not found note */}
         {nativeStatus && nativeStatus.platform !== 'win32' && !nativeStatus.pythonAvailable && !nativeStatus.installed && (
-          <div style={{
-            marginTop: '24px', padding: '14px 20px',
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)', fontSize: '13px', color: 'var(--text-muted)',
-          }}>
-            <strong style={{ color: 'var(--text)' }}>Native Install</strong>
+          <div className="settings-card" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+            <h3 className="settings-card-title">Native Install</h3>
             <p style={{ marginTop: '4px' }}>
               Python 3.8+ was not found on this system.{' '}
               <a href="https://www.python.org/downloads/" target="_blank" rel="noopener noreferrer">Install Python</a>{' '}
@@ -1086,37 +1063,79 @@ export default function SettingsPage() {
             </p>
           </div>
         )}
-      </section>
 
-      <section className="page-section">
-        <h2 className="section-title">Teamster Scale</h2>
-        <p>Connect to a <strong>Teamster</strong> ESP32 load cell device to auto-measure spool weights.</p>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
-          <input
-            type="url"
-            className="form-input"
-            placeholder="http://192.168.1.50"
-            value={teamsterUrl}
-            onChange={e => setTeamsterUrl(e.target.value)}
-            style={{ flex: 1, minWidth: '200px', maxWidth: '400px', fontSize: '14px', padding: '10px 14px' }}
-          />
-          <button className="btn btn-sm btn-primary" onClick={handleTeamsterSave}>Save</button>
-          <button className="btn btn-sm" onClick={handleTeamsterTest}>Test Connection</button>
-        </div>
-        {teamsterMsg && (
-          <p style={{
-            marginTop: '8px',
-            fontSize: '13px',
-            fontWeight: 500,
-            color: teamsterStatus === 'ok' ? 'var(--success)' : teamsterStatus === 'error' ? 'var(--danger)' : 'var(--text-muted)',
-          }}>
-            {teamsterMsg}
+        {/* Spoolman Backup & Restore */}
+        <div className="settings-card">
+          <h3 className="settings-card-title">Spoolman Backup &amp; Restore</h3>
+          <p className="settings-card-desc">
+            Export all vendors, filaments, and spools to a JSON file, or restore from a previous export.
           </p>
-        )}
 
-        {/* Live readout + controls */}
-        <div style={{ marginTop: '20px', padding: '16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Export */}
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={handleExport}
+              disabled={exportBusy || !spoolmanSaved}
+            >
+              {exportBusy ? 'Exporting…' : 'Download Backup JSON'}
+            </button>
+            {!spoolmanSaved && (
+              <span style={{ marginLeft: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                Configure Spoolman URL above first.
+              </span>
+            )}
+            {exportError && (
+              <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--danger)' }}>{exportError}</p>
+            )}
+          </div>
+
+          {/* Import */}
+          <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Import</label>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+              Imports will add new entries — existing data is not deleted or overwritten.
+            </p>
+            <div className="settings-row">
+              <input
+                type="file"
+                accept=".json"
+                onChange={e => setImportFile(e.target.files?.[0] || null)}
+                style={{ fontSize: '13px' }}
+              />
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={handleImport}
+                disabled={importBusy || !importFile || !spoolmanSaved}
+              >
+                {importBusy ? 'Importing…' : 'Import'}
+              </button>
+            </div>
+            {importError && (
+              <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{importError}</p>
+            )}
+            {importLog.length > 0 && (
+              <div style={{
+                marginTop: '10px', padding: '10px 14px',
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px',
+                maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap',
+              }}>
+                {importLog.join('\n')}
+              </div>
+            )}
+          </div>
+        </div>
+      </Section>
+
+      {/* ════════════════════ 4. Scale ════════════════════ */}
+      <Section title="Scale" defaultOpen={false}>
+        <div className="settings-card">
+          <h3 className="settings-card-title">Teamster Live Weight</h3>
+          <p className="settings-card-desc">Live readout, tare, and calibration controls for the Teamster load cell.</p>
+
+          <div className="settings-row" style={{ marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', minWidth: '130px' }}>
               <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Scale:</span>
               <span style={{ fontSize: '22px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: teamsterLive?.ready ? 'var(--text)' : 'var(--text-muted)' }}>
@@ -1135,7 +1154,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Calibrate */}
-          <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="settings-row">
             <label style={{ fontSize: '13px', color: 'var(--text-muted)', flexShrink: 0 }}>Calibrate with known weight:</label>
             <input
               type="number"
@@ -1154,48 +1173,42 @@ export default function SettingsPage() {
             Place a known-weight object on the scale, enter its weight, then click Calibrate.
           </p>
         </div>
-      </section>
+      </Section>
 
-      <section className="page-section">
-        <h2 className="section-title">Project Settings</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '14px', marginBottom: '4px' }}>Deadline Warning Threshold (%)</label>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input
-                type="number"
-                className="form-input"
-                value={projectWarning}
-                onChange={e => setProjectWarning(e.target.value)}
-                style={{ width: '100px', padding: '8px 12px' }}
-              />
-              <span style={{ fontSize: '14px', opacity: 0.7 }}>% buffer on estimated print time</span>
-              <button className="btn btn-sm btn-primary" onClick={handleProjectSave} disabled={projectWarning === projectSaved}>
-                {projectWarning === projectSaved ? 'Saved' : 'Save'}
-              </button>
-            </div>
-            <p style={{ fontSize: '13px', opacity: 0.6, marginTop: '6px' }}>
-              Example: If set to 50%, you'll get a warning if 1.5x the remaining print time puts you past the deadline.
-            </p>
+      {/* ════════════════════ 5. Projects ════════════════════ */}
+      <Section title="Projects" defaultOpen={false}>
+        <div className="settings-card">
+          <h3 className="settings-card-title">Deadline Warning Threshold</h3>
+          <p className="settings-card-desc">
+            Set the percentage buffer on estimated print time before a deadline warning is shown.
+          </p>
+          <div className="settings-row">
+            <input
+              type="number"
+              className="form-input"
+              value={projectWarning}
+              onChange={e => setProjectWarning(e.target.value)}
+              style={{ width: '100px', padding: '8px 12px' }}
+            />
+            <span style={{ fontSize: '14px', opacity: 0.7 }}>% buffer on estimated print time</span>
+            <button className="btn btn-sm btn-primary" onClick={handleProjectSave} disabled={projectWarning === projectSaved}>
+              {projectWarning === projectSaved ? 'Saved' : 'Save'}
+            </button>
           </div>
+          <p style={{ fontSize: '13px', opacity: 0.6, marginTop: '6px' }}>
+            Example: If set to 50%, you'll get a warning if 1.5x the remaining print time puts you past the deadline.
+          </p>
         </div>
-      </section>
+      </Section>
 
-      <section className="page-section">
-        <h2 className="section-title">Printer Presets</h2>
-        <p>Presets let you quickly configure printers with common build volumes and filament capabilities. Built-in presets cannot be edited or deleted.</p>
-        <PresetList />
-      </section>
+      {/* ════════════════════ 6. Backup & Restore ════════════════════ */}
+      <Section title="Backup & Restore" defaultOpen={false}>
+        <div className="settings-card">
+          <h3 className="settings-card-title">Marathon Database</h3>
+          <p className="settings-card-desc">
+            Export or restore the entire Marathon database — includes all printers, print history, maintenance records, files metadata, settings, and more.
+          </p>
 
-      <section className="page-section">
-        <h2 className="section-title">Marathon Database</h2>
-        <p>Export or restore the entire Marathon database — includes all printers, print history, maintenance records, files metadata, settings, and more.</p>
-
-        <div style={{
-          marginTop: '16px', padding: '20px',
-          background: 'var(--surface2)', border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-        }}>
           {/* Export */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
@@ -1217,7 +1230,7 @@ export default function SettingsPage() {
             <p style={{ fontSize: '12px', color: 'var(--danger)', marginBottom: '10px', fontWeight: 500 }}>
               Warning: this replaces ALL current data. A backup of the current database will be saved first.
             </p>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="settings-row">
               <input
                 type="file"
                 accept=".db"
@@ -1244,18 +1257,110 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
-      </section>
+      </Section>
 
-      <section className="page-section">
-        <h2 className="section-title">About &amp; Updates</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ display: 'flex', gap: '16px', fontSize: '14px' }}>
+      {/* ════════════════════ 7. Integrations ════════════════════ */}
+      <Section title="Integrations" defaultOpen={false}>
+        <div className="settings-card">
+          <h3 className="settings-card-title">MCP Server</h3>
+          <p className="settings-card-desc">
+            Expose Marathon as an MCP tool server so Claude Desktop or other AI clients can control your printers directly.
+          </p>
+
+          {!mcpStatus?.installed && (
+            <div style={{ fontSize: '13px', color: 'var(--danger)', marginBottom: '12px' }}>
+              MCP server not found. Make sure <code>mcp-server/src/index.js</code> exists and run <code>npm install</code> inside <code>mcp-server/</code>.
+            </div>
+          )}
+
+          {/* Status row */}
+          <div className="settings-row" style={{ marginBottom: '16px' }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
+              background: mcpStatus?.running ? 'var(--success, #22c55e)' : 'var(--text-muted)',
+            }} />
+            <span style={{ fontSize: '13px' }}>
+              {mcpStatus === null ? 'Checking…' : mcpStatus.running ? `Running — port ${mcpStatus.port}` : 'Stopped'}
+            </span>
+            {mcpStatus?.running ? (
+              <button className="btn btn-sm" onClick={handleMcpStop} disabled={mcpBusy}>
+                {mcpBusy ? 'Stopping…' : 'Stop'}
+              </button>
+            ) : (
+              <button className="btn btn-sm btn-primary" onClick={handleMcpStart} disabled={mcpBusy || !mcpStatus?.installed}>
+                {mcpBusy ? 'Starting…' : 'Start'}
+              </button>
+            )}
+          </div>
+
+          {/* Config inputs */}
+          {!mcpStatus?.running && (
+            <div className="settings-row" style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Port</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  value={mcpPort}
+                  onChange={e => setMcpPort(e.target.value)}
+                  style={{ width: '90px', fontSize: '13px', padding: '6px 10px' }}
+                  placeholder="3001"
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
+                <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Marathon backend URL</label>
+                <input
+                  className="form-input"
+                  type="url"
+                  value={mcpMarathonUrl}
+                  onChange={e => setMcpMarathonUrl(e.target.value)}
+                  style={{ fontSize: '13px', padding: '6px 10px' }}
+                  placeholder="http://localhost:3000"
+                />
+              </div>
+            </div>
+          )}
+
+          {mcpError && <div style={{ fontSize: '13px', color: 'var(--danger)', marginBottom: '12px' }}>{mcpError}</div>}
+
+          {/* Connection info */}
+          {mcpStatus?.running && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '14px', fontSize: '13px' }}>
+              <div style={{ marginBottom: '10px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>HTTP endpoint: </span>
+                <code style={{ userSelect: 'all' }}>{mcpStatus.endpoint}</code>
+              </div>
+              <div style={{ marginBottom: '14px' }}>
+                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Claude Desktop config (<code>%APPDATA%\Claude\claude_desktop_config.json</code>):</span>
+                <pre style={{
+                  background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '4px',
+                  padding: '10px', fontSize: '12px', overflowX: 'auto', margin: 0, userSelect: 'all',
+                }}>{`"marathon": {
+  "command": "node",
+  "args": ["D:/Github/Marathon-overview/mcp-server/src/index.js"],
+  "env": { "MARATHON_URL": "${mcpStatus.marathonUrl}" }
+}`}</pre>
+              </div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                For HTTP clients: use <code>{mcpStatus.endpoint}</code> as the connector URL.
+                For Claude Desktop: edit the config file above and restart Claude Desktop.
+              </div>
+            </div>
+          )}
+        </div>
+      </Section>
+
+      {/* ════════════════════ 8. Updates ════════════════════ */}
+      <Section title="Updates" defaultOpen={false}>
+        <div className="settings-card">
+          <h3 className="settings-card-title">About &amp; Updates</h3>
+          <div style={{ display: 'flex', gap: '16px', fontSize: '14px', marginBottom: '10px' }}>
             <span><strong>Version:</strong> {__APP_VERSION__}</span>
             <span style={{ opacity: 0.6 }}>
               Deploy mode: {import.meta.env.MODE === 'production' ? 'production' : 'development'}
             </span>
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div className="settings-row">
             <button
               className="btn btn-sm"
               onClick={handleCheckUpdate}
@@ -1264,7 +1369,7 @@ export default function SettingsPage() {
               {updateChecking ? 'Checking…' : 'Check for Updates'}
             </button>
             {updateChecked && !updateInfo && (
-              <span style={{ fontSize: '13px', color: 'var(--success)' }}>You are up to date ✓</span>
+              <span style={{ fontSize: '13px', color: 'var(--success)' }}>You are up to date &#10003;</span>
             )}
             {updateInfo && (
               <button className="btn btn-sm btn-primary" onClick={() => setUpdateDialogOpen(true)}>
@@ -1279,137 +1384,7 @@ export default function SettingsPage() {
             onDismiss={() => { setUpdateDialogOpen(false); setUpdateInfo(null); }}
           />
         )}
-      </section>
-
-      <section className="page-section">
-        <h2 className="section-title">Bambu Connect</h2>
-        <div style={{
-          display: 'flex', gap: '16px', alignItems: 'flex-start',
-          padding: '16px', background: 'var(--surface2)', borderRadius: 'var(--radius)',
-          border: '1px solid var(--border)',
-        }}>
-          <div style={{ fontSize: '28px', lineHeight: 1 }}>🐼</div>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontWeight: 600, marginBottom: '4px' }}>Bambu Connect Integration</p>
-            <p style={{ fontSize: '13px', opacity: 0.7, marginBottom: '8px' }}>
-              Cloud-based integration via the Bambu Connect desktop app is planned for a future release.
-              For now, connect your Bambu Lab printers directly using <strong>LAN Developer Mode</strong>
-              — enable it in the printer's settings under <em>Network → LAN Only Mode</em>, then add the
-              printer from the Printers section above and select "Bambu Lab (LAN Developer Mode)".
-            </p>
-            <span style={{
-              display: 'inline-block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em',
-              padding: '2px 8px', borderRadius: '9999px',
-              background: 'var(--warning, #f59e0b)', color: '#fff', opacity: 0.8,
-            }}>
-              Coming soon
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <section className="page-section">
-        <h2 className="section-title">Slicer Integration</h2>
-        <p>
-          Configure your slicer to upload G-code to this server using the OctoPrint preset.
-          Point it at <code>{window.location.origin}</code> — no API key required by default.
-        </p>
-        <ul>
-          <li><strong>PrusaSlicer / SuperSlicer:</strong> Physical Printer → Host type: OctoPrint → Host: <code>{window.location.origin}</code></li>
-          <li><strong>OrcaSlicer:</strong> Printer Settings → "Send to" → OctoPrint → URL: <code>{window.location.origin}</code></li>
-          <li><strong>Cura:</strong> Marketplace → OctoPrint plugin → OctoPrint URL: <code>{window.location.origin}</code></li>
-        </ul>
-        <p>Uploaded files will appear in the <a href="/files">Files</a> page.</p>
-      </section>
-
-      {/* ── MCP Server ── */}
-      <section className="page-section">
-        <h2 className="section-title">MCP Server</h2>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-          Expose Marathon as an MCP tool server so Claude Desktop or other AI clients can control your printers directly.
-        </p>
-
-        {!mcpStatus?.installed && (
-          <div style={{ fontSize: '13px', color: 'var(--danger)', marginBottom: '12px' }}>
-            MCP server not found. Make sure <code>mcp-server/src/index.js</code> exists and run <code>npm install</code> inside <code>mcp-server/</code>.
-          </div>
-        )}
-
-        {/* Status row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-          <span style={{
-            width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-            background: mcpStatus?.running ? 'var(--success, #22c55e)' : 'var(--text-muted)',
-          }} />
-          <span style={{ fontSize: '13px' }}>
-            {mcpStatus === null ? 'Checking…' : mcpStatus.running ? `Running — port ${mcpStatus.port}` : 'Stopped'}
-          </span>
-          {mcpStatus?.running ? (
-            <button className="btn btn-sm" onClick={handleMcpStop} disabled={mcpBusy}>
-              {mcpBusy ? 'Stopping…' : 'Stop'}
-            </button>
-          ) : (
-            <button className="btn btn-sm btn-primary" onClick={handleMcpStart} disabled={mcpBusy || !mcpStatus?.installed}>
-              {mcpBusy ? 'Starting…' : 'Start'}
-            </button>
-          )}
-        </div>
-
-        {/* Config inputs */}
-        {!mcpStatus?.running && (
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Port</label>
-              <input
-                className="form-input"
-                type="number"
-                value={mcpPort}
-                onChange={e => setMcpPort(e.target.value)}
-                style={{ width: '90px', fontSize: '13px', padding: '6px 10px' }}
-                placeholder="3001"
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Marathon backend URL</label>
-              <input
-                className="form-input"
-                type="url"
-                value={mcpMarathonUrl}
-                onChange={e => setMcpMarathonUrl(e.target.value)}
-                style={{ fontSize: '13px', padding: '6px 10px' }}
-                placeholder="http://localhost:3000"
-              />
-            </div>
-          </div>
-        )}
-
-        {mcpError && <div style={{ fontSize: '13px', color: 'var(--danger)', marginBottom: '12px' }}>{mcpError}</div>}
-
-        {/* Connection info */}
-        {mcpStatus?.running && (
-          <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '14px', fontSize: '13px' }}>
-            <div style={{ marginBottom: '10px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>HTTP endpoint: </span>
-              <code style={{ userSelect: 'all' }}>{mcpStatus.endpoint}</code>
-            </div>
-            <div style={{ marginBottom: '14px' }}>
-              <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Claude Desktop config (<code>%APPDATA%\Claude\claude_desktop_config.json</code>):</span>
-              <pre style={{
-                background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '4px',
-                padding: '10px', fontSize: '12px', overflowX: 'auto', margin: 0, userSelect: 'all',
-              }}>{`"marathon": {
-  "command": "node",
-  "args": ["D:/Github/Marathon-overview/mcp-server/src/index.js"],
-  "env": { "MARATHON_URL": "${mcpStatus.marathonUrl}" }
-}`}</pre>
-            </div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-              For HTTP clients: use <code>{mcpStatus.endpoint}</code> as the connector URL.
-              For Claude Desktop: edit the config file above and restart Claude Desktop.
-            </div>
-          </div>
-        )}
-      </section>
+      </Section>
 
       {importMappingData && (
         <ImportFieldMappingDialog
