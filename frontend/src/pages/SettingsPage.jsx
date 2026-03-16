@@ -3,7 +3,7 @@ import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
-import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative } from '../api/spoolman';
+import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate } from '../api/updates';
 import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
@@ -34,6 +34,9 @@ export default function SettingsPage() {
   const [swatchFieldSaved, setSwatchFieldSaved] = useState('');
   const [swatchPromptEnabled, setSwatchPromptEnabled] = useState(false);
   const [swatchPromptSaved, setSwatchPromptSaved] = useState(false);
+  const [storageLocationVal, setStorageLocationVal] = useState('Storage');
+  const [storageLocationSaved, setStorageLocationSaved] = useState('Storage');
+  const [storageLocationBusy, setStorageLocationBusy] = useState(false);
   const [projectWarning, setProjectWarning] = useState('50');
   const [projectSaved, setProjectSaved] = useState('50');
   const [updateInfo, setUpdateInfo] = useState(null);
@@ -97,6 +100,11 @@ export default function SettingsPage() {
       setSwatchFieldSaved(s.swatch_extra_field || '');
       setSwatchPromptEnabled(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
       setSwatchPromptSaved(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
+    }).catch(() => { });
+    getStorageLocation().then(r => {
+      const loc = r.storage_location || 'Storage';
+      setStorageLocationVal(loc);
+      setStorageLocationSaved(loc);
     }).catch(() => { });
     getFields('filament').then(fields => setExtraFields(fields || [])).catch(() => { });
     getDockerStatus().then(setDockerStatus).catch(() => { });
@@ -569,6 +577,55 @@ export default function SettingsPage() {
             {spoolmanMsg}
           </p>
         )}
+
+        {/* ── Storage Location Card ── */}
+        <div style={{
+          marginTop: '24px',
+          padding: '20px',
+          background: 'var(--surface2)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+        }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px' }}>Storage Location</h3>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+            The Spoolman location tag used to identify spools that are sealed in storage.
+            Type a new name to create a location, or change the existing one.
+          </p>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              className="form-input"
+              value={storageLocationVal}
+              onChange={e => setStorageLocationVal(e.target.value)}
+              placeholder="e.g. Storage, Shelf A, Dry Box"
+              style={{ maxWidth: '280px', fontSize: '13px' }}
+              onKeyDown={e => { if (e.key === 'Enter' && storageLocationVal !== storageLocationSaved) {
+                e.preventDefault();
+                if (!storageLocationVal.trim()) return;
+                setStorageLocationBusy(true);
+                setStorageLocation(storageLocationVal.trim())
+                  .then(() => setStorageLocationSaved(storageLocationVal.trim()))
+                  .catch(err => alert(err.message))
+                  .finally(() => setStorageLocationBusy(false));
+              }}}
+            />
+            {storageLocationVal !== storageLocationSaved ? (
+              <button className="btn btn-sm btn-primary" disabled={storageLocationBusy}
+                onClick={async () => {
+                  if (!storageLocationVal.trim()) return;
+                  setStorageLocationBusy(true);
+                  try {
+                    await setStorageLocation(storageLocationVal.trim());
+                    setStorageLocationSaved(storageLocationVal.trim());
+                  } catch (e) { alert(e.message); }
+                  finally { setStorageLocationBusy(false); }
+                }}>
+                {storageLocationBusy ? 'Saving…' : storageLocationSaved ? 'Save' : 'Create'}
+              </button>
+            ) : storageLocationVal ? (
+              <span style={{ fontSize: '13px', color: 'var(--success, #22c55e)' }}>✓ Saved</span>
+            ) : null}
+          </div>
+        </div>
 
         {/* ── Extra Fields Card ── */}
         <div style={{

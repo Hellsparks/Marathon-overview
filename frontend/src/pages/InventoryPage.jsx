@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { getFilaments, getSpools, getInventory, setInventoryTarget, removeInventoryTarget, getSpoolmanSettings, getStorageLocation, setStorageLocation, patchSpool, createSpool } from '../api/spoolman';
+import { getFilaments, getSpools, getInventory, setInventoryTarget, removeInventoryTarget, getSpoolmanSettings, getStorageLocation, patchSpool, createSpool } from '../api/spoolman';
 import { groupSpoolsByFilament, isSpoolLow } from '../utils/spoolStorage';
 import AddSpoolDialog from '../components/spoolman/AddSpoolDialog';
 import ViewToggle from '../components/common/ViewToggle';
@@ -37,8 +37,6 @@ export default function InventoryPage() {
     const [busy, setBusy] = useState({});
     const [storageLocation, setStorageLocationState] = useState('Storage');
     const [storageOpen, setStorageOpen] = useState(true);
-    const [editingLocation, setEditingLocation] = useState(false);
-    const [locationInput, setLocationInput] = useState('');
     const [openBusy, setOpenBusy] = useState({});
     const [showAddSpool, setShowAddSpool] = useState(false);
     const [addSpoolFilamentId, setAddSpoolFilamentId] = useState(null);
@@ -52,6 +50,11 @@ export default function InventoryPage() {
     const [vendorFilter, setVendorFilter] = useState([]);
     const [showFilter, setShowFilter] = useState(false);
     const filterRef = useRef(null);
+    const [storageSearch, setStorageSearch] = useState('');
+    const [storageMaterialFilter, setStorageMaterialFilter] = useState([]);
+    const [storageVendorFilter, setStorageVendorFilter] = useState([]);
+    const [showStorageFilter, setShowStorageFilter] = useState(false);
+    const storageFilterRef = useRef(null);
 
     const load = useCallback(async () => {
         try {
@@ -86,6 +89,15 @@ export default function InventoryPage() {
         document.addEventListener('mousedown', handleClick);
         return () => document.removeEventListener('mousedown', handleClick);
     }, [showFilter]);
+
+    useEffect(() => {
+        if (!showStorageFilter) return;
+        function handleClick(e) {
+            if (storageFilterRef.current && !storageFilterRef.current.contains(e.target)) setShowStorageFilter(false);
+        }
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [showStorageFilter]);
 
     const allTracked = filaments.filter(f => inventory[f.id]);
     const allMaterials = [...new Set(allTracked.map(f => f.material).filter(Boolean))].sort();
@@ -206,17 +218,23 @@ export default function InventoryPage() {
         }
     }
 
-    async function handleSaveStorageLocation() {
-        if (!locationInput.trim()) return;
-        try {
-            await setStorageLocation(locationInput.trim());
-            setStorageLocationState(locationInput.trim());
-            setEditingLocation(false);
-            await load();
-        } catch (e) {
-            alert(e.message);
+    const allStorageMaterials = [...new Set(filaments.map(f => f.material).filter(Boolean))].sort();
+    const allStorageVendors = [...new Set(filaments.map(f => f.vendor?.name).filter(Boolean))].sort();
+    const activeStorageFilterCount = storageMaterialFilter.length + storageVendorFilter.length;
+
+    const filteredStorageRows = storageRows.filter(({ filament: f }) => {
+        if (storageMaterialFilter.length > 0 && !storageMaterialFilter.includes(f.material)) return false;
+        if (storageVendorFilter.length > 0 && !storageVendorFilter.includes(f.vendor?.name)) return false;
+        if (storageSearch.trim()) {
+            const q = storageSearch.toLowerCase();
+            return (
+                (f.name || '').toLowerCase().includes(q) ||
+                (f.material || '').toLowerCase().includes(q) ||
+                (f.vendor?.name || '').toLowerCase().includes(q)
+            );
         }
-    }
+        return true;
+    });
 
     async function handleStoreConfirm() {
         if (!storePrompt) return;
@@ -520,35 +538,72 @@ export default function InventoryPage() {
 
                     {storageOpen && (
                         <div>
-                            <div className="inv-storage-location-row">
-                                {editingLocation ? (
-                                    <>
-                                        <input
-                                            className="input inv-storage-location-input"
-                                            value={locationInput}
-                                            onChange={e => setLocationInput(e.target.value)}
-                                            onKeyDown={e => { if (e.key === 'Enter') handleSaveStorageLocation(); if (e.key === 'Escape') setEditingLocation(false); }}
-                                            autoFocus
-                                        />
-                                        <button className="btn btn-sm btn-primary" onClick={handleSaveStorageLocation}>Save</button>
-                                        <button className="btn btn-sm" onClick={() => setEditingLocation(false)}>Cancel</button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="text-muted" style={{ fontSize: '12px' }}>
-                                            Storage location: <strong style={{ color: 'var(--text)' }}>{storageLocation}</strong>
-                                        </span>
-                                        <button
-                                            className="sm-action-btn"
-                                            title="Change storage location name"
-                                            onClick={() => { setLocationInput(storageLocation); setEditingLocation(true); }}
-                                        >✏</button>
-                                    </>
-                                )}
+                            <div style={{ display: 'flex', gap: '8px', margin: '12px 0', alignItems: 'center' }}>
+                                <div className="spoolman-search-wrap" style={{ flex: 1, position: 'relative' }} ref={storageFilterRef}>
+                                    <span className="spoolman-search-icon">🔍</span>
+                                    <input
+                                        type="text"
+                                        className="input spoolman-search-input"
+                                        placeholder="Search storage…"
+                                        value={storageSearch}
+                                        onChange={e => setStorageSearch(e.target.value)}
+                                        style={{ paddingRight: '36px' }}
+                                    />
+                                    <button
+                                        className="spoolman-filter-btn"
+                                        onClick={() => setShowStorageFilter(v => !v)}
+                                        title="Filter"
+                                        style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)' }}
+                                    >
+                                        {activeStorageFilterCount > 0 ? `⚙ ${activeStorageFilterCount}` : '⚙'}
+                                    </button>
+                                    {showStorageFilter && (
+                                        <div className="spoolman-filter-popover" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 100 }}>
+                                            {allStorageMaterials.length > 0 && (
+                                                <div className="spoolman-filter-group">
+                                                    <div className="spoolman-filter-label">Material</div>
+                                                    {allStorageMaterials.map(mat => (
+                                                        <label key={mat} className="spoolman-filter-option">
+                                                            <input type="checkbox" checked={storageMaterialFilter.includes(mat)}
+                                                                onChange={() => setStorageMaterialFilter(prev =>
+                                                                    prev.includes(mat) ? prev.filter(x => x !== mat) : [...prev, mat]
+                                                                )}
+                                                                style={{ appearance: 'none', WebkitAppearance: 'none', width: '14px', height: '14px', borderRadius: '3px', border: '1.5px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', flexShrink: 0, accentColor: 'var(--primary, #0ea5e9)' }}
+                                                            />
+                                                            {mat}
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {allStorageVendors.length > 0 && (
+                                                <div className="spoolman-filter-group">
+                                                    <div className="spoolman-filter-label">Vendor</div>
+                                                    {allStorageVendors.map(v => (
+                                                        <label key={v} className="spoolman-filter-option">
+                                                            <input type="checkbox" checked={storageVendorFilter.includes(v)}
+                                                                onChange={() => setStorageVendorFilter(prev =>
+                                                                    prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]
+                                                                )}
+                                                                style={{ appearance: 'none', WebkitAppearance: 'none', width: '14px', height: '14px', borderRadius: '3px', border: '1.5px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', flexShrink: 0, accentColor: 'var(--primary, #0ea5e9)' }}
+                                                            />
+                                                            {v}
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            {activeStorageFilterCount > 0 && (
+                                                <button className="spoolman-filter-clear"
+                                                    onClick={() => { setStorageMaterialFilter([]); setStorageVendorFilter([]); }}>
+                                                    Clear filters
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="inv-storage-list">
-                                {storageRows.map(({ filament: f, storageSpools, activeSpools }) => {
+                                {filteredStorageRows.map(({ filament: f, storageSpools, activeSpools }) => {
                                     const hasLowActive = activeSpools.some(isSpoolLow);
                                     const showAlert = hasLowActive && storageSpools.length > 0;
                                     const topStorageSpool = storageSpools[0];

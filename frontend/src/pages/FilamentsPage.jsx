@@ -97,14 +97,14 @@ export default function FilamentsPage() {
     return (
         <div className="page">
             <div className="sm-page-toolbar" style={{ position: 'relative' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+                <div className="spoolman-search-wrap" style={{ position: 'relative', flex: 1, maxWidth: '420px' }}>
+                    <span className="spoolman-search-icon">🔍</span>
                     <input
-                        className="sm-input sm-page-search"
+                        className="input spoolman-search-input"
                         type="text"
                         placeholder="Search filaments by name, color, vendor…"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
-                        style={{ width: '100%', paddingRight: '36px' }}
                     />
                     <button
                         type="button"
