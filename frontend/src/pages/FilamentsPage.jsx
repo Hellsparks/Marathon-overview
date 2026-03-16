@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getFilaments, deleteFilament, getFields } from '../api/spoolman';
 import { getSettings } from '../api/settings';
 import AddFilamentDialog from '../components/spoolman/AddFilamentDialog';
@@ -6,6 +6,24 @@ import ColoriometerPanel from '../components/spoolman/ColoriometerPanel';
 import { findClosestRal } from '../utils/ralColors';
 import ViewToggle from '../components/common/ViewToggle';
 import { buildColorStyle } from '../utils/colorUtils';
+
+const COLOR_NAMES = {
+    red: [255, 0, 0], green: [0, 128, 0], blue: [0, 0, 255], yellow: [255, 255, 0],
+    orange: [255, 165, 0], purple: [128, 0, 128], pink: [255, 192, 203],
+    black: [0, 0, 0], white: [255, 255, 255], gray: [128, 128, 128], grey: [128, 128, 128],
+    silver: [192, 192, 192], cyan: [0, 255, 255], magenta: [255, 0, 255], brown: [165, 42, 42],
+};
+function hexToRgb(hex) {
+    if (!hex) return null;
+    const m = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
+}
+function colorDistance(a, b) { return Math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2); }
+function matchesColor(hex, tokens) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return false;
+    return tokens.some(t => COLOR_NAMES[t] && colorDistance(rgb, COLOR_NAMES[t]) < 120);
+}
 
 function toAbsUrl(url) {
     if (!url) return null;
@@ -20,6 +38,9 @@ export default function FilamentsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [search, setSearch] = useState('');
+    const [materialFilter, setMaterialFilter] = useState([]);
+    const [vendorFilter, setVendorFilter] = useState([]);
+    const [showFilterPopover, setShowFilterPopover] = useState(false);
     const [showAdd, setShowAdd] = useState(false);
     const [editFilament, setEditFilament] = useState(null);
     const [cloneFilament, setCloneFilament] = useState(null);
@@ -54,13 +75,20 @@ export default function FilamentsPage() {
         }
     }
 
+    const uniqueMaterials = useMemo(() => Array.from(new Set(filaments.map(f => f.material).filter(Boolean))).sort(), [filaments]);
+    const uniqueVendors = useMemo(() => Array.from(new Set(filaments.map(f => f.vendor?.name).filter(Boolean))).sort(), [filaments]);
+
     const filtered = filaments.filter(f => {
+        if (materialFilter.length > 0 && !materialFilter.includes(f.material)) return false;
+        if (vendorFilter.length > 0 && !vendorFilter.includes(f.vendor?.name)) return false;
         if (!search.trim()) return true;
         const q = search.toLowerCase();
+        const tokens = q.split(/\s+/);
         return (
             (f.name || '').toLowerCase().includes(q) ||
             (f.material || '').toLowerCase().includes(q) ||
-            (f.vendor?.name || '').toLowerCase().includes(q)
+            (f.vendor?.name || '').toLowerCase().includes(q) ||
+            matchesColor(f.color_hex, tokens)
         );
     });
 
@@ -68,20 +96,68 @@ export default function FilamentsPage() {
 
     return (
         <div className="page">
-            <div className="sm-page-toolbar">
-                <input
-                    className="sm-input sm-page-search"
-                    type="text"
-                    placeholder="Search filaments…"
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    style={{ flex: 1, minWidth: '200px' }}
-                />
+            <div className="sm-page-toolbar" style={{ position: 'relative' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+                    <input
+                        className="sm-input sm-page-search"
+                        type="text"
+                        placeholder="Search filaments by name, color, vendor…"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        style={{ width: '100%', paddingRight: '36px' }}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setShowFilterPopover(!showFilterPopover)}
+                        style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', padding: '6px 10px', fontSize: '13px', border: 'none', background: 'transparent', cursor: 'pointer', color: (materialFilter.length || vendorFilter.length) ? 'var(--primary)' : 'var(--text-muted)' }}
+                        title="Filter filaments"
+                    >⚙</button>
+                </div>
                 <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                     <ViewToggle viewMode={viewMode} onChange={setViewMode} />
                     <button className="btn btn-primary v-btn" onClick={() => setShowAdd(true)}>+ Add Filament</button>
                     <ColoriometerPanel />
                 </div>
+                {showFilterPopover && (
+                    <>
+                        <div style={{ position: 'fixed', inset: 0, zIndex: 999 }} onClick={() => setShowFilterPopover(false)} />
+                        <div style={{
+                            position: 'absolute', top: '100%', left: 0, marginTop: '8px',
+                            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
+                            padding: '12px', zIndex: 1000, minWidth: '240px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                        }} onClick={e => e.stopPropagation()}>
+                            <div style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-muted)' }}>Material</label>
+                                <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '4px', padding: '6px' }}>
+                                    {uniqueMaterials.map(m => (
+                                        <label key={m} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0', cursor: 'pointer', fontSize: '13px' }}>
+                                            <input type="checkbox" checked={materialFilter.includes(m)}
+                                                onChange={e => e.target.checked ? setMaterialFilter([...materialFilter, m]) : setMaterialFilter(materialFilter.filter(x => x !== m))}
+                                            /> {m}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <div style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '6px', color: 'var(--text-muted)' }}>Vendor</label>
+                                <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '4px', padding: '6px' }}>
+                                    {uniqueVendors.map(v => (
+                                        <label key={v} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 0', cursor: 'pointer', fontSize: '13px' }}>
+                                            <input type="checkbox" checked={vendorFilter.includes(v)}
+                                                onChange={e => e.target.checked ? setVendorFilter([...vendorFilter, v]) : setVendorFilter(vendorFilter.filter(x => x !== v))}
+                                            /> {v}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <button type="button" className="btn btn-sm"
+                                onClick={() => { setMaterialFilter([]); setVendorFilter([]); setShowFilterPopover(false); }}
+                                style={{ width: '100%', fontSize: '12px' }}>
+                                Clear Filters
+                            </button>
+                        </div>
+                    </>
+                )}
             </div>
 
             {loading ? (
