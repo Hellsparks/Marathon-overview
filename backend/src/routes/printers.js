@@ -104,6 +104,7 @@ router.put('/reorder', (req, res) => {
 
   const db = getDb();
   const update = db.prepare('UPDATE printers SET sort_order = ?, updated_at = datetime(\'now\') WHERE id = ?');
+  console.log(`[printers/reorder] Updating order for ${order.length} printers:`, order);
   db.exec('BEGIN');
   try {
     for (let i = 0; i < order.length; i++) {

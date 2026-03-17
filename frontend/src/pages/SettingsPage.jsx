@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
@@ -9,6 +10,8 @@ import { checkForUpdate } from '../api/updates';
 import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
 import UpdateDialog from '../components/layout/UpdateDialog';
 import ImportFieldMappingDialog from '../components/spoolman/ImportFieldMappingDialog';
+import ExportSelectionDialog from '../components/spoolman/ExportSelectionDialog';
+import CurrencyConvertDialog from '../components/spoolman/CurrencyConvertDialog';
 import OrcaSlicerDefaultsDialog from '../components/spoolman/OrcaSlicerDefaultsDialog';
 import JSZip from 'jszip';
 
@@ -26,6 +29,7 @@ function Section({ title, defaultOpen = true, children }) {
 }
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const { printers, loading, error, refresh } = usePrinters();
   const [spoolmanUrl, setSpoolmanUrl] = useState('');
   const [spoolmanSaved, setSpoolmanSaved] = useState('');
@@ -77,6 +81,8 @@ export default function SettingsPage() {
   const [importLog, setImportLog] = useState([]);
   const [importError, setImportError] = useState('');
   const [importMappingData, setImportMappingData] = useState(null); // { data, missing, existing }
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [currencyData, setCurrencyData] = useState(null); // { data, source, target }
 
   // Docker setup
   const [dockerStatus, setDockerStatus] = useState(null); // null = loading
@@ -101,6 +107,12 @@ export default function SettingsPage() {
   const [nativeError, setNativeError] = useState('');
   const [nativePort, setNativePort] = useState('7912');
   const [nativeRemoveData, setNativeRemoveData] = useState(false);
+
+  // GitHub integration
+  const [githubToken, setGithubToken] = useState('');
+  const [githubTokenSaved, setGithubTokenSaved] = useState('');
+  const [directReportsEnabled, setDirectReportsEnabled] = useState(false);
+  const [directReportsSaved, setDirectReportsSaved] = useState(false);
 
   useEffect(() => {
     getSettings().then(s => {
@@ -133,6 +145,13 @@ export default function SettingsPage() {
       setMcpStatus(s);
       if (s.port) setMcpPort(String(s.port));
       if (s.marathonUrl) setMcpMarathonUrl(s.marathonUrl);
+    }).catch(() => { });
+
+    getSettings().then(s => {
+      setGithubToken(s.github_token || '');
+      setGithubTokenSaved(s.github_token || '');
+      setDirectReportsEnabled(s.direct_reports_enabled === 'true' || s.direct_reports_enabled === true);
+      setDirectReportsSaved(s.direct_reports_enabled === 'true' || s.direct_reports_enabled === true);
     }).catch(() => { });
   }, []);
 
@@ -182,6 +201,17 @@ export default function SettingsPage() {
     try {
       await updateSetting('orcaslicer_config_field', val);
       setOrcaslicerFieldSaved(val);
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function handleGithubSettingsSave() {
+    try {
+      await updateSetting('github_token', githubToken);
+      await updateSetting('direct_reports_enabled', String(directReportsEnabled));
+      setGithubTokenSaved(githubToken);
+      setDirectReportsSaved(directReportsEnabled);
     } catch (e) {
       alert(e.message);
     }
@@ -428,7 +458,7 @@ export default function SettingsPage() {
 
   async function handleDbImport() {
     if (!dbImportFile) return;
-    if (!confirm('This will replace the entire Marathon database with the uploaded file.\n\nA backup of the current database will be saved alongside it before replacing.\n\nContinue?')) return;
+    if (!confirm('This will replace the entire Marathon database and gcode files with the uploaded backup.\n\nA backup of the current data will be saved first.\n\nContinue?')) return;
     setDbImportBusy(true);
     setDbImportResult(null);
     try {
@@ -442,11 +472,12 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleExport() {
+  async function handleExport(vendorIds) {
+    setShowExportDialog(false);
     setExportBusy(true);
     setExportError('');
     try {
-      await exportSpoolman();
+      await exportSpoolman(vendorIds);
     } catch (e) {
       setExportError(e.message);
     } finally {
@@ -466,11 +497,17 @@ export default function SettingsPage() {
       const validation = await validateImport(data);
       if (!validation.fieldsOk) {
         // Show mapping dialog — pause import
-        setImportMappingData({ data, missing: validation.missing, existing: validation.existing });
+        setImportMappingData({ data, missing: validation.missing, existing: validation.existing, currencyInfo: validation.currencyInfo });
         setImportBusy(false);
         return;
       }
-      // Fields are OK, proceed directly
+      // Check currency mismatch
+      if (validation.currencyInfo) {
+        setCurrencyData({ data, source: validation.currencyInfo.source, target: validation.currencyInfo.target });
+        setImportBusy(false);
+        return;
+      }
+      // Fields are OK and no currency mismatch, proceed directly
       const result = await importSpoolman(data);
       setImportLog(result.log || []);
     } catch (e) {
@@ -481,12 +518,33 @@ export default function SettingsPage() {
   }
 
   async function handleImportWithMappings(createFields, fieldMappings) {
-    const { data } = importMappingData;
+    const { data, currencyInfo } = importMappingData;
     setImportMappingData(null);
+    // Apply field mappings
+    data._createFields = createFields;
+    data._fieldMappings = fieldMappings;
+    // Check currency mismatch after field mapping
+    if (currencyInfo) {
+      setCurrencyData({ data, source: currencyInfo.source, target: currencyInfo.target });
+      return;
+    }
     setImportBusy(true);
     try {
-      data._createFields = createFields;
-      data._fieldMappings = fieldMappings;
+      const result = await importSpoolman(data);
+      setImportLog(result.log || []);
+    } catch (e) {
+      setImportError(e.message);
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function handleCurrencyConfirm(rate) {
+    const { data } = currencyData;
+    setCurrencyData(null);
+    if (rate) data._currencyRate = rate;
+    setImportBusy(true);
+    try {
       const result = await importSpoolman(data);
       setImportLog(result.log || []);
     } catch (e) {
@@ -1225,15 +1283,24 @@ export default function SettingsPage() {
           {/* Export */}
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={handleExport}
-              disabled={exportBusy || !spoolmanSaved}
-            >
-              {exportBusy ? 'Exporting…' : 'Download Backup JSON'}
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => handleExport(null)}
+                disabled={exportBusy || !spoolmanSaved}
+              >
+                {exportBusy ? 'Exporting…' : 'Export All'}
+              </button>
+              <button
+                className="btn btn-sm"
+                onClick={() => setShowExportDialog(true)}
+                disabled={exportBusy || !spoolmanSaved}
+              >
+                Select Manufacturers...
+              </button>
+            </div>
             {!spoolmanSaved && (
-              <span style={{ marginLeft: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                 Configure Spoolman URL above first.
               </span>
             )}
@@ -1384,7 +1451,7 @@ export default function SettingsPage() {
             <div className="settings-row">
               <input
                 type="file"
-                accept=".db"
+                accept=".zip,.db"
                 onChange={e => { setDbImportFile(e.target.files?.[0] || null); setDbImportResult(null); }}
                 style={{ fontSize: '13px' }}
               />
@@ -1501,7 +1568,69 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      {/* ════════════════════ 8. Updates ════════════════════ */}
+      {/* ════════════════════ 7. GitHub Integration ════════════════════ */}
+      <Section title="GitHub Integration" defaultOpen={false}>
+        <div className="settings-card">
+          <h3 className="settings-card-title">Bug Reporting</h3>
+          <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 16px' }}>
+            Configure a GitHub Personal Access Token to enable direct, one-click bug reporting from the navigation bar.
+          </p>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>GitHub Personal Access Token (PAT)</label>
+              <input
+                className="form-input"
+                type="password"
+                value={githubToken}
+                onChange={e => setGithubToken(e.target.value)}
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+              />
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Requires <code>public_repo</code> or <code>repo</code> scope.
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <input
+                type="checkbox"
+                id="direct_reports"
+                checked={directReportsEnabled}
+                onChange={e => setDirectReportsEnabled(e.target.checked)}
+              />
+              <label htmlFor="direct_reports" style={{ fontSize: '14px', cursor: 'pointer' }}>
+                Enable Direct Bug Reporting (No GitHub redirect)
+              </label>
+            </div>
+
+            {(githubToken !== githubTokenSaved || directReportsEnabled !== directReportsSaved) && (
+              <button className="btn btn-sm btn-primary" onClick={handleGithubSettingsSave}>
+                Save GitHub Settings
+              </button>
+            )}
+          </div>
+        </div>
+      </Section>
+
+      {/* ════════════════════ 8. Setup ════════════════════ */}
+      <Section title="Setup" defaultOpen={false}>
+        <div className="settings-card">
+          <h3 className="settings-card-title">Setup Wizard</h3>
+          <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 10px' }}>
+            Re-run the first-time setup wizard to reconfigure Spoolman, features, and printers.
+          </p>
+          <button
+            className="btn btn-sm"
+            onClick={async () => {
+              await fetch('/api/setup/reset', { method: 'POST' });
+              navigate('/setup');
+            }}
+          >
+            Run Setup Wizard
+          </button>
+        </div>
+      </Section>
+
       <Section title="Updates" defaultOpen={false}>
         <div className="settings-card">
           <h3 className="settings-card-title">About &amp; Updates</h3>
@@ -1543,6 +1672,22 @@ export default function SettingsPage() {
           existing={importMappingData.existing}
           onConfirm={handleImportWithMappings}
           onCancel={() => setImportMappingData(null)}
+        />
+      )}
+
+      {showExportDialog && (
+        <ExportSelectionDialog
+          onExport={handleExport}
+          onCancel={() => setShowExportDialog(false)}
+        />
+      )}
+
+      {currencyData && (
+        <CurrencyConvertDialog
+          source={currencyData.source}
+          target={currencyData.target}
+          onConfirm={handleCurrencyConfirm}
+          onCancel={() => setCurrencyData(null)}
         />
       )}
     </div>

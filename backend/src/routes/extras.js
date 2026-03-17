@@ -68,4 +68,55 @@ router.post('/swatch', (req, res) => {
     );
 });
 
+// POST /api/extras/report-bug
+// Body: { type, title, description, logs }
+router.post('/report-bug', async (req, res) => {
+    const { type, title, description, logs } = req.body;
+    const db = getDb();
+
+    const tokenRow = db.prepare("SELECT value FROM settings WHERE key = 'github_token'").get();
+    const enabledRow = db.prepare("SELECT value FROM settings WHERE key = 'direct_reports_enabled'").get();
+
+    if (!tokenRow?.value || enabledRow?.value !== 'true') {
+        return res.status(403).json({ error: 'Direct bug reporting is not enabled or configured in Settings.' });
+    }
+
+    const labels = [];
+    if (type === 'bug') labels.push('bug');
+    if (type === 'feature') labels.push('enhancement');
+    if (type === 'docs') labels.push('documentation');
+
+    let body = description;
+    if (logs) {
+        body += '\n\n### Console Logs\n```text\n' + logs + '\n```';
+    }
+
+    try {
+        const response = await fetch('https://api.github.com/repos/Hellsparks/marathon-overview/issues', {
+            method: 'POST',
+            headers: {
+                'Authorization': `token ${tokenRow.value}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json',
+                'User-Agent': 'Marathon-Fleet-Manager'
+            },
+            body: JSON.stringify({
+                title: `[${type.toUpperCase()}] ${title}`,
+                body,
+                labels
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.message || 'GitHub API error');
+        }
+
+        res.json({ ok: true, url: data.html_url });
+    } catch (err) {
+        console.error('[extras/report-bug]', err.message);
+        res.status(500).json({ error: `Failed to create issue: ${err.message}` });
+    }
+});
+
 module.exports = router;

@@ -259,9 +259,28 @@ export async function dismissBambuWarning(spoolId) {
     return r.json();
 }
 
-/** Download all Spoolman data as a JSON file (triggers browser download). */
-export async function exportSpoolman() {
-    const r = await fetch(`${API}/export`);
+/** Fetch vendor list with filament/spool counts for export selection. */
+export async function getExportPreview() {
+    const r = await fetch(`${API}/export/preview`);
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+}
+
+/** Download Spoolman data as a JSON file. If vendorIds provided, only those vendors. */
+export async function exportSpoolman(vendorIds) {
+    let r;
+    if (vendorIds && vendorIds.length > 0) {
+        r = await fetch(`${API}/export`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vendor_ids: vendorIds }),
+        });
+    } else {
+        r = await fetch(`${API}/export`);
+    }
     if (!r.ok) {
         const err = await r.json().catch(() => ({}));
         throw new Error(err.error || `HTTP ${r.status}`);
@@ -276,6 +295,16 @@ export async function exportSpoolman() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+}
+
+/** Fetch exchange rate between two currencies. */
+export async function getExchangeRate(from, to) {
+    const r = await fetch(`${API}/exchange-rate?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    return r.json();
 }
 
 /** Import (restore) Spoolman data from a parsed JSON object. */

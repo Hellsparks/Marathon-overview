@@ -918,8 +918,54 @@ router.get('/settings', async (_req, res) => {
 
 // ── Export / Import ──────────────────────────────────────────────────────────
 
-// GET /api/spoolman/export — download all Spoolman data as a JSON backup
-router.get('/export', async (_req, res) => {
+/** Shared helper: fetch all Spoolman data and build the export payload. */
+async function buildExportPayload(url, vendorIds) {
+    const fetchJson = async (path) => {
+        const r = await fetch(`${url}${path}`, { signal: AbortSignal.timeout(15000) });
+        if (!r.ok) throw new Error(`Spoolman ${r.status} for ${path}`);
+        return r.json();
+    };
+    const [allVendors, allFilaments, allSpools, vendorFields, filamentFields, spoolFields, settings] = await Promise.all([
+        fetchJson('/api/v1/vendor'),
+        fetchJson('/api/v1/filament'),
+        fetchJson('/api/v1/spool'),
+        fetchJson('/api/v1/field/vendor').catch(() => []),
+        fetchJson('/api/v1/field/filament').catch(() => []),
+        fetchJson('/api/v1/field/spool').catch(() => []),
+        fetchJson('/api/v1/setting').catch(() => ({})),
+    ]);
+
+    const currency = typeof settings?.currency === 'string'
+        ? settings.currency
+        : (settings?.currency?.value ?? '');
+
+    let vendors = allVendors;
+    let filaments = allFilaments;
+    let spools = allSpools;
+
+    // If vendor IDs provided, filter to only those vendors and their filaments/spools
+    if (vendorIds && vendorIds.length > 0) {
+        const idSet = new Set(vendorIds);
+        vendors = allVendors.filter(v => idSet.has(v.id));
+        filaments = allFilaments.filter(f => f.vendor?.id !== undefined && idSet.has(f.vendor.id));
+        const filamentIdSet = new Set(filaments.map(f => f.id));
+        spools = allSpools.filter(s => s.filament?.id !== undefined && filamentIdSet.has(s.filament.id));
+    }
+
+    return {
+        export_version: 2,
+        exported_at: new Date().toISOString(),
+        currency,
+        partial: !!(vendorIds && vendorIds.length > 0),
+        vendors,
+        filaments,
+        spools,
+        custom_fields: { vendor: vendorFields, filament: filamentFields, spool: spoolFields },
+    };
+}
+
+// GET /api/spoolman/export/preview — list vendors with filament/spool counts for selection UI
+router.get('/export/preview', async (_req, res) => {
     const url = getSpoolmanUrl();
     if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
     try {
@@ -928,25 +974,75 @@ router.get('/export', async (_req, res) => {
             if (!r.ok) throw new Error(`Spoolman ${r.status} for ${path}`);
             return r.json();
         };
-        const [vendors, filaments, spools, vendorFields, filamentFields, spoolFields] = await Promise.all([
+        const [vendors, filaments, spools] = await Promise.all([
             fetchJson('/api/v1/vendor'),
             fetchJson('/api/v1/filament'),
             fetchJson('/api/v1/spool'),
-            fetchJson('/api/v1/field/vendor').catch(() => []),
-            fetchJson('/api/v1/field/filament').catch(() => []),
-            fetchJson('/api/v1/field/spool').catch(() => []),
         ]);
+
+        // Count filaments and spools per vendor
+        const filamentCounts = {};
+        const spoolCounts = {};
+        for (const f of filaments) {
+            const vid = f.vendor?.id;
+            if (vid !== undefined) filamentCounts[vid] = (filamentCounts[vid] || 0) + 1;
+        }
+        const filamentsByVendor = {};
+        for (const f of filaments) {
+            const vid = f.vendor?.id;
+            if (vid !== undefined) {
+                if (!filamentsByVendor[vid]) filamentsByVendor[vid] = new Set();
+                filamentsByVendor[vid].add(f.id);
+            }
+        }
+        for (const s of spools) {
+            const fid = s.filament?.id;
+            if (fid === undefined) continue;
+            for (const [vid, fids] of Object.entries(filamentsByVendor)) {
+                if (fids.has(fid)) spoolCounts[vid] = (spoolCounts[vid] || 0) + 1;
+            }
+        }
+
+        const preview = vendors.map(v => ({
+            id: v.id,
+            name: v.name,
+            filament_count: filamentCounts[v.id] || 0,
+            spool_count: spoolCounts[v.id] || 0,
+        }));
+
+        res.json({ vendors: preview, total_filaments: filaments.length, total_spools: spools.length });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// GET /api/spoolman/export — download all Spoolman data as a JSON backup
+router.get('/export', async (_req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    try {
+        const payload = await buildExportPayload(url, null);
         const dateStr = new Date().toISOString().slice(0, 10);
         res.setHeader('Content-Disposition', `attachment; filename="spoolman-backup-${dateStr}.json"`);
         res.setHeader('Content-Type', 'application/json');
-        res.json({
-            export_version: 1,
-            exported_at: new Date().toISOString(),
-            vendors,
-            filaments,
-            spools,
-            custom_fields: { vendor: vendorFields, filament: filamentFields, spool: spoolFields },
-        });
+        res.json(payload);
+    } catch (err) {
+        res.status(502).json({ error: err.message });
+    }
+});
+
+// POST /api/spoolman/export — partial export filtered by vendor IDs
+router.post('/export', async (req, res) => {
+    const url = getSpoolmanUrl();
+    if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
+    const { vendor_ids } = req.body || {};
+    try {
+        const payload = await buildExportPayload(url, vendor_ids || null);
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const suffix = (vendor_ids && vendor_ids.length > 0) ? '-partial' : '';
+        res.setHeader('Content-Disposition', `attachment; filename="spoolman-backup${suffix}-${dateStr}.json"`);
+        res.setHeader('Content-Type', 'application/json');
+        res.json(payload);
     } catch (err) {
         res.status(502).json({ error: err.message });
     }
@@ -958,7 +1054,7 @@ router.post('/import/validate', async (req, res) => {
     if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
 
     const data = req.body;
-    if (!data || data.export_version !== 1)
+    if (!data || (data.export_version !== 1 && data.export_version !== 2))
         return res.status(400).json({ error: 'Invalid export file' });
 
     try {
@@ -1000,7 +1096,24 @@ router.post('/import/validate', async (req, res) => {
             if (missingList.length > 0) hasMissing = true;
         }
 
-        res.json({ fieldsOk: !hasMissing, missing, existing });
+        // Check currency mismatch (v2 exports include currency)
+        let currencyInfo = null;
+        if (data.currency) {
+            try {
+                const settingsRes = await fetch(`${url}/api/v1/setting`, { signal: AbortSignal.timeout(5000) });
+                if (settingsRes.ok) {
+                    const settings = await settingsRes.json();
+                    const localCurrency = typeof settings?.currency === 'string'
+                        ? settings.currency
+                        : (settings?.currency?.value ?? '');
+                    if (localCurrency && data.currency && localCurrency !== data.currency) {
+                        currencyInfo = { source: data.currency, target: localCurrency };
+                    }
+                }
+            } catch { /* non-fatal */ }
+        }
+
+        res.json({ fieldsOk: !hasMissing, missing, existing, currencyInfo });
     } catch (err) {
         res.status(502).json({ error: err.message });
     }
@@ -1013,12 +1126,13 @@ router.post('/import', async (req, res) => {
     if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
 
     const data = req.body;
-    if (!data || data.export_version !== 1) {
-        return res.status(400).json({ error: 'Invalid export file (missing export_version: 1)' });
+    if (!data || (data.export_version !== 1 && data.export_version !== 2)) {
+        return res.status(400).json({ error: 'Invalid export file (missing export_version)' });
     }
 
     const fieldMappings = data._fieldMappings || {}; // { filament: { old_key: new_key }, ... }
     const createFields = data._createFields || []; // [{ entity, ...fieldDef }]
+    const currencyRate = data._currencyRate || null; // multiplier for price conversion
 
     const log = [];
     const push = msg => { log.push(msg); console.log('[spoolman-import]', msg); };
@@ -1099,6 +1213,7 @@ router.post('/import', async (req, res) => {
         }
 
         // Filaments
+        if (currencyRate) push(`Converting prices with rate ×${currencyRate}`);
         push(`Importing ${data.filaments?.length || 0} filaments…`);
         for (const f of (data.filaments || [])) {
             const { id, registered, vendor, extra, ...fields } = f;
@@ -1106,6 +1221,10 @@ router.post('/import', async (req, res) => {
                 const newVendorId = vendorIdMap[vendor.id];
                 if (newVendorId) fields.vendor_id = newVendorId;
                 // If vendor couldn't be mapped, omit vendor_id (create filament without vendor)
+            }
+            // Convert price if currency rate provided
+            if (currencyRate && fields.price != null) {
+                fields.price = Math.round(fields.price * currencyRate * 100) / 100;
             }
             const mappedExtra = applyMappings(extra, 'filament');
             if (mappedExtra) fields.extra = mappedExtra;
@@ -1127,6 +1246,9 @@ router.post('/import', async (req, res) => {
                 if (!newId) { push(`  Spool id=${id} skipped: filament not found`); continue; }
                 fields.filament_id = newId;
             }
+            if (currencyRate && fields.price != null) {
+                fields.price = Math.round(fields.price * currencyRate * 100) / 100;
+            }
             const mappedExtra = applyMappings(extra, 'spool');
             if (mappedExtra) fields.extra = mappedExtra;
             try {
@@ -1142,6 +1264,27 @@ router.post('/import', async (req, res) => {
     } catch (err) {
         push(`Fatal: ${err.message}`);
         res.status(500).json({ error: err.message, log });
+    }
+});
+
+// GET /api/spoolman/exchange-rate?from=USD&to=EUR — fetch live exchange rate
+router.get('/exchange-rate', async (req, res) => {
+    const { from, to } = req.query;
+    if (!from || !to) return res.status(400).json({ error: 'from and to query params required' });
+    if (from === to) return res.json({ rate: 1, from, to });
+    try {
+        // Use the free frankfurter.app API (no key required)
+        const r = await fetch(
+            `https://api.frankfurter.app/latest?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+            { signal: AbortSignal.timeout(5000) }
+        );
+        if (!r.ok) throw new Error(`Exchange rate API returned ${r.status}`);
+        const data = await r.json();
+        const rate = data.rates?.[to.toUpperCase()];
+        if (!rate) throw new Error(`No rate found for ${from} → ${to}`);
+        res.json({ rate, from: data.base, to: to.toUpperCase() });
+    } catch (err) {
+        res.status(502).json({ error: err.message });
     }
 });
 

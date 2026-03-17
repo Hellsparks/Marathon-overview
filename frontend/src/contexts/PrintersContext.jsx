@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getPrinters, reorderPrinters } from '../api/printers';
+import { useToast } from './ToastContext';
 
 const PrintersContext = createContext(null);
 
@@ -7,6 +8,7 @@ export function PrintersProvider({ children }) {
     const [printers, setPrinters] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const addToast = useToast();
 
     const refresh = useCallback(async () => {
         try {
@@ -34,8 +36,9 @@ export function PrintersProvider({ children }) {
         try {
             const data = await reorderPrinters(orderedIds);
             setPrinters(data);
+            addToast?.('Printer order saved', 'success');
         } catch { /* optimistic state is close enough */ }
-    }, []);
+    }, [addToast]);
 
     return (
         <PrintersContext.Provider value={{ printers, loading, error, refresh, reorder }}>

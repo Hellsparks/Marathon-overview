@@ -10,7 +10,7 @@ export async function exportDatabase() {
     const blob = await r.blob();
     const disposition = r.headers.get('content-disposition') || '';
     const match = disposition.match(/filename="([^"]+)"/);
-    const filename = match ? match[1] : `marathon-backup-${new Date().toISOString().slice(0, 10)}.db`;
+    const filename = match ? match[1] : `marathon-backup-${new Date().toISOString().slice(0, 10)}.zip`;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

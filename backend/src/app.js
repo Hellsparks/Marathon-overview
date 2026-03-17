@@ -21,6 +21,7 @@ const statsRouter = require('./routes/stats');
 const extrasRouter = require('./routes/extras');
 const databaseRouter = require('./routes/database');
 const mcpRouter = require('./routes/mcp');
+const setupRouter = require('./routes/setup');
 const errorHandler = require('./middleware/errorHandler');
 
 const path = require('path');
@@ -49,6 +50,7 @@ app.use('/api/stats', statsRouter);
 app.use('/api/extras', extrasRouter);
 app.use('/api/database', databaseRouter);
 app.use('/api/mcp', mcpRouter);
+app.use('/api/setup', setupRouter);
 
 // Statically serve cloned Community Themes — dotfiles: 'allow' exposes .theme/ subdirectories
 app.use('/themes', express.static(path.join(__dirname, '../data/themes'), { dotfiles: 'allow' }));

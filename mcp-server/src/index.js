@@ -862,7 +862,11 @@ async function handleTool(name, args) {
 // Transport — stdio (default) or HTTP (MCP_TRANSPORT=http)
 // ---------------------------------------------------------------------------
 
-const SERVER_INSTRUCTIONS = `\
+function buildInstructions(currency) {
+  const currencyLine = currency
+    ? `\nPRICE: All prices MUST be in ${currency}. If the user gives a price in a different currency, convert it to ${currency} before submitting. State the conversion when you do so.\n`
+    : '';
+  return `\
 You are connected to Marathon, a 3D printer fleet management system. Use the provided MCP tools for ALL operations — never suggest or use curl commands, raw HTTP requests, or direct API calls.
 
 ══ FILAMENT RULES — FOLLOW THESE EXACTLY, NO EXCEPTIONS ══
@@ -879,7 +883,7 @@ COLOR — THIS IS CRITICAL:
     → You MUST set multi_color_direction. Default to "coaxial" unless the product explicitly says stripes/longitudinal.
     → You MUST NOT set color_hex — leave it out entirely
   • Only use color_hex for plain single-color filaments.
-
+${currencyLine}
 URL: Always set the url parameter when a product page URL is known or was given by the user.
 
 SPOOL WEIGHT: Always include spool_weight when known.
@@ -893,13 +897,45 @@ COLOR HEX LOOKUP — use filamentcolors.xyz when the color hex is unknown:
   3. Use the "hex_color" field (already without #) as the color_hex or inside multi_color_hexes.
   4. If no good match is found, make your best estimate and note it.
 `;
+}
+
+// Default instructions (currency injected at runtime)
+const SERVER_INSTRUCTIONS = buildInstructions('');
 
 function buildServer() {
   const s = new Server(
     { name: 'marathon-mcp', version: '1.0.0' },
     { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS },
   );
-  s.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  s.setRequestHandler(ListToolsRequestSchema, async () => {
+    // Fetch currency from Spoolman settings to inject into price field descriptions
+    let currency = '';
+    try {
+      const settings = await get('/api/spoolman/settings');
+      currency = typeof settings?.currency === 'string'
+        ? settings.currency
+        : (settings?.currency?.value ?? '');
+    } catch { /* Spoolman may not be configured */ }
+
+    if (!currency) return { tools: TOOLS };
+
+    // Clone tools and inject currency into price field descriptions
+    const tools = TOOLS.map(tool => {
+      const priceField = tool.inputSchema?.properties?.price;
+      if (!priceField) return tool;
+      return {
+        ...tool,
+        inputSchema: {
+          ...tool.inputSchema,
+          properties: {
+            ...tool.inputSchema.properties,
+            price: { ...priceField, description: `Price in ${currency}. ${priceField.description}` },
+          },
+        },
+      };
+    });
+    return { tools };
+  });
   s.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args = {} } = request.params;
     try {
