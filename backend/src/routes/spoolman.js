@@ -331,16 +331,26 @@ router.get('/ams-slots/:printerId', (req, res) => {
 // ── Multi-tool slot management (Klipper/Moonraker multi-toolhead) ─────────────
 
 // GET /api/spoolman/tool-slots/:printerId — { 0: spoolId|null, 1: spoolId|null, … }
+// Slot count is derived from MMU assignments (sum of all MMU slot_counts) or falls back to toolhead_count
 router.get('/tool-slots/:printerId', (req, res) => {
     try {
         const db = getDb();
         const printerId = parseInt(req.params.printerId, 10);
         const printer = db.prepare('SELECT toolhead_count FROM printers WHERE id = ?').get(printerId);
         if (!printer) return res.status(404).json({ error: 'Printer not found' });
+
+        // Check MMU assignments to determine total slot count
+        const mmus = db.prepare('SELECT tool_index, slot_count FROM printer_mmus WHERE printer_id = ? ORDER BY tool_index').all(printerId);
+        let totalSlots;
+        if (mmus.length > 0) {
+            totalSlots = mmus.reduce((sum, m) => sum + m.slot_count, 0);
+        } else {
+            totalSlots = printer.toolhead_count || 1;
+        }
+
         const rows = db.prepare('SELECT tool_index, spool_id FROM printer_tool_slots WHERE printer_id = ?').all(printerId);
         const map = {};
-        // Pre-fill all slots as null so the client always gets N keys
-        for (let i = 0; i < (printer.toolhead_count || 1); i++) map[i] = null;
+        for (let i = 0; i < totalSlots; i++) map[i] = null;
         for (const r of rows) map[r.tool_index] = r.spool_id;
         res.json(map);
     } catch (err) {

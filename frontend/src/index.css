@@ -1029,9 +1029,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-  overflow: hidden;
+  overflow: visible;
 }
-
 .settings-section-toggle {
   display: flex;
   align-items: center;
@@ -1039,6 +1038,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   width: 100%;
   padding: 16px 20px;
   border: none;
+  border-radius: var(--radius);
   background: none;
   cursor: pointer;
   color: var(--text);

@@ -1,6 +1,6 @@
 // ... existing imports
 import { useState, useEffect, useRef } from 'react';
-import { createPrinter, updatePrinter } from '../../api/printers';
+import { createPrinter, updatePrinter, getMmuPresets, getPrinterMmus, updatePrinterMmus } from '../../api/printers';
 import { getPresets } from '../../api/presets';
 
 const ALL_FILAMENT_TYPES = ['PLA', 'PETG', 'ABS', 'ASA', 'Nylon', 'PC', 'TPU', 'HIPS', 'PVA'];
@@ -31,10 +31,20 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
   const [showHost, setShowHost] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showSerial, setShowSerial] = useState(false);
+  const [mmuPresets, setMmuPresets] = useState([]);
+  const [mmuAssignments, setMmuAssignments] = useState({}); // { tool_index: { mmu_preset_id, slot_count } }
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     getPresets().then(setPresets).catch(() => { });
+    getMmuPresets().then(setMmuPresets).catch(() => { });
+    if (printer?.id) {
+      getPrinterMmus(printer.id).then(rows => {
+        const map = {};
+        for (const r of rows) map[r.tool_index] = { mmu_preset_id: r.mmu_preset_id, slot_count: r.slot_count };
+        setMmuAssignments(map);
+      }).catch(() => { });
+    }
   }, []);
 
   function set(field, value) {
@@ -58,6 +68,25 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
         filament_types: current.includes(type) ? current.filter(t => t !== type) : [...current, type],
       };
     });
+  }
+
+  function setMmu(toolIndex, presetId) {
+    if (!presetId) {
+      setMmuAssignments(a => { const n = { ...a }; delete n[toolIndex]; return n; });
+      return;
+    }
+    const preset = mmuPresets.find(p => p.id === presetId);
+    setMmuAssignments(a => ({
+      ...a,
+      [toolIndex]: { mmu_preset_id: presetId, slot_count: preset?.slot_count ?? 4 },
+    }));
+  }
+
+  function setMmuSlots(toolIndex, count) {
+    setMmuAssignments(a => ({
+      ...a,
+      [toolIndex]: { ...a[toolIndex], slot_count: Number(count) || 4 },
+    }));
   }
 
   function applyPreset(presetId) {
@@ -108,10 +137,20 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
           ? 'global'
           : form.theme_mode,
       };
+      let savedId;
       if (printer) {
         await updatePrinter(printer.id, data);
+        savedId = printer.id;
       } else {
-        await createPrinter(data);
+        const created = await createPrinter(data);
+        savedId = created?.id;
+      }
+      // Save MMU assignments
+      if (savedId) {
+        const mmus = Object.entries(mmuAssignments).map(([ti, m]) => ({
+          tool_index: Number(ti), mmu_preset_id: m.mmu_preset_id, slot_count: m.slot_count,
+        }));
+        await updatePrinterMmus(savedId, mmus).catch(() => { });
       }
       onSaved?.();
     } catch (err) {
@@ -285,6 +324,47 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                   onChange={e => set('abrasive_capable', e.target.checked)} />
                 Abrasive capable (hardened nozzle)
               </label>
+
+              {/* MMU / Multi-material addons */}
+              <fieldset className="form-fieldset" style={{ marginTop: '12px' }}>
+                <legend>Multi-Material Addons</legend>
+                <p className="text-muted" style={{ fontSize: '12px', margin: '0 0 10px' }}>
+                  Assign an MMU per toolhead to define spool slot count.
+                </p>
+                {Array.from({ length: form.toolhead_count || 1 }, (_, i) => {
+                  const assignment = mmuAssignments[i];
+                  return (
+                    <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600, minWidth: '28px', color: 'var(--text-muted)' }}>T{i}</span>
+                      <select
+                        className="form-select"
+                        style={{ flex: 1 }}
+                        value={assignment?.mmu_preset_id ?? ''}
+                        onChange={e => setMmu(i, e.target.value)}
+                      >
+                        <option value="">— No MMU —</option>
+                        {mmuPresets.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      {assignment?.mmu_preset_id && (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px' }}>
+                          Slots
+                          <input
+                            className="form-input"
+                            type="number"
+                            min={1}
+                            max={64}
+                            value={assignment.slot_count}
+                            onChange={e => setMmuSlots(i, e.target.value)}
+                            style={{ width: '60px' }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  );
+                })}
+              </fieldset>
 
               <fieldset className="form-fieldset">
                 <legend>Supported Filaments</legend>

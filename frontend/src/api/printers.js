@@ -13,3 +13,12 @@ export const deletePrinter = (id) =>
 
 export const scrapePrinterTheme = (host, port) =>
   apiFetch('/api/printers/scrape-theme', { method: 'POST', body: JSON.stringify({ host, port }) });
+
+// MMU presets & assignments
+export const getMmuPresets = () => apiFetch('/api/printers/mmu-presets');
+
+export const getPrinterMmus = (printerId) =>
+  apiFetch(`/api/printers/${printerId}/mmus`);
+
+export const updatePrinterMmus = (printerId, mmus) =>
+  apiFetch(`/api/printers/${printerId}/mmus`, { method: 'PUT', body: JSON.stringify({ mmus }) });

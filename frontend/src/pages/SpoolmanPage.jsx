@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { usePrinters } from '../hooks/usePrinters';
 import { getSpools, setActiveSpool, useFilament, measureFilament, deleteSpool, getAmsSlots, getToolSlots, setToolSlot, getBambuWarnings, dismissBambuWarning, getStorageLocation, patchSpool, fetchTeamsterWeight, tareTeamster } from '../api/spoolman';
+import { getPrinterMmus } from '../api/printers';
 import { groupSpoolsByFilament } from '../utils/spoolStorage';
 import { useFilamentGuard } from '../hooks/useFilamentGuard';
 import SpoolmanPrinterCard from '../components/spoolman/SpoolmanPrinterCard';
@@ -99,6 +100,7 @@ export default function SpoolmanPage() {
     const [toolSlots, setToolSlots] = useState({});           // { printerId: { 0: spoolId|null, ... } }
     const [toolSlotSpools, setToolSlotSpools] = useState({}); // { spoolId: spoolObject }
     const [dropTargetToolSlot, setDropTargetToolSlot] = useState(null); // { printerId, toolIndex }
+    const [printerMmus, setPrinterMmus] = useState({});       // { printerId: [{ tool_index, mmu_preset_id, mmu_name, slot_count }] }
 
     // Extracted shared guard hook for compatibility & 'in use' warnings
     const { startGuard, renderGuardDialog, bambuWarnings, fetchWarningsIfNeeded, pendingAssignment, confirmGuard } = useFilamentGuard({
@@ -210,15 +212,35 @@ export default function SpoolmanPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [bambuPrinterIds, spools]);
 
-    // Fetch tool slot mappings for multi-toolhead non-Bambu printers
-    const multiToolPrinters = printers.filter(p => p.firmware_type !== 'bambu' && (p.toolhead_count || 1) > 1);
-    const multiToolPrinterIds = multiToolPrinters.map(p => p.id).join(',');
+    // Fetch MMU assignments for all non-Bambu printers
+    const nonBambuPrinters = printers.filter(p => p.firmware_type !== 'bambu');
+    const nonBambuPrinterIds = nonBambuPrinters.map(p => p.id).join(',');
     useEffect(() => {
-        if (multiToolPrinters.length === 0) return;
+        if (nonBambuPrinters.length === 0) return;
+        async function fetchMmus() {
+            const mmuMap = {};
+            await Promise.all(nonBambuPrinters.map(async p => {
+                try { mmuMap[p.id] = await getPrinterMmus(p.id); }
+                catch { mmuMap[p.id] = []; }
+            }));
+            setPrinterMmus(mmuMap);
+        }
+        fetchMmus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [nonBambuPrinterIds]);
+
+    // Fetch tool slot mappings for printers with multi-toolhead or MMU assignments
+    const slottedPrinters = nonBambuPrinters.filter(p => {
+        const mmus = printerMmus[p.id];
+        return (mmus && mmus.length > 0) || (p.toolhead_count || 1) > 1;
+    });
+    const slottedPrinterIds = slottedPrinters.map(p => p.id).join(',');
+    useEffect(() => {
+        if (slottedPrinters.length === 0) return;
         const spoolById = new Map(spools.map(s => [s.id, s]));
         async function fetchSlots() {
             const results = await Promise.all(
-                multiToolPrinters.map(async p => {
+                slottedPrinters.map(async p => {
                     try { return { id: p.id, slots: await getToolSlots(p.id) }; }
                     catch { return { id: p.id, slots: {} }; }
                 })
@@ -236,7 +258,7 @@ export default function SpoolmanPage() {
         }
         fetchSlots();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [multiToolPrinterIds, spools]);
+    }, [slottedPrinterIds, spools, printerMmus]);
 
 
 
@@ -1013,6 +1035,7 @@ export default function SpoolmanPage() {
                                 onTrayDragLeave={onTrayDragLeave}
                                 onTrayDrop={onTrayDrop}
                                 onClearTray={handleClearTray}
+                                mmuAssignments={printerMmus[p.id] || []}
                                 toolSlots={toolSlots[p.id] || {}}
                                 toolSlotSpools={toolSlotSpools}
                                 dropTargetToolSlot={dropTargetToolSlot}

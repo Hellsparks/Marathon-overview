@@ -196,6 +196,68 @@ function safeJsonParse(str) {
   try { return JSON.parse(str); } catch { return []; }
 }
 
+// ── MMU Presets ──────────────────────────────────────────────────────
+
+// GET /api/printers/mmu-presets
+router.get('/mmu-presets', (req, res) => {
+  const db = getDb();
+  const presets = db.prepare('SELECT * FROM mmu_presets ORDER BY name').all();
+  res.json(presets);
+});
+
+// ── Printer MMU assignments ─────────────────────────────────────────
+
+// GET /api/printers/:id/mmus
+router.get('/:id/mmus', (req, res) => {
+  const printerId = parseInt(req.params.id, 10);
+  const db = getDb();
+  const rows = db.prepare(
+    `SELECT pm.*, mp.name AS mmu_name, mp.slot_count AS default_slot_count
+     FROM printer_mmus pm
+     JOIN mmu_presets mp ON mp.id = pm.mmu_preset_id
+     WHERE pm.printer_id = ?
+     ORDER BY pm.tool_index`
+  ).all(printerId);
+  res.json(rows);
+});
+
+// PUT /api/printers/:id/mmus  — replace all MMU assignments for a printer
+router.put('/:id/mmus', (req, res) => {
+  const { mmus } = req.body; // [{ tool_index, mmu_preset_id, slot_count }]
+  if (!Array.isArray(mmus)) return res.status(400).json({ error: 'mmus must be an array' });
+
+  const printerId = parseInt(req.params.id, 10);
+  const db = getDb();
+  const printer = db.prepare('SELECT id FROM printers WHERE id = ?').get(printerId);
+  if (!printer) return res.status(404).json({ error: 'Printer not found' });
+
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM printer_mmus WHERE printer_id = ?').run(printerId);
+    const ins = db.prepare(
+      'INSERT INTO printer_mmus (printer_id, tool_index, mmu_preset_id, slot_count) VALUES (?, ?, ?, ?)'
+    );
+    for (const m of mmus) {
+      if (!m.mmu_preset_id) continue; // skip empty/cleared
+      ins.run(printerId, m.tool_index ?? 0, m.mmu_preset_id, m.slot_count ?? 4);
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+
+  // Return updated list
+  const rows = db.prepare(
+    `SELECT pm.*, mp.name AS mmu_name, mp.slot_count AS default_slot_count
+     FROM printer_mmus pm
+     JOIN mmu_presets mp ON mp.id = pm.mmu_preset_id
+     WHERE pm.printer_id = ?
+     ORDER BY pm.tool_index`
+  ).all(printerId);
+  res.json(rows);
+});
+
 function defaultPort(firmwareType) {
   switch (firmwareType) {
     case 'octoprint':

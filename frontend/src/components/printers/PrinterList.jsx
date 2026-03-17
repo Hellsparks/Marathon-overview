@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { deletePrinter } from '../../api/printers';
+import { useState, useEffect } from 'react';
+import { deletePrinter, getPrinterMmus } from '../../api/printers';
 import { clearPrinterScrapeCache } from '../../services/themeScraper';
 import ConfirmDialog from '../common/ConfirmDialog';
 import PrinterForm from './PrinterForm';
@@ -9,6 +9,19 @@ export default function PrinterList({ printers, onRefresh }) {
   const [addingNew, setAddingNew] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [showSensitive, setShowSensitive] = useState(false);
+  const [printerMmus, setPrinterMmus] = useState({}); // { printerId: [{ mmu_name, slot_count }] }
+
+  useEffect(() => {
+    if (printers.length === 0) return;
+    Promise.all(printers.map(async p => {
+      try { return { id: p.id, mmus: await getPrinterMmus(p.id) }; }
+      catch { return { id: p.id, mmus: [] }; }
+    })).then(results => {
+      const map = {};
+      for (const r of results) map[r.id] = r.mmus;
+      setPrinterMmus(map);
+    });
+  }, [printers]);
 
   async function handleDelete(id) {
     const printer = printers.find(p => p.id === id);
@@ -54,6 +67,7 @@ export default function PrinterList({ printers, onRefresh }) {
               <th>Bed Size</th>
               <th>Filaments</th>
               <th>Toolheads</th>
+              <th>MMU / Slots</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -92,6 +106,19 @@ export default function PrinterList({ printers, onRefresh }) {
                   )}
                 </td>
                 <td>{p.toolhead_count || 1}</td>
+                <td>
+                  {(printerMmus[p.id] || []).length > 0 ? (
+                    <div className="badge-row">
+                      {printerMmus[p.id].map(m => (
+                        <span key={m.tool_index} className="badge badge-muted" title={`T${m.tool_index}: ${m.mmu_name}`}>
+                          {m.mmu_name} ({m.slot_count})
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
+                </td>
                 <td className="file-actions">
                   <button className="btn btn-sm" onClick={() => setEditingPrinter(p)}>
                     Edit

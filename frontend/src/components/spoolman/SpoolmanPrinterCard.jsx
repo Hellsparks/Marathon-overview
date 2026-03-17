@@ -44,13 +44,77 @@ function scopeCSS(css, scope) {
     return out.join('');
 }
 
+// Build a flat slot array from MMU assignments
+// e.g. T0 with 10-slot Tradrack + T1 with 10-slot Tradrack = 20 slots
+// Labels: T0:1, T0:2, ..., T0:10, T1:1, T1:2, ..., T1:10
+function buildMmuSlotLayout(mmuAssignments) {
+    const slots = [];
+    const sorted = [...mmuAssignments].sort((a, b) => a.tool_index - b.tool_index);
+    for (const mmu of sorted) {
+        for (let s = 0; s < mmu.slot_count; s++) {
+            slots.push({
+                slotIndex: slots.length,
+                label: `T${mmu.tool_index}:${s + 1}`,
+                toolIndex: mmu.tool_index,
+                mmuSlot: s,
+            });
+        }
+    }
+    return slots;
+}
+
+function renderSlot(slotIndex, label, printer, toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot) {
+    const spoolId = toolSlots?.[slotIndex];
+    const spool = spoolId ? toolSlotSpools?.[spoolId] : null;
+    const f = spool?.filament || {};
+    const color = f.color_hex ? `#${f.color_hex.slice(0, 6)}` : null;
+    const isSlotTarget = dropTargetToolSlot?.printerId === printer.id && dropTargetToolSlot?.toolIndex === slotIndex;
+    return (
+        <div
+            key={slotIndex}
+            className={`ams-drop-slot${isSlotTarget ? ' ams-drop-hover' : ''}${spool ? ' ams-slot-filled' : ''}`}
+            onDragEnter={e => { e.preventDefault(); e.stopPropagation(); }}
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; onToolSlotDragOver?.(e, printer.id, slotIndex); }}
+            onDragLeave={() => onToolSlotDragLeave?.()}
+            onDrop={e => { e.preventDefault(); e.stopPropagation(); onToolSlotDrop?.(e, printer, slotIndex); }}
+        >
+            <div className="ams-slot-header">
+                <span className="ams-slot-num">{label}</span>
+            </div>
+            {spool ? (
+                <>
+                    <div
+                        className="ams-slot-drag-overlay"
+                        draggable
+                        onDragStart={e => {
+                            e.stopPropagation();
+                            onToolSlotDragStart?.(e, printer.id, slotIndex, spool);
+                        }}
+                    />
+                    <div className="ams-slot-swatch" style={{ backgroundColor: color || '#888' }} />
+                    <span className="ams-slot-material">{f.material || '—'}</span>
+                    <span className="ams-slot-name">{f.name || `#${spool.id}`}</span>
+                    <button
+                        className="ams-slot-clear"
+                        onClick={e => { e.stopPropagation(); onClearToolSlot?.(printer.id, slotIndex); }}
+                        title="Unload slot"
+                    >✕</button>
+                </>
+            ) : (
+                <span className="ams-slot-empty">Drop spool</span>
+            )}
+        </div>
+    );
+}
+
 const scrapedCssCache = new Map();
 
 export default function SpoolmanPrinterCard({
     printer, activeSpool, isTarget, onDragOver, onDragLeave, onDrop, onClearSpool, printerStatus,
     // Bambu AMS props
     amsSlots, amsSpools, dropTargetTray, onTrayDragOver, onTrayDragLeave, onTrayDrop, onClearTray,
-    // Multi-toolhead Moonraker props
+    // Multi-toolhead / MMU Moonraker props
+    mmuAssignments = [],
     toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotMouseDown, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot,
 }) {
     const [scrapedCss, setScrapedCss] = useState(
@@ -119,6 +183,22 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
     const isIsolated = !!rawCss;
     const isBambu = printer.firmware_type === 'bambu';
 
+    // Build slot layout from MMU assignments or fall back to toolhead_count
+    // Also check actual toolSlots keys — backend returns MMU-aware slot count even before frontend MMU data loads
+    const hasMmu = mmuAssignments.length > 0;
+    const toolSlotKeys = Object.keys(toolSlots || {}).length;
+    const slotLayout = hasMmu
+        ? buildMmuSlotLayout(mmuAssignments)
+        : toolSlotKeys > (printer.toolhead_count || 1)
+            // Backend returned more slots than toolhead_count — MMU data not yet loaded, use slot keys
+            ? Array.from({ length: toolSlotKeys }, (_, i) => ({ slotIndex: i, label: `S${i + 1}`, toolIndex: 0 }))
+            : (printer.toolhead_count || 1) > 1
+                ? Array.from({ length: printer.toolhead_count }, (_, i) => ({ slotIndex: i, label: `T${i}`, toolIndex: i }))
+                : toolSlotKeys > 1
+                    ? Array.from({ length: toolSlotKeys }, (_, i) => ({ slotIndex: i, label: `S${i + 1}`, toolIndex: 0 }))
+                    : null;
+    const totalSlotCount = slotLayout ? slotLayout.length : 0;
+
     return (
         <div data-spoolman-printer-id={printer.id} style={{ display: 'contents' }}>
             {isIsolated && (
@@ -126,15 +206,16 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
             )}
 
             <div
-                className={`printer-card v-card theme--dark${isIsolated ? ' isolated-theme' : ''} spoolman-printer-card${!isBambu && isTarget ? ' drop-hover' : ''}`}
-                onDragOver={!isBambu ? onDragOver : undefined}
-                onDragLeave={!isBambu ? onDragLeave : undefined}
-                onDrop={!isBambu ? onDrop : undefined}
-                style={{ cursor: isBambu ? 'default' : 'pointer', marginBottom: '12px' }}
+                className={`printer-card v-card theme--dark${isIsolated ? ' isolated-theme' : ''} spoolman-printer-card${!isBambu && !slotLayout && isTarget ? ' drop-hover' : ''}`}
+                onDragOver={!isBambu && !slotLayout ? onDragOver : undefined}
+                onDragLeave={!isBambu && !slotLayout ? onDragLeave : undefined}
+                onDrop={!isBambu && !slotLayout ? onDrop : undefined}
+                style={{ cursor: isBambu || slotLayout ? 'default' : 'pointer', marginBottom: '12px' }}
             >
                 <div className={`printer-card-header v-card__title${isBambu ? ' bambu-header' : ''}`}>
                     <h3 className="printer-name v-toolbar__title">{printer.name}</h3>
                     {isBambu && <span className="ams-badge">AMS</span>}
+                    {!isBambu && hasMmu && <span className="ams-badge" style={{ background: 'var(--primary, #4a9eff)', color: '#fff' }}>{totalSlotCount} slots</span>}
                 </div>
 
                 <div className="printer-card-body" style={{ padding: '0 16px 16px' }}>
@@ -194,54 +275,39 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                 );
                             })}
                         </div>
-                    ) : (printer.toolhead_count || 1) > 1 ? (
-                        /* ── Multi-toolhead: N-slot grid ─────────────────── */
-                        <div className="ams-slot-grid" style={{ gridTemplateColumns: `repeat(${Math.min(printer.toolhead_count, 3)}, 1fr)` }}>
-                            {Array.from({ length: printer.toolhead_count }, (_, i) => {
-                                const spoolId = toolSlots?.[i];
-                                const spool = spoolId ? toolSlotSpools?.[spoolId] : null;
-                                const f = spool?.filament || {};
-                                const color = f.color_hex ? `#${f.color_hex.slice(0, 6)}` : null;
-                                const isSlotTarget = dropTargetToolSlot?.printerId === printer.id && dropTargetToolSlot?.toolIndex === i;
-                                return (
-                                    <div
-                                        key={i}
-                                        className={`ams-drop-slot${isSlotTarget ? ' ams-drop-hover' : ''}${spool ? ' ams-slot-filled' : ''}`}
-                                        onDragEnter={e => { e.preventDefault(); e.stopPropagation(); }}
-                                        onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; onToolSlotDragOver?.(e, printer.id, i); }}
-                                        onDragLeave={() => onToolSlotDragLeave?.()}
-                                        onDrop={e => { e.preventDefault(); e.stopPropagation(); onToolSlotDrop?.(e, printer, i); }}
-                                    >
-                                        <div className="ams-slot-header">
-                                            <span className="ams-slot-num">T{i}</span>
+                    ) : slotLayout ? (
+                        /* ── Multi-slot grid (MMU or multi-toolhead) ──────── */
+                        hasMmu ? (
+                            /* Grouped by toolhead — each MMU gets its own labeled section */
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                {mmuAssignments.map(m => {
+                                    const groupSlots = slotLayout.filter(s => s.toolIndex === m.tool_index);
+                                    return (
+                                        <div key={m.tool_index}>
+                                            <div style={{
+                                                fontSize: '11px', fontWeight: 600, padding: '4px 8px',
+                                                background: 'var(--surface2, rgba(255,255,255,0.05))',
+                                                borderRadius: '4px 4px 0 0', borderBottom: '1px solid var(--border)',
+                                                color: 'var(--text-muted)',
+                                            }}>
+                                                T{m.tool_index} — {m.mmu_name}
+                                            </div>
+                                            <div className="ams-slot-grid" style={{
+                                                gridTemplateColumns: `repeat(${Math.min(m.slot_count, 5)}, 1fr)`,
+                                                borderRadius: '0 0 4px 4px',
+                                            }}>
+                                                {groupSlots.map(({ slotIndex, mmuSlot }) => renderSlot(slotIndex, mmuSlot + 1, printer, toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot))}
+                                            </div>
                                         </div>
-                                        {spool ? (
-                                            <>
-                                                {/* Transparent drag overlay — covers slot body, unambiguously draggable */}
-                                                <div
-                                                    className="ams-slot-drag-overlay"
-                                                    draggable
-                                                    onDragStart={e => {
-                                                        e.stopPropagation();
-                                                        onToolSlotDragStart?.(e, printer.id, i, spool);
-                                                    }}
-                                                />
-                                                <div className="ams-slot-swatch" style={{ backgroundColor: color || '#888' }} />
-                                                <span className="ams-slot-material">{f.material || '—'}</span>
-                                                <span className="ams-slot-name">{f.name || `#${spool.id}`}</span>
-                                                <button
-                                                    className="ams-slot-clear"
-                                                    onClick={e => { e.stopPropagation(); onClearToolSlot?.(printer.id, i); }}
-                                                    title="Unload slot"
-                                                >✕</button>
-                                            </>
-                                        ) : (
-                                            <span className="ams-slot-empty">Drop spool</span>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            /* Plain multi-toolhead without MMU */
+                            <div className="ams-slot-grid" style={{ gridTemplateColumns: `repeat(${Math.min(totalSlotCount, 4)}, 1fr)` }}>
+                                {slotLayout.map(({ slotIndex, label }) => renderSlot(slotIndex, label, printer, toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot))}
+                            </div>
+                        )
                     ) : (
                         /* ── Single-toolhead: active spool display ────────── */
                         activeSpool ? (
