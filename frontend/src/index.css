@@ -3180,6 +3180,100 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   width: 580px;
 }
 
+.spool-dialog-expanded {
+  width: 1000px !important;
+}
+
+.dialog-split {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: stretch !important;
+  gap: 0 !important;
+  margin: 0 -24px -24px -24px !important; /* Flush to sides and bottom only */
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--surface);
+}
+
+.dialog-left {
+  flex: 1;
+  padding: 24px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.dialog-right {
+  flex: 0 0 380px;
+  padding: 24px;
+  background: color-mix(in srgb, var(--surface2) 40%, var(--surface));
+  border-left: 1px solid var(--border);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure the grid works inside the split panes */
+.dialog-split .sm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.dialog-split .sm-field-full {
+  grid-column: span 2;
+}
+
+/* ─── Collapsible Sections ──────────────────────────────────────── */
+.sm-collapsible {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.sm-collapsible:last-child {
+  border-bottom: none;
+}
+
+.sm-collapsible-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  transition: color 0.2s;
+}
+
+.sm-collapsible-header:hover {
+  color: var(--primary);
+}
+
+.sm-collapsible-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.sm-collapsible.open .sm-collapsible-chevron {
+  transform: rotate(90deg);
+}
+
+.sm-collapsible-content {
+  padding-bottom: 16px;
+  display: none;
+}
+
+.sm-collapsible.open .sm-collapsible-content {
+  display: grid;
+}
+
 /* ─── Spoolman create buttons in filter bar ─────────────────────── */
 .spoolman-add-btns {
   display: flex;

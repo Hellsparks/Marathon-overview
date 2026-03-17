@@ -3,12 +3,14 @@ import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
-import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation } from '../api/spoolman';
+import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation, getFilaments } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate } from '../api/updates';
 import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
 import UpdateDialog from '../components/layout/UpdateDialog';
 import ImportFieldMappingDialog from '../components/spoolman/ImportFieldMappingDialog';
+import OrcaSlicerDefaultsDialog from '../components/spoolman/OrcaSlicerDefaultsDialog';
+import JSZip from 'jszip';
 
 function Section({ title, defaultOpen = true, children }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -47,6 +49,8 @@ export default function SettingsPage() {
   const [swatchFieldSaved, setSwatchFieldSaved] = useState('');
   const [swatchPromptEnabled, setSwatchPromptEnabled] = useState(false);
   const [swatchPromptSaved, setSwatchPromptSaved] = useState(false);
+  const [orcaslicerField, setOrcaslicerField] = useState('');
+  const [orcaslicerFieldSaved, setOrcaslicerFieldSaved] = useState('');
   const [storageLocationVal, setStorageLocationVal] = useState('Storage');
   const [storageLocationSaved, setStorageLocationSaved] = useState('Storage');
   const [storageLocationBusy, setStorageLocationBusy] = useState(false);
@@ -55,6 +59,7 @@ export default function SettingsPage() {
   const [updateInfo, setUpdateInfo] = useState(null);
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateChecked, setUpdateChecked] = useState(false);
+  const [showOrcaDefaults, setShowOrcaDefaults] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
 
   // Marathon DB backup
@@ -113,6 +118,8 @@ export default function SettingsPage() {
       setSwatchFieldSaved(s.swatch_extra_field || '');
       setSwatchPromptEnabled(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
       setSwatchPromptSaved(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
+      setOrcaslicerField(s.orcaslicer_config_field || '');
+      setOrcaslicerFieldSaved(s.orcaslicer_config_field || '');
     }).catch(() => { });
     getStorageLocation().then(r => {
       const loc = r.storage_location || 'Storage';
@@ -168,6 +175,87 @@ export default function SettingsPage() {
       setSwatchPromptSaved(swatchPromptEnabled);
     } catch (e) {
       alert(e.message);
+    }
+  }
+
+  async function handleOrcaslicerFieldSave(val) {
+    try {
+      await updateSetting('orcaslicer_config_field', val);
+      setOrcaslicerFieldSaved(val);
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function handleExportAllOrcaSlicer() {
+    try {
+      const allFilaments = await getFilaments();
+      if (!allFilaments || allFilaments.length === 0) {
+        alert("No filaments found to export.");
+        return;
+      }
+
+      const zip = new JSZip();
+
+      for (const f of allFilaments) {
+        // Find overrides from Spoolman extra field (slicer)
+        let orcaOverrides = {};
+        if (orcaslicerField && f.extra?.[orcaslicerField]) {
+            try {
+                orcaOverrides = JSON.parse(f.extra[orcaslicerField]);
+            } catch (e) {
+                console.error(`Failed to parse OrcaSlicer config for ${f.name}`, e);
+            }
+        }
+
+        // Default density to 1.24 if not set, as it's required for accurate weight calculation
+        const density = f.density || 1.24;
+        
+        // OrcaSlicer JSON structure
+        const orcaJson = {
+            "type": "filament",
+            "setting_id": `marathon_${f.id}`,
+            "name": f.name,
+            "from": "system",
+            "instantiation": "true",
+            "inherits": "fdm_filament_common", // A safe base class in OrcaSlicer
+            
+            // Map Basic Spoolman Data
+            "filament_vendor": [ f.vendor?.name || "Unknown" ],
+            "filament_type": [ f.material || "PLA" ],
+            "filament_diameter": [ f.diameter || 1.75 ],
+            "filament_density": [ density ],
+            "filament_cost": [ f.price || 0 ],
+            "filament_spool_weight": [ f.spool_weight || 0 ],
+
+            // Only map color if we have one
+            ...(f.color_hex && { "filament_color": [ `#${f.color_hex.slice(0,6)}` ] }),
+
+            // Apply overrides from "OrcaSlicer Settings" panel
+            ...(orcaOverrides.shrinkage_xy !== undefined && orcaOverrides.shrinkage_xy !== '' && { "filament_shrink": [ (parseFloat(orcaOverrides.shrinkage_xy) / 100).toFixed(3) ] }),
+            ...(orcaOverrides.shrinkage_z !== undefined && orcaOverrides.shrinkage_z !== '' && { "filament_z_shrink": [ (parseFloat(orcaOverrides.shrinkage_z) / 100).toFixed(3) ] }),
+            ...(orcaOverrides.nozzle_temp_min !== undefined && orcaOverrides.nozzle_temp_min !== '' && { "nozzle_temperature": [ parseInt(orcaOverrides.nozzle_temp_min) ] }),
+            ...(orcaOverrides.nozzle_temp_max !== undefined && orcaOverrides.nozzle_temp_max !== '' && { "temperature_vitrification": [ parseInt(orcaOverrides.nozzle_temp_max) ] }),
+            ...(orcaOverrides.bed_temp !== undefined && orcaOverrides.bed_temp !== '' && { "hot_plate_temp": [ parseInt(orcaOverrides.bed_temp) ] }),
+            ...(orcaOverrides.flow_ratio !== undefined && orcaOverrides.flow_ratio !== '' && { "filament_flow_ratio": [ parseFloat(orcaOverrides.flow_ratio) ] }),
+            ...(orcaOverrides.pressure_advance !== undefined && orcaOverrides.pressure_advance !== '' && { "pressure_advance": [ parseFloat(orcaOverrides.pressure_advance) ] })
+        };
+
+        const safeName = f.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        zip.file(`${safeName}.json`, JSON.stringify(orcaJson, null, 4));
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'orcaslicer_filaments.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Failed to export: " + e.message);
     }
   }
 
@@ -302,6 +390,11 @@ export default function SettingsPage() {
           payload = { name: 'Has printed swatch', key: 'swatch', field_type: 'boolean' };
           settingKey = 'swatch_extra_field';
           setterFunc = val => { setSwatchField(val); setSwatchFieldSaved(val); };
+          break;
+        case 'orcaslicer':
+          payload = { name: 'OrcaSlicer Config', key: 'orcaslicer_config', field_type: 'text' };
+          settingKey = 'orcaslicer_config_field';
+          setterFunc = val => { setOrcaslicerField(val); setOrcaslicerFieldSaved(val); };
           break;
         default:
           return;
@@ -833,8 +926,66 @@ export default function SettingsPage() {
                 {(swatchField === swatchFieldSaved && swatchPromptEnabled === swatchPromptSaved) ? 'Saved' : 'Save Swatch Settings'}
               </button>
             </div>
+
+            {/* OrcaSlicer Filament Profiles */}
+            <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
+                OrcaSlicer Filament Profiles
+              </label>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <input
+                  type="checkbox"
+                  id="orcaslicerEnabled"
+                  checked={!!orcaslicerField}
+                  onChange={e => {
+                      const enabled = e.target.checked;
+                      if (enabled) {
+                        // Need to find or auto-create the field
+                        const existing = extraFields.find(f => f.key === 'slicer');
+                        if (existing) {
+                          setOrcaslicerField(existing.key);
+                          handleOrcaslicerFieldSave(existing.key);
+                        } else {
+                          handleAutoCreateField('slicer');
+                        }
+                      } else {
+                        setOrcaslicerField('');
+                        handleOrcaslicerFieldSave('');
+                      }
+                    }}
+                  style={{
+                    appearance: 'none', WebkitAppearance: 'none', width: '20px', height: '20px',
+                    border: '2px solid var(--border)', borderRadius: '4px', cursor: 'pointer',
+                    backgroundColor: 'var(--surface)', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', flexShrink: 0, accentColor: 'var(--primary, #0ea5e9)'
+                  }}
+                />
+                <label htmlFor="orcaslicerEnabled" style={{ fontSize: '13px', cursor: 'pointer', userSelect: 'none' }}>
+                  Enable OrcaSlicer settings panel and export options for filaments.
+                </label>
+              </div>
+
+              {!!orcaslicerField && (
+                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <button className="btn btn-sm btn-primary" style={{ padding: '6px 12px' }} onClick={handleExportAllOrcaSlicer}>
+                    Export All Profiles (ZIP)
+                  </button>
+                  <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => setShowOrcaDefaults(true)}>
+                    Configure Defaults
+                  </button>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                    Download a `.zip` archive containing all OrcaSlicer configuration JSON files.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
+        {showOrcaDefaults && (
+            <OrcaSlicerDefaultsDialog onClose={() => setShowOrcaDefaults(false)} />
+        )}
 
         {/* Docker Setup */}
         {dockerStatus?.reason === 'docker_not_found' ? (

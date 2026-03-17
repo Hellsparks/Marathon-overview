@@ -47,6 +47,7 @@ export default function FilamentsPage() {
     const [viewMode, setViewMode] = useState('list');
     const [swatchField, setSwatchField] = useState(null);
     const [urlField, setUrlField] = useState(null);
+    const [orcaslicerField, setOrcaslicerField] = useState(null);
 
     const load = useCallback(async () => {
         try {
@@ -55,6 +56,7 @@ export default function FilamentsPage() {
             setExtraFields(fields || []);
             setSwatchField(s?.swatch_extra_field || null);
             setUrlField(s?.url_extra_field || null);
+            setOrcaslicerField(s?.orcaslicer_config_field || null);
             setError(null);
         } catch (e) {
             setError(e.message);
@@ -70,6 +72,109 @@ export default function FilamentsPage() {
         try {
             await deleteFilament(f.id);
             await load();
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    async function handleExportOrcaSlicer(f) {
+        try {
+            // Generate basic template
+            const profile = {
+                "type": "filament",
+                "name": `${f.vendor?.name || 'Generic'} ${f.material || 'PLA'} ${f.name}`,
+                "from": "User",
+                "instantiation": "true",
+                "inherits": "My Generic PLA", // Fallback inherit
+                "filament_settings_id": [
+                    `${f.vendor?.name || 'Generic'} ${f.material || 'PLA'} ${f.name}`
+                ],
+                "filament_vendor": [
+                    f.vendor?.name || "Generic"
+                ],
+                "filament_type": [
+                    f.material || "PLA"
+                ],
+                "filament_diameter": [
+                    f.diameter ? String(f.diameter) : "1.75"
+                ],
+                "filament_density": [
+                    f.density ? String(f.density) : "1.24"
+                ],
+                "filament_color": [
+                    f.color_hex ? `#${f.color_hex.slice(0, 6).toUpperCase()}` : "#FFFFFF"
+                ]
+            };
+
+            // Apply overrides from extra field
+            if (orcaslicerField && f.extra?.[orcaslicerField]) {
+                try {
+                    const overrides = JSON.parse(f.extra[orcaslicerField]);
+
+                    // 1. Basic Material Info
+                    if (overrides.filament_vendor) profile.filament_vendor = [overrides.filament_vendor];
+                    if (overrides.required_nozzle_hrc) profile.required_nozzle_hrc = [String(overrides.required_nozzle_hrc)];
+                    if (overrides.filament_softening_temperature) profile.filament_softening_temperature = [String(overrides.filament_softening_temperature)];
+                    if (overrides.idle_temperature) profile.idle_temperature = [String(overrides.idle_temperature)];
+                    if (overrides.shrinkage_xy) profile.filament_shrink = [`${overrides.shrinkage_xy}%`];
+                    if (overrides.shrinkage_z) profile.filament_shrink_z = [`${overrides.shrinkage_z}%`];
+                    if (overrides.chamber_temperature) profile.chamber_temperature = [String(overrides.chamber_temperature)];
+                    if (overrides.activate_temperature_control !== undefined) profile.activate_temperature_control = [overrides.activate_temperature_control ? "true" : "false"];
+                    if (overrides.is_soluble_filament !== undefined) profile.is_soluble_filament = [overrides.is_soluble_filament ? "true" : "false"];
+                    if (overrides.support_material_interface_filament !== undefined) profile.support_material_interface_filament = [overrides.support_material_interface_filament ? "true" : "false"];
+
+                    // 2. Print Temperatures & Speeds
+                    if (overrides.nozzle_temperature) profile.nozzle_temperature = [String(overrides.nozzle_temperature)];
+                    if (overrides.nozzle_temp_initial_layer) profile.nozzle_temperature_initial_layer = [String(overrides.nozzle_temp_initial_layer)];
+                    if (overrides.nozzle_temp_min) profile.nozzle_temperature_range_low = [String(overrides.nozzle_temp_min)];
+                    if (overrides.nozzle_temp_max) profile.nozzle_temperature_range_high = [String(overrides.nozzle_temp_max)];
+                    if (overrides.bed_temp) profile.hot_plate_temp = [String(overrides.bed_temp)];
+                    if (overrides.bed_temp_initial_layer) profile.hot_plate_temp_initial_layer = [String(overrides.bed_temp_initial_layer)];
+                    if (overrides.max_volumetric_speed) profile.filament_max_volumetric_speed = [String(overrides.max_volumetric_speed)];
+                    if (overrides.flow_ratio) profile.filament_flow_ratio = [String(overrides.flow_ratio)];
+                    if (overrides.pressure_advance) profile.pressure_advance = [String(overrides.pressure_advance)];
+                    if (overrides.enable_pressure_advance !== undefined) profile.enable_pressure_advance = [overrides.enable_pressure_advance ? "true" : "false"];
+
+                    // 3. Cooling Settings
+                    if (overrides.fan_min_speed) profile.fan_min_speed = [String(overrides.fan_min_speed)];
+                    if (overrides.fan_max_speed) profile.fan_max_speed = [String(overrides.fan_max_speed)];
+                    if (overrides.exhaust_fan_speed) profile.exhaust_fan_speed = [String(overrides.exhaust_fan_speed)];
+                    if (overrides.fan_below_layer_time) profile.fan_below_layer_time = [String(overrides.fan_below_layer_time)];
+                    if (overrides.overhang_fan_speed) profile.overhang_fan_speed = [String(overrides.overhang_fan_speed)];
+                    if (overrides.slowdown_for_layer_cooling !== undefined) profile.slowdown_for_layer_cooling = [overrides.slowdown_for_layer_cooling ? "true" : "false"];
+                    if (overrides.enable_overhang_fan !== undefined) profile.enable_overhang_fan = [overrides.enable_overhang_fan ? "true" : "false"];
+                    if (overrides.activate_air_filtration !== undefined) profile.activate_air_filtration = [overrides.activate_air_filtration ? "true" : "false"];
+
+                    // 4. Retraction Overrides
+                    if (overrides.retraction_length) profile.retraction_length = [String(overrides.retraction_length)];
+                    if (overrides.z_hop) profile.z_hop = [String(overrides.z_hop)];
+                    if (overrides.retraction_speed) profile.retraction_speed = [String(overrides.retraction_speed)];
+                    if (overrides.deretraction_speed) profile.deretraction_speed = [String(overrides.deretraction_speed)];
+                    if (overrides.wipe_distance) profile.wipe_distance = [String(overrides.wipe_distance)];
+                    if (overrides.retract_on_layer_change !== undefined) profile.retract_on_layer_change = [overrides.retract_on_layer_change ? "true" : "false"];
+                    if (overrides.wipe_on_retract !== undefined) profile.wipe_on_retract = [overrides.wipe_on_retract ? "true" : "false"];
+
+                    // 5. Advanced
+                    if (overrides.inherits) profile.inherits = overrides.inherits;
+                    if (overrides.compatible_printers) {
+                        profile.compatible_printers = overrides.compatible_printers.split(',').map(p => p.trim().replace(/^"(.*)"$/, '$1'));
+                    }
+                    if (overrides.filament_ramming_length) profile.filament_ramming_length = [String(overrides.filament_ramming_length)];
+                } catch (e) {
+                    console.error("Failed to parse OrcaSlicer config", e);
+                }
+            }
+
+            // Trigger download
+            const blob = new Blob([JSON.stringify(profile, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${(f.vendor?.name || 'Generic').replace(/ /g, '_')}_${(f.material || 'PLA').replace(/ /g, '_')}_${f.name.replace(/ /g, '_')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         } catch (e) {
             alert(e.message);
         }
@@ -92,7 +197,7 @@ export default function FilamentsPage() {
         );
     });
 
-    const displayExtraFields = extraFields.filter(f => f.key !== swatchField);
+    const displayExtraFields = extraFields.filter(f => f.key !== swatchField && f.key !== orcaslicerField);
 
     return (
         <div className="page">
@@ -224,6 +329,11 @@ export default function FilamentsPage() {
                                             ))}
                                             <td className="sm-catalogue-actions">
                                                 <button
+                                                    className="sm-action-btn sm-action-primary"
+                                                    onClick={() => handleExportOrcaSlicer(f)}
+                                                    title="Export to OrcaSlicer JSON"
+                                                >⭳</button>
+                                                <button
                                                     className="sm-action-btn"
                                                     onClick={() => setEditFilament(f)}
                                                     title="Edit"
@@ -303,9 +413,10 @@ export default function FilamentsPage() {
                                     </div>
 
                                     <div style={{ display: 'flex', borderTop: '1px solid var(--border)', padding: '6px' }}>
-                                        <button className="btn-icon" style={{ flex: 1, padding: '8px', color: 'var(--text-muted)' }} onClick={() => setEditFilament(f)} title="Edit">✎ Edit</button>
-                                        <button className="btn-icon" style={{ flex: 1, padding: '8px', color: 'var(--text-muted)' }} onClick={() => setCloneFilament(f)} title="Clone">⎘ Clone</button>
-                                        <button className="btn-icon text-danger" style={{ flex: 1, padding: '8px', color: '#ff4444' }} onClick={() => handleDelete(f)} title="Delete">🗑 Delete</button>
+                                        <button className="btn-icon" style={{ flex: 1, padding: '8px', color: 'var(--primary)' }} onClick={() => handleExportOrcaSlicer(f)} title="Export to OrcaSlicer">⭳</button>
+                                        <button className="btn-icon" style={{ flex: 1, padding: '8px', color: 'var(--text-muted)' }} onClick={() => setEditFilament(f)} title="Edit">✎</button>
+                                        <button className="btn-icon" style={{ flex: 1, padding: '8px', color: 'var(--text-muted)' }} onClick={() => setCloneFilament(f)} title="Clone">⎘</button>
+                                        <button className="btn-icon text-danger" style={{ flex: 1, padding: '8px', color: '#ff4444' }} onClick={() => handleDelete(f)} title="Delete">✕</button>
                                     </div>
                                 </div>
                             );

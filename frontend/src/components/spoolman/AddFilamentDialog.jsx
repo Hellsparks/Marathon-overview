@@ -22,6 +22,47 @@ function tdToTranslucency(td) {
     return Math.min(95, Math.round(parseFloat(td) * 5));
 }
 
+function CollapsibleSection({ title, children, defaultOpen = false }) {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+    return (
+        <div className={`sm-collapsible ${isOpen ? 'open' : ''}`}>
+            <button type="button" className="sm-collapsible-header" onClick={() => setIsOpen(!isOpen)}>
+                {title}
+                <span className="sm-collapsible-chevron">▶</span>
+            </button>
+            <div className="sm-collapsible-content">
+                {children}
+            </div>
+        </div>
+    );
+}
+
+const OrcaField = ({ label, id, config, setConfig, type = "number", step, half = true }) => (
+    <div className={half ? "sm-field" : "sm-field sm-field-full"}>
+        <label className="sm-label" title={label}>{label}</label>
+        <input 
+            className="sm-input" 
+            type={type} 
+            step={step} 
+            value={config[id] || ''} 
+            onChange={e => setConfig({ ...config, [id]: e.target.value })} 
+        />
+    </div>
+);
+
+const OrcaCheckbox = ({ label, id, config, setConfig }) => (
+    <div className="sm-field">
+        <label className="sm-label" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '4px' }}>
+            <input 
+                type="checkbox" 
+                checked={config[id] === true || config[id] === 'true'} 
+                onChange={e => setConfig({ ...config, [id]: e.target.checked })} 
+            />
+            {label}
+        </label>
+    </div>
+);
+
 const MATERIAL_DENSITIES = {
     PLA: 1.24, 'PLA+': 1.24,
     PETG: 1.27,
@@ -38,6 +79,64 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
     const isEdit = !!filament && !isClone;
     const [vendors, setVendors] = useState([]);
     const [extraFields, setExtraFields] = useState([]);
+    const [orcaslicerFieldKey, setOrcaslicerFieldKey] = useState('');
+
+    const [showOrcaPanel, setShowOrcaPanel] = useState(false);
+    const [orcaslicerDefaults, setOrcaslicerDefaults] = useState({});
+    
+    // OrcaSlicer config state
+    const [orcaslicerConfig, setOrcaslicerConfig] = useState(() => {
+        return {
+            // Basic Material Info
+            filament_vendor: '',
+            is_soluble_filament: false,
+            support_material_interface_filament: false,
+            required_nozzle_hrc: '',
+            adhesiveness_category: '',
+            filament_softening_temperature: '',
+            idle_temperature: '',
+            shrinkage_xy: '',
+            shrinkage_z: '',
+            chamber_temperature: '',
+            activate_temperature_control: false,
+
+            // Print Temperatures & Speeds
+            nozzle_temperature: '',
+            nozzle_temp_initial_layer: '',
+            nozzle_temp_min: '',
+            nozzle_temp_max: '',
+            bed_temp: '',
+            bed_temp_initial_layer: '',
+            max_volumetric_speed: '',
+            flow_ratio: '',
+            pressure_advance: '',
+            enable_pressure_advance: false,
+
+            // Cooling
+            fan_min_speed: '',
+            fan_max_speed: '',
+            slowdown_for_layer_cooling: false,
+            fan_below_layer_time: '',
+            enable_overhang_fan: false,
+            overhang_fan_speed: '',
+            activate_air_filtration: false,
+            exhaust_fan_speed: '',
+
+            // Retraction Overrides
+            retraction_length: '',
+            z_hop: '',
+            retraction_speed: '',
+            deretraction_speed: '',
+            retract_on_layer_change: false,
+            wipe_on_retract: false,
+            wipe_distance: '',
+
+            // Advanced & Profiles
+            inherits: '',
+            compatible_printers: '',
+            filament_ramming_length: '',
+        };
+    });
 
     const [vendorId, setVendorId] = useState(String(filament?.vendor?.id ?? ''));
     const [name, setName] = useState(filament?.name ?? '');
@@ -105,6 +204,25 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                 setVendors(v || []);
                 setExtraFields(f || []);
                 setTdFieldKey(s?.hueforge_td_field || '');
+                setOrcaslicerFieldKey(s?.orcaslicer_config_field || '');
+                
+                if (s?.orcaslicer_defaults) {
+                    try {
+                        setOrcaslicerDefaults(JSON.parse(s.orcaslicer_defaults));
+                    } catch (e) {
+                         console.error('Failed to parse orcaslicer_defaults', e);
+                    }
+                }
+
+                // If editing and we have the orca field, parse it
+                if (s?.orcaslicer_config_field && filament?.extra?.[s.orcaslicer_config_field]) {
+                    try {
+                        const parsed = JSON.parse(filament.extra[s.orcaslicer_config_field]);
+                        setOrcaslicerConfig(prev => ({ ...prev, ...parsed }));
+                    } catch (e) {
+                        console.error('Failed to parse orcaslicer_config', e);
+                    }
+                }
             })
             .catch(() => { });
     }, []);
@@ -147,6 +265,45 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
     function setExtraVal(key, val) {
         setExtra(prev => ({ ...prev, [key]: val }));
     }
+
+    const handleApplyOrcaDefaults = (force = false) => {
+        if (!orcaslicerFieldKey) return;
+        const defaults = orcaslicerDefaults[material] || orcaslicerDefaults['Global'] || {};
+        
+        setOrcaslicerConfig(prev => {
+            const next = { ...prev };
+            for (const key of Object.keys(next)) {
+                if (defaults[key] !== undefined && defaults[key] !== '') {
+                    if (force || next[key] === '') {
+                        next[key] = defaults[key];
+                    }
+                }
+            }
+            return next;
+        });
+    };
+
+    // Auto-fill OrcaSlicer config when material changes
+    useEffect(() => {
+        // Only auto-fill if we're creating OR if it's an explicit material change on a clone/new
+        // For edits, we probably only want to auto-fill if fields are totally empty
+        const defaults = orcaslicerDefaults[material] || orcaslicerDefaults['Global'] || {};
+        if (!orcaslicerFieldKey || Object.keys(defaults).length === 0) return;
+
+        setOrcaslicerConfig(prev => {
+            let changed = false;
+            const next = { ...prev };
+            for (const key of Object.keys(next)) {
+                if (defaults[key] !== undefined && defaults[key] !== '') {
+                    if (next[key] === '') {
+                        next[key] = defaults[key];
+                        changed = true;
+                    }
+                }
+            }
+            return changed ? next : prev;
+        });
+    }, [material, orcaslicerDefaults, orcaslicerFieldKey]);
 
     function handleColoriometerReading({ hex, td }) {
         if (hex) setColorHex(`#${hex}`);
@@ -215,6 +372,20 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                     extraOut[f.key] = val;
                 }
             }
+            
+            if (orcaslicerFieldKey) {
+                const configToSave = {};
+                for (const [k, v] of Object.entries(orcaslicerConfig)) {
+                    if (v !== '') configToSave[k] = v;
+                }
+                if (Object.keys(configToSave).length > 0) {
+                    // Must double-stringify to pass as Spoolman Text Extra Field
+                    extraOut[orcaslicerFieldKey] = JSON.stringify(JSON.stringify(configToSave));
+                } else {
+                    extraOut[orcaslicerFieldKey] = null;
+                }
+            }
+
             body.extra = extraOut;
 
             const result = isEdit
@@ -249,13 +420,24 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
 
     return (
         <div className="spool-dialog-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="spool-dialog spool-dialog-wide">
+            <div className={`spool-dialog spool-dialog-wide ${showOrcaPanel ? 'spool-dialog-expanded' : ''}`}>
                 <div className="spool-dialog-header">
                     <h3 className="spool-dialog-title">{isEdit ? 'Edit Filament' : isClone ? 'Clone Filament' : 'Add Filament'}</h3>
-                    <button className="spool-dialog-close" onClick={onClose}>✕</button>
+                    {orcaslicerFieldKey && (
+                        <button
+                            type="button"
+                            className={`btn ${showOrcaPanel ? 'btn-primary' : 'btn-muted'}`}
+                            onClick={() => setShowOrcaPanel(!showOrcaPanel)}
+                            style={{ marginLeft: 'auto', marginRight: '32px', padding: '2px 8px', fontSize: '11px' }}
+                        >
+                            OrcaSlicer ⮞
+                        </button>
+                    )}
+                    <button type="button" className="spool-dialog-close" onClick={onClose}>✕</button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="sm-form sm-form-grid">
+                <form onSubmit={handleSubmit} className="dialog-split">
+                    <div className="dialog-left sm-form sm-form-grid">
                     <div className="sm-field sm-field-full">
                         <label className="sm-label">Name *</label>
                         <input
@@ -573,6 +755,8 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                             );
                         }
 
+                        if (f.key === orcaslicerFieldKey) return null; // hide raw JSON from general tab
+                        
                         return (
                             <div key={f.key} className="sm-field">
                                 <label className="sm-label">{f.name}{f.unit ? ` (${f.unit})` : ''}</label>
@@ -591,9 +775,94 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                     <div className="spool-dialog-actions sm-field-full">
                         <button type="button" className="btn v-btn" onClick={onClose} disabled={busy}>Cancel</button>
                         <button type="submit" className="btn btn-primary v-btn" disabled={busy || !name.trim()}>
-                            {busy ? 'Saving…' : isEdit ? 'Save' : 'Create'}
+                            {busy ? 'Saving…' : isEdit ? 'Save Changes' : isClone ? 'Clone Filament' : 'Add Filament'}
                         </button>
                     </div>
+                    </div>
+
+                    {orcaslicerFieldKey && showOrcaPanel && (
+                        <div className="dialog-right sm-form" style={{ alignContent: 'start', padding: '24px' }}>
+                            <div className="sm-field sm-field-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--border)', marginBottom: 12 }}>
+                                <h4 style={{ margin: 0, color: 'var(--text)', fontSize: 14 }}>
+                                    OrcaSlicer Settings
+                                </h4>
+                                <button 
+                                    type="button" 
+                                    className="btn btn-sm" 
+                                    style={{ fontSize: 11, padding: '2px 8px' }}
+                                    onClick={() => handleApplyOrcaDefaults(true)}
+                                    title={`Apply defaults for ${material || 'Global'}`}
+                                >
+                                    Apply {material || 'Global'} Defaults
+                                </button>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <CollapsibleSection title="Basic Material Info" defaultOpen={true}>
+                                    <div className="sm-form-grid">
+                                        <OrcaField label="Vendor" id="filament_vendor" type="text" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Nozzle HRC" id="required_nozzle_hrc" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Softening Temp" id="filament_softening_temperature" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Idle Temp" id="idle_temperature" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Shrinkage XY (%)" id="shrinkage_xy" step="0.01" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Shrinkage Z (%)" id="shrinkage_z" step="0.01" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Chamber Temp" id="chamber_temperature" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaCheckbox label="Activate Chamber" id="activate_temperature_control" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaCheckbox label="Is Soluble" id="is_soluble_filament" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaCheckbox label="Is Support" id="support_material_interface_filament" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                    </div>
+                                </CollapsibleSection>
+
+                                <CollapsibleSection title="Temperatures & Speeds" defaultOpen={true}>
+                                    <div className="sm-form-grid">
+                                        <OrcaField label="Nozzle Temp" id="nozzle_temperature" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Nozzle Initial" id="nozzle_temp_initial_layer" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Bed Temp" id="bed_temp" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Bed Initial" id="bed_temp_initial_layer" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Nozzle Min" id="nozzle_temp_min" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Nozzle Max" id="nozzle_temp_max" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Flow Ratio" id="flow_ratio" step="0.001" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Max Vol. Speed" id="max_volumetric_speed" step="0.1" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Pressure Adv." id="pressure_advance" step="0.001" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaCheckbox label="Enable PA" id="enable_pressure_advance" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                    </div>
+                                </CollapsibleSection>
+
+                                <CollapsibleSection title="Cooling Settings">
+                                    <div className="sm-form-grid">
+                                        <OrcaField label="Min Fan (%)" id="fan_min_speed" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Max Fan (%)" id="fan_max_speed" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Exhaust (%)" id="exhaust_fan_speed" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Layer Time (s)" id="fan_below_layer_time" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Overhang (%)" id="overhang_fan_speed" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaCheckbox label="Slow for Cooling" id="slowdown_for_layer_cooling" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaCheckbox label="Overhang Fan" id="enable_overhang_fan" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaCheckbox label="Air Filtration" id="activate_air_filtration" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                    </div>
+                                </CollapsibleSection>
+
+                                <CollapsibleSection title="Retraction Overrides">
+                                    <div className="sm-form-grid">
+                                        <OrcaField label="Length (mm)" id="retraction_length" step="0.1" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Z-Hop (mm)" id="z_hop" step="0.1" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Retract Speed" id="retraction_speed" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Deretract Spd" id="deretraction_speed" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaField label="Wipe Dist (mm)" id="wipe_distance" step="0.1" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaCheckbox label="Layer Change" id="retract_on_layer_change" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                        <OrcaCheckbox label="Wipe" id="wipe_on_retract" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                    </div>
+                                </CollapsibleSection>
+
+                                <CollapsibleSection title="Advanced & Profiles">
+                                    <div className="sm-form-grid">
+                                        <OrcaField label="Compatible Printers" id="compatible_printers" type="text" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} half={false} />
+                                        <OrcaField label="Inherits Profile" id="inherits" type="text" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} half={false} />
+                                        <OrcaField label="Ramming (mm)" id="filament_ramming_length" config={orcaslicerConfig} setConfig={setOrcaslicerConfig} />
+                                    </div>
+                                </CollapsibleSection>
+                            </div>
+                        </div>
+                    )}
                 </form>
             </div>
         </div>
