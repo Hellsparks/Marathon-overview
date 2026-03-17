@@ -20,6 +20,7 @@ export default function CreateProjectModal({ onClose, onSave, filaments = [] }) 
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [assignments, setAssignments] = useState({}); // { slot_key: { spool_id, etc } }
     const [spoolSearch, setSpoolSearch] = useState('');
+    const [categoryChoices, setCategoryChoices] = useState({}); // { category_id: option_id }
 
     // Files Flow State
     const [selectedFileIds, setSelectedFileIds] = useState([]);
@@ -39,18 +40,22 @@ export default function CreateProjectModal({ onClose, onSave, filaments = [] }) 
         }
     }, [mode]);
 
-    const handleSelectTemplate = (tpl) => {
-        setSelectedTemplate(tpl);
-        setProjectName(`${tpl.name} - ${new Date().toLocaleDateString()}`);
+    const handleSelectTemplate = async (tpl) => {
+        // Fetch full template data (with categories)
+        let fullTpl = tpl;
+        try {
+            const res = await fetch(`/api/templates/${tpl.id}`);
+            if (res.ok) fullTpl = await res.json();
+        } catch { /* fall back to list data */ }
+
+        setSelectedTemplate(fullTpl);
+        setProjectName(`${fullTpl.name} - ${new Date().toLocaleDateString()}`);
 
         // Initialize assignments from template preferred filaments
         const initial = {};
-        tpl.color_slots?.forEach(slot => {
+        fullTpl.color_slots?.forEach(slot => {
             const prefFilament = filaments.find(f => f.id === slot.pref_filament_id);
-
-            // Try to find a matching spool for this filament preference
             const matchingSpool = spools.find(s => s.filament?.id === slot.pref_filament_id && (s.remaining_weight || 0) > 0);
-
             initial[slot.slot_key] = {
                 slot_key: slot.slot_key,
                 spool_id: matchingSpool?.id || null,
@@ -61,7 +66,21 @@ export default function CreateProjectModal({ onClose, onSave, filaments = [] }) 
             };
         });
         setAssignments(initial);
-        setStep(2);
+
+        // Initialize category choices — default to first option for each choice category
+        const choiceCats = (fullTpl.categories || []).filter(c => c.type === 'choice');
+        const initialChoices = {};
+        for (const cat of choiceCats) {
+            if (cat.options?.length > 0) initialChoices[cat.id] = cat.options[0].id;
+        }
+        setCategoryChoices(initialChoices);
+
+        // If there are choice categories, show choices step; otherwise skip to assignment
+        if (choiceCats.length > 0) {
+            setStep(2);
+        } else {
+            setStep(3);
+        }
     };
 
     const handleSpoolSelect = (slotKey, spoolId) => {
@@ -106,7 +125,8 @@ export default function CreateProjectModal({ onClose, onSave, filaments = [] }) 
                 due_date: dueDate || null,
                 template_id: selectedTemplate?.id || null,
                 file_ids: mode === 'files' ? selectedFileIds : [],
-                color_assignments: Object.values(assignments)
+                color_assignments: Object.values(assignments),
+                category_choices: categoryChoices
             };
 
             const res = await fetch('/api/projects', {
@@ -126,6 +146,58 @@ export default function CreateProjectModal({ onClose, onSave, filaments = [] }) 
         } finally {
             setLoading(false);
         }
+    };
+
+    const hasChoiceCategories = (selectedTemplate?.categories || []).some(c => c.type === 'choice');
+
+    const renderCategoryChoices = () => {
+        const cats = selectedTemplate?.categories || [];
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>
+                    Choose which variant you want for each category:
+                </p>
+                {cats.map(cat => {
+                    if (cat.type === 'fixed') {
+                        return (
+                            <div key={cat.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '12px 16px' }}>
+                                <div style={{ fontSize: '14px', fontWeight: 700 }}>{cat.name}</div>
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                    {cat.plates?.length || 0} plate{(cat.plates?.length || 0) !== 1 ? 's' : ''} — always included
+                                </div>
+                            </div>
+                        );
+                    }
+                    // Choice category
+                    const selectedOptId = categoryChoices[cat.id];
+                    const selectedOpt = cat.options?.find(o => o.id === selectedOptId);
+                    return (
+                        <div key={cat.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '12px 16px' }}>
+                            <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px' }}>{cat.name}</div>
+                            <select
+                                className="form-select"
+                                value={selectedOptId || ''}
+                                onChange={e => setCategoryChoices(prev => ({ ...prev, [cat.id]: Number(e.target.value) }))}
+                                style={{ width: '100%', marginBottom: '6px' }}
+                            >
+                                {cat.options?.map(opt => (
+                                    <option key={opt.id} value={opt.id}>
+                                        {opt.name} ({opt.plates?.length || 0} plate{(opt.plates?.length || 0) !== 1 ? 's' : ''})
+                                    </option>
+                                ))}
+                            </select>
+                            {selectedOpt?.plates?.length > 0 && (
+                                <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                                    {selectedOpt.plates.map(p => (
+                                        <span key={p.id}>• {p.display_name}</span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        );
     };
 
     const renderModeSelection = () => (
@@ -411,19 +483,37 @@ export default function CreateProjectModal({ onClose, onSave, filaments = [] }) 
                 <div style={{ padding: '24px', minHeight: '300px' }}>
                     {!mode && renderModeSelection()}
                     {mode === 'template' && step === 1 && renderTemplateList()}
-                    {mode === 'template' && step === 2 && renderAssignmentStep()}
+                    {mode === 'template' && step === 2 && hasChoiceCategories && renderCategoryChoices()}
+                    {mode === 'template' && ((step === 3) || (step === 2 && !hasChoiceCategories)) && renderAssignmentStep()}
                     {mode === 'files' && renderFilePickerStep()}
                 </div>
 
                 <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', background: 'var(--surface2)' }}>
-                    <button className="btn btn-outline" onClick={() => mode && step === 1 ? setMode(null) : setStep(1)} disabled={!mode}>
+                    <button className="btn btn-outline" onClick={() => {
+                        if (!mode) return;
+                        if (mode === 'template') {
+                            if (step === 1) setMode(null);
+                            else if (step === 2 && hasChoiceCategories) setStep(1);
+                            else if (step === 3) setStep(hasChoiceCategories ? 2 : 1);
+                            else setStep(1);
+                        } else {
+                            setMode(null);
+                        }
+                    }} disabled={!mode}>
                         Back
                     </button>
-                    {((mode === 'template' && step === 2) || mode === 'files') ? (
-                        <button className="btn btn-primary" onClick={handleSubmit} disabled={loading || !projectName || (mode === 'files' && selectedFileIds.length === 0)}>
-                            {loading ? 'Creating...' : 'Launch Project'}
-                        </button>
-                    ) : null}
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        {mode === 'template' && step === 2 && hasChoiceCategories && (
+                            <button className="btn btn-primary" onClick={() => setStep(3)}>
+                                Next
+                            </button>
+                        )}
+                        {((mode === 'template' && ((step === 3) || (step === 2 && !hasChoiceCategories))) || mode === 'files') ? (
+                            <button className="btn btn-primary" onClick={handleSubmit} disabled={loading || !projectName || (mode === 'files' && selectedFileIds.length === 0)}>
+                                {loading ? 'Creating...' : 'Launch Project'}
+                            </button>
+                        ) : null}
+                    </div>
                 </div>
             </div>
         </div>

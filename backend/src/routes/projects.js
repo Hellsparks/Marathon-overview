@@ -79,15 +79,27 @@ router.get('/:id', (req, res) => {
         if (!project) return res.status(404).json({ error: 'Project not found' });
 
         project.plates = db.prepare(`
-            SELECT pp.*, 
-                   datetime(pj.end_time, '-' || pj.total_duration_s || ' seconds') as actual_start_time, 
+            SELECT pp.*,
+                   tp.category_id, tp.option_id,
+                   datetime(pj.end_time, '-' || pj.total_duration_s || ' seconds') as actual_start_time,
                    pj.end_time as actual_end_time
             FROM project_plates pp
+            LEFT JOIN template_plates tp ON pp.template_plate_id = tp.id
             LEFT JOIN gcode_print_jobs pj ON pp.print_job_id = pj.id
             WHERE pp.project_id = ?
             ORDER BY pp.sort_order
         `).all(project.id);
         project.color_assignments = db.prepare(`SELECT * FROM project_color_assignments WHERE project_id = ?`).all(project.id);
+
+        // Include category choices so the frontend can show which option was picked
+        project.category_choices = db.prepare(`
+            SELECT pcc.*, tc.name as category_name, tc.type as category_type,
+                   tco.name as option_name
+            FROM project_category_choices pcc
+            LEFT JOIN template_categories tc ON pcc.category_id = tc.id
+            LEFT JOIN template_category_options tco ON pcc.option_id = tco.id
+            WHERE pcc.project_id = ?
+        `).all(project.id);
 
         res.json(project);
     } catch (err) {
@@ -97,7 +109,7 @@ router.get('/:id', (req, res) => {
 
 // POST /api/projects (Hybrid)
 router.post('/', (req, res) => {
-    const { template_id, name, due_date, file_ids = [], color_assignments = [], folder_id } = req.body;
+    const { template_id, name, due_date, file_ids = [], color_assignments = [], category_choices = {}, folder_id } = req.body;
     if (!name) return res.status(400).json({ error: 'Project name is required' });
 
     try {
@@ -108,32 +120,47 @@ router.post('/', (req, res) => {
             projectId = run.lastInsertRowid;
 
             if (template_id) {
-                // Flow A: Create from Template
+                // Flow A: Create from Template (category-aware)
                 const templatePlates = db.prepare(`SELECT * FROM template_plates WHERE template_id = ?`).all(template_id);
+                const categories = db.prepare(`SELECT * FROM template_categories WHERE template_id = ?`).all(template_id);
                 const insertPlate = db.prepare(`
-                    INSERT INTO project_plates 
+                    INSERT INTO project_plates
                     (project_id, filename, display_name, estimated_time_s, filament_usage_mm, filament_usage_g, sliced_for, sort_order,
-                     filament_type, min_x, max_x, min_y, max_y, min_z, max_z)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     filament_type, min_x, max_x, min_y, max_y, min_z, max_z, template_plate_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `);
+                const insertChoice = db.prepare(`INSERT INTO project_category_choices (project_id, category_id, option_id) VALUES (?, ?, ?)`);
+
+                // Build set of selected option IDs
+                const selectedOptionIds = new Set();
+                // Also build set of choice category IDs (so we know which plates need option filtering)
+                const choiceCatIds = new Set();
+                for (const cat of categories) {
+                    if (cat.type === 'choice') {
+                        choiceCatIds.add(cat.id);
+                        const chosenOptId = category_choices[cat.id] || category_choices[String(cat.id)];
+                        if (chosenOptId) {
+                            selectedOptionIds.add(Number(chosenOptId));
+                            insertChoice.run(projectId, cat.id, Number(chosenOptId));
+                        }
+                    }
+                }
 
                 for (const tp of templatePlates) {
+                    // Skip plates from choice categories where a different option was selected
+                    if (tp.option_id && !selectedOptionIds.has(tp.option_id)) continue;
+                    // Skip plates from choice categories with no selection made
+                    if (tp.category_id && choiceCatIds.has(tp.category_id) && !tp.option_id) continue;
+
                     insertPlate.run(
-                        projectId,
-                        tp.filename,
-                        tp.display_name,
-                        tp.estimated_time_s,
-                        tp.filament_usage_mm,
-                        tp.filament_usage_g,
-                        tp.sliced_for,
-                        tp.sort_order,
+                        projectId, tp.filename, tp.display_name,
+                        tp.estimated_time_s, tp.filament_usage_mm, tp.filament_usage_g,
+                        tp.sliced_for, tp.sort_order,
                         tp.filament_type || null,
-                        tp.min_x || null,
-                        tp.max_x || null,
-                        tp.min_y || null,
-                        tp.max_y || null,
-                        tp.min_z || null,
-                        tp.max_z || null
+                        tp.min_x || null, tp.max_x || null,
+                        tp.min_y || null, tp.max_y || null,
+                        tp.min_z || null, tp.max_z || null,
+                        tp.id
                     );
                 }
             } else if (file_ids.length > 0) {
@@ -268,6 +295,91 @@ router.patch('/:id/folder', (req, res) => {
         const info = db.prepare('UPDATE projects SET folder_id = ? WHERE id = ?').run(folder_id || null, req.params.id);
         if (info.changes === 0) return res.status(404).json({ error: 'Project not found' });
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// PATCH /api/projects/:id/swap-option — swap a choice category's selected alternative
+router.patch('/:id/swap-option', (req, res) => {
+    const { category_id, new_option_id, force } = req.body;
+    if (!category_id || !new_option_id) return res.status(400).json({ error: 'category_id and new_option_id are required' });
+
+    try {
+        const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        // Find current choice for this category
+        const currentChoice = db.prepare('SELECT * FROM project_category_choices WHERE project_id = ? AND category_id = ?')
+            .get(project.id, category_id);
+
+        if (currentChoice && currentChoice.option_id === Number(new_option_id)) {
+            return res.json({ success: true, message: 'Already selected' });
+        }
+
+        // Find plates that belong to the old option
+        const oldPlates = currentChoice
+            ? db.prepare('SELECT * FROM project_plates WHERE project_id = ? AND template_plate_id IN (SELECT id FROM template_plates WHERE option_id = ?)')
+                .all(project.id, currentChoice.option_id)
+            : [];
+
+        // Check for printed plates
+        const donePlates = oldPlates.filter(p => p.status === 'done');
+        if (donePlates.length > 0 && !force) {
+            return res.json({
+                warning: true,
+                done_count: donePlates.length,
+                done_plates: donePlates.map(p => ({ id: p.id, display_name: p.display_name })),
+                message: `${donePlates.length} plate(s) already printed. Send force:true to confirm swap.`
+            });
+        }
+
+        // Perform swap in transaction
+        db.exec('BEGIN TRANSACTION');
+        try {
+            // Remove old option's plates
+            if (currentChoice) {
+                db.prepare('DELETE FROM project_plates WHERE project_id = ? AND template_plate_id IN (SELECT id FROM template_plates WHERE option_id = ?)')
+                    .run(project.id, currentChoice.option_id);
+            }
+
+            // Insert new option's plates from template
+            const newTemplatePlates = db.prepare('SELECT * FROM template_plates WHERE option_id = ?').all(new_option_id);
+            const insertPlate = db.prepare(`
+                INSERT INTO project_plates
+                (project_id, filename, display_name, estimated_time_s, filament_usage_mm, filament_usage_g, sliced_for, sort_order,
+                 filament_type, min_x, max_x, min_y, max_y, min_z, max_z, template_plate_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            for (const tp of newTemplatePlates) {
+                insertPlate.run(
+                    project.id, tp.filename, tp.display_name,
+                    tp.estimated_time_s, tp.filament_usage_mm, tp.filament_usage_g,
+                    tp.sliced_for, tp.sort_order,
+                    tp.filament_type || null,
+                    tp.min_x || null, tp.max_x || null,
+                    tp.min_y || null, tp.max_y || null,
+                    tp.min_z || null, tp.max_z || null,
+                    tp.id
+                );
+            }
+
+            // Update or insert the choice record
+            if (currentChoice) {
+                db.prepare('UPDATE project_category_choices SET option_id = ? WHERE project_id = ? AND category_id = ?')
+                    .run(new_option_id, project.id, category_id);
+            } else {
+                db.prepare('INSERT INTO project_category_choices (project_id, category_id, option_id) VALUES (?, ?, ?)')
+                    .run(project.id, category_id, new_option_id);
+            }
+
+            db.exec('COMMIT');
+            res.json({ success: true });
+        } catch (txnErr) {
+            db.exec('ROLLBACK');
+            throw txnErr;
+        }
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

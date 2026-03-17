@@ -106,6 +106,8 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
     const [showEditModal, setShowEditModal] = useState(false);
     const [editName, setEditName] = useState('');
     const [editDueDate, setEditDueDate] = useState('');
+    const [templateData, setTemplateData] = useState(null);
+    const [swapConfirm, setSwapConfirm] = useState(null); // { category_id, new_option_id, done_plates }
 
     const fetchData = async () => {
         try {
@@ -121,6 +123,14 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
             setSettings(settingsRes);
             setEditName(projRes.name);
             setEditDueDate(projRes.due_date || '');
+
+            // Fetch template data for category info (if from template)
+            if (projRes.template_id) {
+                fetch(`/api/templates/${projRes.template_id}`)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(t => { if (t) setTemplateData(t); })
+                    .catch(() => {});
+            }
 
             // Sync with Right Panel
             if (setSelected) {
@@ -302,6 +312,70 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
         }
     };
 
+    const handleSwapOption = async (categoryId, newOptionId, force = false) => {
+        try {
+            setLoading(true);
+            const res = await fetch(`/api/projects/${projectId}/swap-option`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ category_id: categoryId, new_option_id: newOptionId, force })
+            });
+            const data = await res.json();
+            if (data.warning && !force) {
+                setSwapConfirm({ category_id: categoryId, new_option_id: newOptionId, done_plates: data.done_plates, done_count: data.done_count });
+                setLoading(false);
+                return;
+            }
+            if (!res.ok && !data.success) throw new Error(data.error || 'Swap failed');
+            setSwapConfirm(null);
+            await fetchData();
+            toast?.('Alternative swapped', 'success');
+        } catch (err) {
+            toast?.(err.message, 'error') || alert(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Group plates by category for display
+    const groupPlates = () => {
+        if (!project?.plates) return [{ name: null, type: null, plates: [] }];
+        if (!templateData?.categories?.length) {
+            // No categories — single flat group
+            return [{ name: null, type: null, categoryId: null, plates: project.plates }];
+        }
+
+        const groups = [];
+        const usedPlateIds = new Set();
+
+        for (const cat of templateData.categories) {
+            if (cat.type === 'fixed') {
+                const catPlates = project.plates.filter(p => p.category_id === cat.id);
+                catPlates.forEach(p => usedPlateIds.add(p.id));
+                groups.push({ name: cat.name, type: 'fixed', categoryId: cat.id, plates: catPlates });
+            } else if (cat.type === 'choice') {
+                const choice = project.category_choices?.find(c => c.category_id === cat.id);
+                const catPlates = project.plates.filter(p => p.category_id === cat.id);
+                catPlates.forEach(p => usedPlateIds.add(p.id));
+                groups.push({
+                    name: cat.name, type: 'choice', categoryId: cat.id,
+                    chosenOptionId: choice?.option_id,
+                    chosenOptionName: choice?.option_name,
+                    options: cat.options,
+                    plates: catPlates
+                });
+            }
+        }
+
+        // Uncategorized plates
+        const uncategorized = project.plates.filter(p => !usedPlateIds.has(p.id));
+        if (uncategorized.length > 0) {
+            groups.push({ name: null, type: null, categoryId: null, plates: uncategorized });
+        }
+
+        return groups;
+    };
+
     if (loading) return <div className="page"><div className="loading">Loading project...</div></div>;
     if (error) return <div className="page"><div className="error">{error}</div></div>;
     if (!project) return <div className="page">Project not found.</div>;
@@ -393,100 +467,136 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                             <div style={{ fontSize: '14px', fontWeight: 600 }}>{progress}% Complete</div>
                         </div>
                         <div style={{ padding: '0 8px' }}>
-                            {project.plates.map((plate, i) => (
-                                <div
-                                    key={plate.id}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '12px',
-                                        padding: '10px 12px',
-                                        borderBottom: i === project.plates.length - 1 ? 'none' : '1px solid var(--border)',
-                                        background: plate.status === 'done' ? 'rgba(0,0,0,0.1)' : 'transparent',
-                                        opacity: plate.status === 'done' ? 0.6 : 1,
-                                        transition: 'all 0.2s',
-                                        fontSize: '13px'
-                                    }}
-                                >
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontWeight: 600, color: plate.status === 'done' ? 'var(--text-muted)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {plate.display_name}
-                                        </div>
-                                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', gap: '8px' }}>
-                                            {plate.estimated_time_s ? (
-                                                <span>⏱️ {Math.floor(plate.estimated_time_s / 3600)}h {Math.floor((plate.estimated_time_s % 3600) / 60)}m</span>
-                                            ) : null}
-                                            {plate.filament_usage_g ? (
-                                                <span>⚖️ {Math.round(plate.filament_usage_g)}g</span>
-                                            ) : null}
-                                        </div>
-                                    </div>
-
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                                        {project.status === 'archived' ? (
-                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '2px', paddingRight: '12px', textAlign: 'right' }}>
-                                                {plate.actual_start_time ? (
-                                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                                                        <span>start</span>
-                                                        <span style={{ fontWeight: 600, color: 'var(--text)' }}>
-                                                            {new Date(plate.actual_start_time).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                                                        </span>
-                                                    </div>
-                                                ) : null}
-                                                {plate.actual_end_time ? (
-                                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                                                        <span>finish</span>
-                                                        <span style={{ fontWeight: 600, color: 'var(--text)' }}>
-                                                            {new Date(plate.actual_end_time).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                                                        </span>
-                                                    </div>
-                                                ) : (!plate.actual_start_time ? (
-                                                    <span style={{ fontStyle: 'italic', opacity: 0.7 }}>Not printed</span>
-                                                ) : null)}
+                            {groupPlates().map((group, gi) => (
+                                <React.Fragment key={group.categoryId ?? `uncategorized-${gi}`}>
+                                    {/* Category header */}
+                                    {group.name && (
+                                        <div style={{
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            padding: '10px 12px 6px', marginTop: gi > 0 ? '4px' : 0,
+                                            borderTop: gi > 0 ? '2px solid var(--border)' : 'none'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                                                    {group.name}
+                                                </span>
+                                                {group.type === 'choice' && group.chosenOptionName && (
+                                                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 15%, transparent)', padding: '2px 8px', borderRadius: '8px' }}>
+                                                        {group.chosenOptionName}
+                                                    </span>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <>
-                                                <PrinterSelector
-                                                    printers={printers}
-                                                    status={status}
-                                                    plate={plate}
-                                                    selectedId={selectedPrinters[plate.id]}
-                                                    onSelect={id => setSelectedPrinters(prev => ({ ...prev, [plate.id]: id }))}
-                                                    disabled={plate.status === 'done' || loading}
-                                                />
-
-                                                <button
-                                                    className="btn btn-sm btn-primary"
-                                                    onClick={() => handlePrint(plate)}
-                                                    disabled={!selectedPrinters[plate.id] || plate.status === 'done' || loading}
-                                                    style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}
+                                            {group.type === 'choice' && group.options && project.status !== 'archived' && (
+                                                <select
+                                                    className="form-select"
+                                                    value={group.chosenOptionId || ''}
+                                                    onChange={e => handleSwapOption(group.categoryId, Number(e.target.value))}
+                                                    style={{ width: 'auto', fontSize: '12px', padding: '2px 8px', height: '28px' }}
                                                 >
-                                                    Print
-                                                </button>
-                                            </>
-                                        )}
-
-                                        <div style={{ width: '1px', height: '16px', background: 'var(--border)', margin: '0 4px' }} />
-
-                                        <div style={{ minWidth: '70px', textAlign: 'right' }}>
-                                            {plate.status === 'done' ? (
-                                                <span style={{ color: 'var(--success)', fontWeight: 700, fontSize: '11px' }}>✓ DONE</span>
-                                            ) : (
-                                                <span style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '11px' }}>{project.status === 'archived' ? 'Not printed' : 'PENDING'}</span>
+                                                    {group.options.map(opt => (
+                                                        <option key={opt.id} value={opt.id}>{opt.name}</option>
+                                                    ))}
+                                                </select>
                                             )}
                                         </div>
+                                    )}
+                                    {/* Plates in this group */}
+                                    {group.plates.map((plate, i) => (
+                                        <div
+                                            key={plate.id}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '12px',
+                                                padding: '10px 12px',
+                                                borderBottom: i === group.plates.length - 1 ? 'none' : '1px solid var(--border)',
+                                                background: plate.status === 'done' ? 'rgba(0,0,0,0.1)' : 'transparent',
+                                                opacity: plate.status === 'done' ? 0.6 : 1,
+                                                transition: 'all 0.2s',
+                                                fontSize: '13px'
+                                            }}
+                                        >
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontWeight: 600, color: plate.status === 'done' ? 'var(--text-muted)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {plate.display_name}
+                                                </div>
+                                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', gap: '8px' }}>
+                                                    {plate.estimated_time_s ? (
+                                                        <span>⏱️ {Math.floor(plate.estimated_time_s / 3600)}h {Math.floor((plate.estimated_time_s % 3600) / 60)}m</span>
+                                                    ) : null}
+                                                    {plate.filament_usage_g ? (
+                                                        <span>⚖️ {Math.round(plate.filament_usage_g)}g</span>
+                                                    ) : null}
+                                                </div>
+                                            </div>
 
-                                        {project.status !== 'archived' && (
-                                            <button
-                                                className="btn btn-sm btn-outline"
-                                                onClick={() => updatePlateStatus(plate.id, plate.status === 'done' ? 'pending' : 'done')}
-                                                style={{ height: '28px', padding: '0 8px', fontSize: '11px', opacity: 0.7 }}
-                                            >
-                                                {plate.status === 'done' ? 'Re-open' : 'Done'}
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                                {project.status === 'archived' ? (
+                                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '2px', paddingRight: '12px', textAlign: 'right' }}>
+                                                        {plate.actual_start_time ? (
+                                                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                                                <span>start</span>
+                                                                <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                                                    {new Date(plate.actual_start_time).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                                                </span>
+                                                            </div>
+                                                        ) : null}
+                                                        {plate.actual_end_time ? (
+                                                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                                                <span>finish</span>
+                                                                <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                                                    {new Date(plate.actual_end_time).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                                                </span>
+                                                            </div>
+                                                        ) : (!plate.actual_start_time ? (
+                                                            <span style={{ fontStyle: 'italic', opacity: 0.7 }}>Not printed</span>
+                                                        ) : null)}
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <PrinterSelector
+                                                            printers={printers}
+                                                            status={status}
+                                                            plate={plate}
+                                                            selectedId={selectedPrinters[plate.id]}
+                                                            onSelect={id => setSelectedPrinters(prev => ({ ...prev, [plate.id]: id }))}
+                                                            disabled={plate.status === 'done' || loading}
+                                                        />
+
+                                                        <button
+                                                            className="btn btn-sm btn-primary"
+                                                            onClick={() => handlePrint(plate)}
+                                                            disabled={!selectedPrinters[plate.id] || plate.status === 'done' || loading}
+                                                            style={{ height: '28px', padding: '0 10px', fontSize: '12px' }}
+                                                        >
+                                                            Print
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                <div style={{ width: '1px', height: '16px', background: 'var(--border)', margin: '0 4px' }} />
+
+                                                <div style={{ minWidth: '70px', textAlign: 'right' }}>
+                                                    {plate.status === 'done' ? (
+                                                        <span style={{ color: 'var(--success)', fontWeight: 700, fontSize: '11px' }}>✓ DONE</span>
+                                                    ) : (
+                                                        <span style={{ color: 'var(--warning)', fontWeight: 600, fontSize: '11px' }}>{project.status === 'archived' ? 'Not printed' : 'PENDING'}</span>
+                                                    )}
+                                                </div>
+
+                                                {project.status !== 'archived' && (
+                                                    <button
+                                                        className="btn btn-sm btn-outline"
+                                                        onClick={() => updatePlateStatus(plate.id, plate.status === 'done' ? 'pending' : 'done')}
+                                                        style={{ height: '28px', padding: '0 8px', fontSize: '11px', opacity: 0.7 }}
+                                                    >
+                                                        {plate.status === 'done' ? 'Re-open' : 'Done'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </React.Fragment>
                             ))}
                         </div>
                     </div>
@@ -671,6 +781,32 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                         })}
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Swap Confirmation Dialog */}
+            {swapConfirm && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, backdropFilter: 'blur(4px)' }}>
+                    <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: '16px', width: '420px', padding: '24px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: 'var(--warning)' }}>Swap with printed plates?</h3>
+                        <p style={{ fontSize: '13px', margin: '0 0 16px 0' }}>
+                            {swapConfirm.done_count} plate{swapConfirm.done_count !== 1 ? 's have' : ' has'} already been printed and will be removed:
+                        </p>
+                        <ul style={{ margin: '0 0 16px 0', paddingLeft: '20px', fontSize: '13px' }}>
+                            {swapConfirm.done_plates?.map(p => (
+                                <li key={p.id} style={{ color: 'var(--text-muted)' }}>{p.display_name}</li>
+                            ))}
+                        </ul>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className="btn btn-danger" style={{ flex: 1 }}
+                                onClick={() => handleSwapOption(swapConfirm.category_id, swapConfirm.new_option_id, true)}>
+                                Swap Anyway
+                            </button>
+                            <button className="btn btn-outline" style={{ flex: 1 }} onClick={() => setSwapConfirm(null)}>
+                                Cancel
+                            </button>
                         </div>
                     </div>
                 </div>
