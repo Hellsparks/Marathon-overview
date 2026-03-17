@@ -215,7 +215,7 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                 <div className={`printer-card-header v-card__title${isBambu ? ' bambu-header' : ''}`}>
                     <h3 className="printer-name v-toolbar__title">{printer.name}</h3>
                     {isBambu && <span className="ams-badge">AMS</span>}
-                    {!isBambu && hasMmu && <span className="ams-badge" style={{ background: 'var(--primary, #4a9eff)', color: '#fff' }}>{totalSlotCount} slots</span>}
+                    {!isBambu && hasMmu && <span className="ams-badge">{totalSlotCount} slots</span>}
                 </div>
 
                 <div className="printer-card-body" style={{ padding: '0 16px 16px' }}>
@@ -264,9 +264,10 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                                     className="ams-slot-swatch"
                                                     style={{ backgroundColor: physicalColor || '#888' }}
                                                 />
-                                                <span className="ams-slot-material" style={{ color: 'var(--text-muted)' }}>{physicalTray.tray_type || '—'}</span>
-                                                <span className="ams-slot-name" style={{ fontStyle: 'italic', fontSize: '11px', color: 'var(--text-muted)' }}>MQTT Status</span>
-                                                <span className="ams-slot-empty" style={{ opacity: 0.5, fontSize: '10px', marginTop: '4px' }}>Drop spool to assign</span>
+                                                <span className="ams-slot-material">{physicalTray.tray_type || '—'}</span>
+                                                <span className="ams-slot-name" style={{ fontStyle: 'italic', fontSize: '11px', color: 'var(--text-muted)' }}>
+                                                    {physicalTray.tray_sub_brands || 'Via printer'}
+                                                </span>
                                             </>
                                         ) : (
                                             <span className="ams-slot-empty">Drop spool</span>
@@ -286,9 +287,10 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                         <div key={m.tool_index}>
                                             <div style={{
                                                 fontSize: '11px', fontWeight: 600, padding: '4px 8px',
-                                                background: 'var(--surface2, rgba(255,255,255,0.05))',
-                                                borderRadius: '4px 4px 0 0', borderBottom: '1px solid var(--border)',
-                                                color: 'var(--text-muted)',
+                                                background: 'color-mix(in srgb, var(--primary) 15%, transparent)',
+                                                borderRadius: '4px 4px 0 0',
+                                                borderBottom: '1px solid color-mix(in srgb, var(--primary) 30%, transparent)',
+                                                color: 'var(--primary)',
                                             }}>
                                                 T{m.tool_index} — {m.mmu_name}
                                             </div>

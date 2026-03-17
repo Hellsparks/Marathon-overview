@@ -49,6 +49,17 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
 
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }));
+    // When toolhead count decreases, remove MMU assignments for removed toolheads
+    if (field === 'toolhead_count') {
+      const count = Number(value) || 1;
+      setMmuAssignments(a => {
+        const trimmed = {};
+        for (const [k, v] of Object.entries(a)) {
+          if (Number(k) < count) trimmed[k] = v;
+        }
+        return trimmed;
+      });
+    }
   }
 
   function setFirmwareType(type) {
