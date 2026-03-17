@@ -537,6 +537,20 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   gap: 16px;
 }
 
+.printer-grid-item.edit-mode {
+  cursor: grab;
+  border-radius: var(--radius, 8px);
+  transition: outline 0.15s, transform 0.15s;
+}
+.printer-grid-item.edit-mode:active {
+  cursor: grabbing;
+}
+.printer-grid-item.edit-mode.drop-target {
+  outline: 2px dashed var(--primary);
+  outline-offset: 4px;
+  border-radius: var(--radius, 8px);
+}
+
 /* ─── Sidebar Printer Card ──────────────────────────────────────── */
 .printer-card--sidebar {
   padding: 8px 12px;

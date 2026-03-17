@@ -9,7 +9,7 @@ const VALID_FIRMWARE_TYPES = ['moonraker', 'octoprint', 'duet', 'bambu'];
 // GET /api/printers
 router.get('/', (req, res) => {
   const db = getDb();
-  const printers = db.prepare('SELECT * FROM printers ORDER BY name').all();
+  const printers = db.prepare('SELECT * FROM printers ORDER BY sort_order, name').all();
   res.json(printers.map(normalizePrinter));
 });
 
@@ -35,15 +35,16 @@ router.post('/', (req, res) => {
   }
 
   const db = getDb();
+  const nextOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM printers').get().n;
   const result = db.prepare(
-    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     name, host, port, api_key || null,
     bed_width, bed_depth, bed_height,
     typeof filament_types === 'string' ? filament_types : JSON.stringify(filament_types),
     toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number || null,
-    scrape_css_path || null
+    scrape_css_path || null, nextOrder
   );
 
   const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(result.lastInsertRowid);
@@ -53,7 +54,7 @@ router.post('/', (req, res) => {
 
 // PUT /api/printers/:id
 router.put('/:id', (req, res) => {
-  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path } = req.body;
+  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path, hardened_tools } = req.body;
   if (firmware_type !== undefined && !VALID_FIRMWARE_TYPES.includes(firmware_type)) {
     return res.status(400).json({ error: `firmware_type must be one of: ${VALID_FIRMWARE_TYPES.join(', ')}` });
   }
@@ -64,6 +65,7 @@ router.put('/:id', (req, res) => {
   db.prepare(
     `UPDATE printers SET name=?, host=?, port=?, api_key=?, enabled=?,
      bed_width=?, bed_depth=?, bed_height=?, filament_types=?, toolhead_count=?, preset_id=?, custom_css=?, theme_mode=?, firmware_type=?, serial_number=?, scrape_css_path=?,
+     hardened_tools=?,
      updated_at=datetime('now')
      WHERE id=?`
   ).run(
@@ -85,11 +87,36 @@ router.put('/:id', (req, res) => {
     firmware_type !== undefined ? firmware_type : (printer.firmware_type || 'moonraker'),
     serial_number !== undefined ? serial_number : printer.serial_number,
     scrape_css_path !== undefined ? (scrape_css_path || null) : printer.scrape_css_path,
+    hardened_tools !== undefined
+      ? (typeof hardened_tools === 'string' ? hardened_tools : JSON.stringify(hardened_tools))
+      : (printer.hardened_tools || '[]'),
     req.params.id
   );
 
   const updated = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id);
   res.json(normalizePrinter(updated));
+});
+
+// PUT /api/printers/reorder — bulk update sort_order
+router.put('/reorder', (req, res) => {
+  const { order } = req.body; // Array of printer IDs in desired order
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array of printer IDs' });
+
+  const db = getDb();
+  const update = db.prepare('UPDATE printers SET sort_order = ?, updated_at = datetime(\'now\') WHERE id = ?');
+  db.exec('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      update.run(i, order[i]);
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+
+  const printers = db.prepare('SELECT * FROM printers ORDER BY sort_order, name').all();
+  res.json(printers.map(normalizePrinter));
 });
 
 // POST /api/printers/scrape-theme
@@ -189,6 +216,7 @@ function normalizePrinter(p) {
     ...p,
     firmware_type: p.firmware_type || 'moonraker',
     filament_types: safeJsonParse(p.filament_types),
+    hardened_tools: safeJsonParse(p.hardened_tools),
   };
 }
 

@@ -22,3 +22,7 @@ export const getPrinterMmus = (printerId) =>
 
 export const updatePrinterMmus = (printerId, mmus) =>
   apiFetch(`/api/printers/${printerId}/mmus`, { method: 'PUT', body: JSON.stringify({ mmus }) });
+
+// Printer ordering
+export const reorderPrinters = (order) =>
+  apiFetch('/api/printers/reorder', { method: 'PUT', body: JSON.stringify({ order }) });

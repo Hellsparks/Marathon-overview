@@ -19,7 +19,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
     bed_height: printer?.bed_height ?? '',
     filament_types: printer?.filament_types ?? [],
     toolhead_count: printer?.toolhead_count ?? 1,
-    abrasive_capable: printer?.abrasive_capable ? true : false,
+    hardened_tools: printer?.hardened_tools ?? [],
     preset_id: printer?.preset_id ?? '',
     custom_css: printer?.custom_css ?? '',
     theme_mode: printer?.theme_mode ?? 'global',
@@ -48,10 +48,15 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
   }, []);
 
   function set(field, value) {
-    setForm(f => ({ ...f, [field]: value }));
-    // When toolhead count decreases, remove MMU assignments for removed toolheads
     if (field === 'toolhead_count') {
       const count = Number(value) || 1;
+      // Trim hardened_tools for removed toolheads
+      setForm(f => ({
+        ...f,
+        toolhead_count: value,
+        hardened_tools: (f.hardened_tools || []).filter(t => t < count),
+      }));
+      // Trim MMU assignments for removed toolheads
       setMmuAssignments(a => {
         const trimmed = {};
         for (const [k, v] of Object.entries(a)) {
@@ -59,6 +64,8 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
         }
         return trimmed;
       });
+    } else {
+      setForm(f => ({ ...f, [field]: value }));
     }
   }
 
@@ -141,7 +148,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
         bed_depth: form.bed_depth || null,
         bed_height: form.bed_height || null,
         filament_types: JSON.stringify(form.filament_types || []),
-        abrasive_capable: form.abrasive_capable ? 1 : 0,
+        hardened_tools: JSON.stringify(form.hardened_tools || []),
         scrape_css_path: form.scrape_css_path || null,
         // If scrape mode was set but firmware changed away from Moonraker, reset to global
         theme_mode: form.firmware_type !== 'moonraker' && form.theme_mode === 'scrape'
@@ -329,12 +336,29 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                   onChange={e => set('toolhead_count', Number(e.target.value))} min={1} max={16} />
               </label>
 
-              <label className="checkbox-label" style={{ marginTop: '4px' }}>
-                <input type="checkbox"
-                  checked={form.abrasive_capable}
-                  onChange={e => set('abrasive_capable', e.target.checked)} />
-                Abrasive capable (hardened nozzle)
-              </label>
+              <div style={{ marginTop: '8px' }}>
+                <span className="form-label" style={{ marginBottom: '4px', display: 'block' }}>Hardened Nozzle</span>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {Array.from({ length: form.toolhead_count || 1 }, (_, i) => {
+                    const checked = (form.hardened_tools || []).includes(i);
+                    return (
+                      <label key={i} className="checkbox-label" style={{ fontSize: '13px' }}>
+                        <input type="checkbox" checked={checked}
+                          onChange={e => {
+                            const current = form.hardened_tools || [];
+                            set('hardened_tools', e.target.checked
+                              ? [...current, i].sort((a, b) => a - b)
+                              : current.filter(t => t !== i));
+                          }} />
+                        T{i}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-muted" style={{ fontSize: '11px', marginTop: '2px' }}>
+                  Mark toolheads with hardened nozzles to allow abrasive filaments.
+                </p>
+              </div>
 
               {/* MMU / Multi-material addons */}
               <fieldset className="form-fieldset" style={{ marginTop: '12px' }}>

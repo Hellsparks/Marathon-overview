@@ -367,6 +367,32 @@ router.post('/tool-slots/:printerId', async (req, res) => {
     const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(printerId);
     if (!printer) return res.status(404).json({ error: 'Printer not found' });
 
+    // Resolve which toolhead and lane this slot belongs to (for MMU/AFC gcode)
+    const mmus = db.prepare('SELECT tool_index, slot_count FROM printer_mmus WHERE printer_id = ? ORDER BY tool_index').all(printerId);
+    let gcodeCmd;
+    if (mmus.length > 0) {
+        // MMU mode: map flat slotIndex to toolhead + lane
+        let remaining = toolIndex;
+        let toolhead = 0;
+        let lane = 0;
+        for (const mmu of mmus) {
+            if (remaining < mmu.slot_count) {
+                toolhead = mmu.tool_index;
+                lane = remaining;
+                break;
+            }
+            remaining -= mmu.slot_count;
+        }
+        // AFC/MMU: SET_SPOOL_ID LANE=<lane> SPOOL_ID=<id> (common AFC pattern)
+        // Also set Spoolman active spool via SET_ACTIVE_SPOOL if available
+        const val = spoolId || 0;
+        gcodeCmd = `SET_ACTIVE_SPOOL ID=${val}`;
+    } else {
+        // Traditional multi-toolhead: T0, T1, etc.
+        const val = spoolId || 'None';
+        gcodeCmd = `SET_GCODE_VARIABLE MACRO=T${toolIndex} VARIABLE=spool_id VALUE=${val}`;
+    }
+
     try {
         const client = new MoonrakerClient(printer);
         if (spoolId) {
@@ -375,17 +401,15 @@ router.post('/tool-slots/:printerId', async (req, res) => {
                 VALUES (?, ?, ?)
                 ON CONFLICT(printer_id, tool_index) DO UPDATE SET spool_id = excluded.spool_id
             `).run(printerId, toolIndex, spoolId);
-
-            // Tell Klipper to update the macro variable so SET_ACTIVE_SPOOL works on tool change
-            try {
-                await client.sendGcode(`SET_GCODE_VARIABLE MACRO=T${toolIndex} VARIABLE=spool_id VALUE=${spoolId}`);
-            } catch { /* printer may be offline — slot is still saved */ }
         } else {
             db.prepare('DELETE FROM printer_tool_slots WHERE printer_id = ? AND tool_index = ?').run(printerId, toolIndex);
-            try {
-                await client.sendGcode(`SET_GCODE_VARIABLE MACRO=T${toolIndex} VARIABLE=spool_id VALUE=None`);
-            } catch { /* offline ok */ }
         }
+
+        // Send gcode — printer may be offline, slot assignment is still saved
+        try {
+            await client.sendGcode(gcodeCmd);
+        } catch { /* offline ok */ }
+
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

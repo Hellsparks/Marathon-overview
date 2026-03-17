@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getPrinters } from '../api/printers';
+import { getPrinters, reorderPrinters } from '../api/printers';
 
 const PrintersContext = createContext(null);
 
@@ -25,8 +25,20 @@ export function PrintersProvider({ children }) {
         refresh();
     }, [refresh]);
 
+    const reorder = useCallback(async (orderedIds) => {
+        // Optimistic: reorder locally first
+        setPrinters(prev => {
+            const map = new Map(prev.map(p => [p.id, p]));
+            return orderedIds.map(id => map.get(id)).filter(Boolean);
+        });
+        try {
+            const data = await reorderPrinters(orderedIds);
+            setPrinters(data);
+        } catch { /* optimistic state is close enough */ }
+    }, []);
+
     return (
-        <PrintersContext.Provider value={{ printers, loading, error, refresh }}>
+        <PrintersContext.Provider value={{ printers, loading, error, refresh, reorder }}>
             {children}
         </PrintersContext.Provider>
     );
