@@ -55,24 +55,28 @@ router.post('/spoolman', async (req, res) => {
             { entity: 'filament', payload: { name: 'Hueforge TD', key: 'hue_td', field_type: 'float', unit: 'TD' }, setting: 'hueforge_td_field' },
             { entity: 'filament', payload: { name: 'Has printed swatch', key: 'swatch', field_type: 'boolean' }, setting: 'swatch_extra_field' },
             { entity: 'filament', payload: { name: 'OrcaSlicer Config', key: 'orcaslicer_config', field_type: 'text' }, setting: 'orcaslicer_config_field' },
+            { entity: 'filament', payload: { name: 'Material Modifier', key: 'material_modifier', field_type: 'text' }, setting: 'material_modifier_field' },
         ];
 
         for (const { entity, payload, setting } of extraFields) {
             try {
-                // Check if field already exists
-                const existingRes = await fetch(`${baseUrl}/api/v1/field/${entity}/${payload.key}`, { signal: AbortSignal.timeout(5000) });
-                if (existingRes.ok) {
-                    // Already exists — just save the setting mapping
-                    const upsert = db.prepare("UPDATE settings SET value = ? WHERE key = ?").run(payload.key, setting);
-                    if (upsert.changes === 0) db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(setting, payload.key);
-                    fieldsCreated.push(payload.key);
-                    continue;
+                // Check if field already exists by listing all fields
+                const listRes = await fetch(`${baseUrl}/api/v1/field/${entity}`, { signal: AbortSignal.timeout(5000) });
+                if (listRes.ok) {
+                    const fields = await listRes.json();
+                    if (fields.find(f => f.key === payload.key)) {
+                        const upsert = db.prepare("UPDATE settings SET value = ? WHERE key = ?").run(payload.key, setting);
+                        if (upsert.changes === 0) db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run(setting, payload.key);
+                        fieldsCreated.push(payload.key);
+                        continue;
+                    }
                 }
-                // Create it
-                const createRes = await fetch(`${baseUrl}/api/v1/field/${entity}`, {
+                // Create: POST /api/v1/field/{entity}/{key}
+                const { key, ...body } = payload;
+                const createRes = await fetch(`${baseUrl}/api/v1/field/${entity}/${key}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify(body),
                     signal: AbortSignal.timeout(5000)
                 });
                 if (createRes.ok) {

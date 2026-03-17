@@ -10,7 +10,7 @@
 const BASE_TYPES = ['PETG', 'PLA', 'ABS', 'ASA', 'HIPS', 'PVA', 'TPU', 'TPE', 'PC', 'PA', 'FLEX', 'NYLON'];
 
 // Variant suffixes that don't change the base polymer
-const VARIANT_RE = /[\s\-+]*(HF|HS|LW|Silk|Matte|Tough|Pro|Max|Ultra|Basic|Speed|Rapid|Galaxy|Sparkle|Glow|Clear|Transparent|Translucent|Eco|Bio|ST|Plus|\+)(?=[\s\-]|$)/gi;
+const VARIANT_RE = /[\s\-+]*(HF|HS|LW|Silk\s*Rainbow|Silk\s*TriColor|Silk\s*BiColor|Silk|Matte|Tough|Pro|Max|Ultra|Basic|Speed|Rapid|Galaxy|Glitter|Glow|Metal|BiColor|TriColor|Rainbow|Clear|Transparent|Translucent|Eco|Bio|ST|Plus|\+)(?=[\s\-]|$)/gi;
 
 // Abrasive filler suffixes (Carbon Fibre, Glass Fibre, Aramid Fibre)
 const ABRASIVE_RE = /\b(CF|GF|AF)\d*\b/i;
@@ -38,9 +38,11 @@ export function normalizeFilamentType(material) {
 
 /**
  * Returns true if the material contains an abrasive filler (CF/GF/AF).
+ * Checks both the material string and the separate material_modifier extra field.
  * These require a hardened nozzle.
  */
-export function isAbrasiveFilament(material) {
+export function isAbrasiveFilament(material, modifier) {
+    if (modifier && ABRASIVE_RE.test(modifier)) return true;
     if (!material) return false;
     return ABRASIVE_RE.test(material);
 }

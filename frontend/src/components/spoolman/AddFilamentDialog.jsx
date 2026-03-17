@@ -7,6 +7,7 @@ import { onReading as coloriometerOnReading, getLastReading, getStatus as colori
 import { buildColorStyle, isMultiColor } from '../../utils/colorUtils';
 
 const COMMON_MATERIALS = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'PLA+', 'PA', 'PC', 'HIPS', 'PVA'];
+const COMMON_MODIFIERS = ['Silk', 'Silk BiColor', 'Silk TriColor', 'Silk Rainbow', 'Matte', 'CF', 'GF', 'HF', 'HT', 'EF', 'HS', '95A', '85A', '70A', '60A', 'Tough', 'Pro', 'Galaxy', 'Glitter', 'Glow', 'Metal', 'BiColor', 'TriColor', 'Rainbow'];
 
 function hexToRgb(hex) {
     const h = (hex || '').replace('#', '').slice(0, 6).padEnd(6, '0');
@@ -80,6 +81,9 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
     const [vendors, setVendors] = useState([]);
     const [extraFields, setExtraFields] = useState([]);
     const [orcaslicerFieldKey, setOrcaslicerFieldKey] = useState('');
+
+    const [modifierFieldKey, setModifierFieldKey] = useState('');
+    const [swatchFieldKey, setSwatchFieldKey] = useState('');
 
     const [showOrcaPanel, setShowOrcaPanel] = useState(false);
     const [orcaslicerDefaults, setOrcaslicerDefaults] = useState({});
@@ -204,6 +208,8 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                 setVendors(v || []);
                 setExtraFields(f || []);
                 setTdFieldKey(s?.hueforge_td_field || '');
+                setModifierFieldKey(s?.material_modifier_field || '');
+                setSwatchFieldKey(s?.swatch_extra_field || '');
                 setOrcaslicerFieldKey(s?.orcaslicer_config_field || '');
                 
                 if (s?.orcaslicer_defaults) {
@@ -485,6 +491,23 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                         </datalist>
                     </div>
 
+                    {modifierFieldKey && (
+                        <div className="sm-field">
+                            <label className="sm-label">Modifier</label>
+                            <input
+                                className="sm-input"
+                                type="text"
+                                list="sm-modifiers"
+                                placeholder="e.g. Silk, CF, HF"
+                                value={extra[modifierFieldKey] ?? ''}
+                                onChange={e => setExtraVal(modifierFieldKey, e.target.value)}
+                            />
+                            <datalist id="sm-modifiers">
+                                {COMMON_MODIFIERS.map(m => <option key={m} value={m} />)}
+                            </datalist>
+                        </div>
+                    )}
+
                     <div className="sm-field sm-field-full">
                         <label className="sm-label">Color</label>
 
@@ -719,7 +742,7 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                         <input className="sm-input" type="text" placeholder="Optional" value={comment} onChange={e => setComment(e.target.value)} />
                     </div>
 
-                    {extraFields.map(f => {
+                    {extraFields.filter(f => f.key !== modifierFieldKey && f.key !== orcaslicerFieldKey).map(f => {
                         if (f.field_type === 'boolean') {
                             const isChecked = extra[f.key] === true || extra[f.key] === 'true';
                             return (
@@ -740,7 +763,7 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                                             {f.name}
                                         </label>
                                     </div>
-                                    {f.key === 'swatch' && (
+                                    {swatchFieldKey && f.key === swatchFieldKey && (
                                         <button
                                             type="button"
                                             className="btn"

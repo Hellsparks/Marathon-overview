@@ -55,6 +55,8 @@ export default function SettingsPage() {
   const [swatchPromptSaved, setSwatchPromptSaved] = useState(false);
   const [orcaslicerField, setOrcaslicerField] = useState('');
   const [orcaslicerFieldSaved, setOrcaslicerFieldSaved] = useState('');
+  const [modifierField, setModifierField] = useState('');
+  const [modifierFieldSaved, setModifierFieldSaved] = useState('');
   const [storageLocationVal, setStorageLocationVal] = useState('Storage');
   const [storageLocationSaved, setStorageLocationSaved] = useState('Storage');
   const [storageLocationBusy, setStorageLocationBusy] = useState(false);
@@ -132,6 +134,8 @@ export default function SettingsPage() {
       setSwatchPromptSaved(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
       setOrcaslicerField(s.orcaslicer_config_field || '');
       setOrcaslicerFieldSaved(s.orcaslicer_config_field || '');
+      setModifierField(s.material_modifier_field || '');
+      setModifierFieldSaved(s.material_modifier_field || '');
     }).catch(() => { });
     getStorageLocation().then(r => {
       const loc = r.storage_location || 'Storage';
@@ -201,6 +205,15 @@ export default function SettingsPage() {
     try {
       await updateSetting('orcaslicer_config_field', val);
       setOrcaslicerFieldSaved(val);
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function handleModifierFieldSave(val) {
+    try {
+      await updateSetting('material_modifier_field', val);
+      setModifierFieldSaved(val);
     } catch (e) {
       alert(e.message);
     }
@@ -426,6 +439,11 @@ export default function SettingsPage() {
           settingKey = 'orcaslicer_config_field';
           setterFunc = val => { setOrcaslicerField(val); setOrcaslicerFieldSaved(val); };
           break;
+        case 'material_modifier':
+          payload = { name: 'Material Modifier', key: 'material_modifier', field_type: 'text' };
+          settingKey = 'material_modifier_field';
+          setterFunc = val => { setModifierField(val); setModifierFieldSaved(val); };
+          break;
         default:
           return;
       }
@@ -472,12 +490,12 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleExport(vendorIds) {
+  async function handleExport(opts) {
     setShowExportDialog(false);
     setExportBusy(true);
     setExportError('');
     try {
-      await exportSpoolman(vendorIds);
+      await exportSpoolman(opts);
     } catch (e) {
       setExportError(e.message);
     } finally {
@@ -990,39 +1008,33 @@ export default function SettingsPage() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
                 OrcaSlicer Filament Profiles
               </label>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                <input
-                  type="checkbox"
-                  id="orcaslicerEnabled"
-                  checked={!!orcaslicerField}
+              <div className="settings-row">
+                <select
+                  className="spoolman-filter-select"
+                  style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
+                  value={orcaslicerField}
                   onChange={e => {
-                      const enabled = e.target.checked;
-                      if (enabled) {
-                        // Need to find or auto-create the field
-                        const existing = extraFields.find(f => f.key === 'slicer');
-                        if (existing) {
-                          setOrcaslicerField(existing.key);
-                          handleOrcaslicerFieldSave(existing.key);
-                        } else {
-                          handleAutoCreateField('slicer');
-                        }
-                      } else {
-                        setOrcaslicerField('');
-                        handleOrcaslicerFieldSave('');
-                      }
-                    }}
-                  style={{
-                    appearance: 'none', WebkitAppearance: 'none', width: '20px', height: '20px',
-                    border: '2px solid var(--border)', borderRadius: '4px', cursor: 'pointer',
-                    backgroundColor: 'var(--surface)', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', flexShrink: 0, accentColor: 'var(--primary, #0ea5e9)'
+                    setOrcaslicerField(e.target.value);
+                    handleOrcaslicerFieldSave(e.target.value);
                   }}
-                />
-                <label htmlFor="orcaslicerEnabled" style={{ fontSize: '13px', cursor: 'pointer', userSelect: 'none' }}>
-                  Enable OrcaSlicer settings panel and export options for filaments.
-                </label>
+                >
+                  <option value="">— not set —</option>
+                  {extraFields.map(f => (
+                    <option key={f.key} value={f.key}>{f.name} ({f.key})</option>
+                  ))}
+                </select>
+                {orcaslicerField === orcaslicerFieldSaved && orcaslicerField && (
+                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved &#10003;</span>
+                )}
+                {!orcaslicerField && (
+                  <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => handleAutoCreateField('orcaslicer')}>
+                    Auto-Create Text Field
+                  </button>
+                )}
               </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                Stores OrcaSlicer filament settings for export. Enables the OrcaSlicer panel and export options.
+              </p>
 
               {!!orcaslicerField && (
                 <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1032,11 +1044,41 @@ export default function SettingsPage() {
                   <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => setShowOrcaDefaults(true)}>
                     Configure Defaults
                   </button>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-                    Download a `.zip` archive containing all OrcaSlicer configuration JSON files.
-                  </p>
                 </div>
               )}
+            {/* Material Modifier Field */}
+            <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
+                Material Modifier (Silk, CF, GF, HF, etc.)
+              </label>
+              <div className="settings-row">
+                <select
+                  className="spoolman-filter-select"
+                  style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
+                  value={modifierField}
+                  onChange={e => {
+                    setModifierField(e.target.value);
+                    handleModifierFieldSave(e.target.value);
+                  }}
+                >
+                  <option value="">— not set —</option>
+                  {extraFields.map(f => (
+                    <option key={f.key} value={f.key}>{f.name} ({f.key})</option>
+                  ))}
+                </select>
+                {modifierField === modifierFieldSaved && modifierField && (
+                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved &#10003;</span>
+                )}
+                {!modifierField && (
+                  <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => handleAutoCreateField('material_modifier')}>
+                    Auto-Create Text Field
+                  </button>
+                )}
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                Stores the filament variant (Silk, CF, GF, Matte, 95A, etc.) separately from the base material type. Used for abrasive detection and filtering.
+              </p>
+            </div>
             </div>
           </div>
         </div>

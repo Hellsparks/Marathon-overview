@@ -23,6 +23,7 @@ router.post('/', (req, res) => {
     firmware_type = 'moonraker',
     serial_number = null,
     scrape_css_path = null,
+    slicer_api_key = null,
   } = req.body;
 
   const port = req.body.port ?? defaultPort(firmware_type);
@@ -37,14 +38,14 @@ router.post('/', (req, res) => {
   const db = getDb();
   const nextOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM printers').get().n;
   const result = db.prepare(
-    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path, sort_order)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO printers (name, host, port, api_key, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path, slicer_api_key, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     name, host, port, api_key || null,
     bed_width, bed_depth, bed_height,
     typeof filament_types === 'string' ? filament_types : JSON.stringify(filament_types),
     toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number || null,
-    scrape_css_path || null, nextOrder
+    scrape_css_path || null, slicer_api_key || null, nextOrder
   );
 
   const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(result.lastInsertRowid);
@@ -54,7 +55,7 @@ router.post('/', (req, res) => {
 
 // PUT /api/printers/:id
 router.put('/:id', (req, res) => {
-  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path, hardened_tools } = req.body;
+  const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path, hardened_tools, slicer_api_key } = req.body;
   if (firmware_type !== undefined && !VALID_FIRMWARE_TYPES.includes(firmware_type)) {
     return res.status(400).json({ error: `firmware_type must be one of: ${VALID_FIRMWARE_TYPES.join(', ')}` });
   }
@@ -65,7 +66,7 @@ router.put('/:id', (req, res) => {
   db.prepare(
     `UPDATE printers SET name=?, host=?, port=?, api_key=?, enabled=?,
      bed_width=?, bed_depth=?, bed_height=?, filament_types=?, toolhead_count=?, preset_id=?, custom_css=?, theme_mode=?, firmware_type=?, serial_number=?, scrape_css_path=?,
-     hardened_tools=?,
+     hardened_tools=?, slicer_api_key=?,
      updated_at=datetime('now')
      WHERE id=?`
   ).run(
@@ -90,6 +91,7 @@ router.put('/:id', (req, res) => {
     hardened_tools !== undefined
       ? (typeof hardened_tools === 'string' ? hardened_tools : JSON.stringify(hardened_tools))
       : (printer.hardened_tools || '[]'),
+    slicer_api_key !== undefined ? (slicer_api_key || null) : printer.slicer_api_key,
     req.params.id
   );
 

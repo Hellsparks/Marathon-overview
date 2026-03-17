@@ -412,7 +412,8 @@ SPOOL WEIGHT: Always include spool_weight when it is known or can be found — i
       properties: {
         name: { type: 'string', description: 'Color/variant only — no material or brand. e.g. "Blue Green", "Silk Gold", "Bicolor Red Blue"' },
         vendor_id: { type: 'number', description: 'Vendor/manufacturer ID (from list_vendors)' },
-        material: { type: 'string', description: 'Polymer type only, e.g. "PLA", "PETG", "TPU95A". No color or brand.' },
+        material: { type: 'string', description: 'Base polymer type only, e.g. "PLA", "PETG", "TPU", "ABS". Do NOT include modifiers like Silk, CF, GF, HF here — use material_modifier instead.' },
+        material_modifier: { type: 'string', description: 'Material variant/modifier separate from base material. e.g. "Silk", "CF", "GF", "HF", "HT", "Matte", "Metal", "Glitter", "BiColor", "TriColor", "Rainbow", "Silk BiColor", "Silk TriColor", "Silk Rainbow", "95A". Omit for standard/unmodified filaments.' },
         density: { type: 'number', description: 'Density in g/cm³, e.g. 1.24 for PLA' },
         diameter: { type: 'number', description: 'Filament diameter in mm, e.g. 1.75' },
         weight: { type: 'number', description: 'Net filament weight per spool in grams, e.g. 1000' },
@@ -447,7 +448,8 @@ Same naming and color rules as create_filament:
         filament_id: { type: 'number', description: 'ID of the filament profile to update' },
         name: { type: 'string', description: 'Color/variant only — no material or brand prefix' },
         vendor_id: { type: 'number' },
-        material: { type: 'string', description: 'Polymer type only, e.g. "PLA", "TPU95A"' },
+        material: { type: 'string', description: 'Base polymer type only, e.g. "PLA", "PETG", "TPU". No modifiers.' },
+        material_modifier: { type: 'string', description: 'Material variant/modifier, e.g. "Silk", "CF", "GF", "HF", "Matte", "Metal", "Glitter", "BiColor", "TriColor", "Rainbow", "Silk BiColor", "Silk TriColor", "Silk Rainbow", "95A"' },
         density: { type: 'number' },
         diameter: { type: 'number' },
         weight: { type: 'number' },
@@ -783,22 +785,24 @@ async function handleTool(name, args) {
     case 'create_filament':
     case 'update_filament': {
       const isUpdate = name === 'update_filament';
-      const { filament_id, url, swatch, pressure_advance, extruder_temp, bed_temp, ...body } = args;
+      const { filament_id, url, swatch, pressure_advance, material_modifier, extruder_temp, bed_temp, ...body } = args;
       // Spoolman stores temps under settings_ prefix
       if (extruder_temp !== undefined) body.settings_extruder_temp = extruder_temp;
       if (bed_temp !== undefined) body.settings_bed_temp = bed_temp;
 
-      // Fetch settings to map url and swatch to the correct extra fields configured in Marathon
+      // Fetch settings to map url, swatch, modifier to the correct extra fields configured in Marathon
       let settings = {};
       try { settings = await get('/api/settings'); } catch (e) { /* ignore */ }
-      const urlKey = settings.url_extra_field || 'url';
-      const swatchKey = settings.swatch_extra_field || 'swatch';
+      const urlKey = settings.url_extra_field;
+      const swatchKey = settings.swatch_extra_field;
+      const modifierKey = settings.material_modifier_field;
 
       // Extra fields
       const extra = { ...(body.extra || {}) };
-      if (url !== undefined) extra[urlKey] = `"${url}"`;
-      if (swatch !== undefined) extra[swatchKey] = String(swatch);
+      if (url !== undefined && urlKey) extra[urlKey] = `"${url}"`;
+      if (swatch !== undefined && swatchKey) extra[swatchKey] = String(swatch);
       if (pressure_advance !== undefined) extra['pressure_advance'] = String(pressure_advance);
+      if (material_modifier !== undefined && modifierKey) extra[modifierKey] = material_modifier;
       if (Object.keys(extra).length) body.extra = extra;
       return isUpdate
         ? patch(`/api/spoolman/filaments/${filament_id}`, body)
@@ -875,7 +879,13 @@ NAME: Color/variant only. Strip the material type and brand completely.
   ✓ "White Brown"   ✓ "Silk Gold"   ✓ "Blue Green"
   ✗ "PLA Bicolor White/Brown"   ✗ "PolyTerra Matte Black"
 
-MATERIAL: Polymer type only — "PLA", "PETG", "TPU95A". No color, no brand.
+MATERIAL: Base polymer type only — "PLA", "PETG", "TPU", "ABS". No color, no brand, no modifiers.
+
+MATERIAL MODIFIER: Separate field for variants like "Silk", "CF", "GF", "HF", "HT", "Matte", "Metal", "Glitter", "BiColor", "TriColor", "Rainbow", "Silk BiColor", "Silk TriColor", "Silk Rainbow", "95A", "85A".
+  ✓ material="PLA", material_modifier="Silk"
+  ✓ material="PLA", material_modifier="CF"
+  ✓ material="TPU", material_modifier="95A"
+  ✗ material="PLA Silk"   ✗ material="TPU95A"   ✗ material="PLA CF"
 
 COLOR — THIS IS CRITICAL:
   • If the filament is described as bicolor, multicolor, dual-color, or color-shifting in ANY way:

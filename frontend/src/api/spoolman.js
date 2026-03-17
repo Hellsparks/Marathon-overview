@@ -269,14 +269,14 @@ export async function getExportPreview() {
     return r.json();
 }
 
-/** Download Spoolman data as a JSON file. If vendorIds provided, only those vendors. */
-export async function exportSpoolman(vendorIds) {
+/** Download Spoolman data as a JSON file. Options: { filament_ids, vendor_ids, include_spools } */
+export async function exportSpoolman(opts) {
     let r;
-    if (vendorIds && vendorIds.length > 0) {
+    if (opts && (opts.filament_ids?.length > 0 || opts.vendor_ids?.length > 0 || opts.include_spools === false)) {
         r = await fetch(`${API}/export`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ vendor_ids: vendorIds }),
+            body: JSON.stringify(opts),
         });
     } else {
         r = await fetch(`${API}/export`);

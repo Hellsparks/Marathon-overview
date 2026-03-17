@@ -7,7 +7,7 @@ router.get('/', (req, res) => {
   const db = getDb();
   try {
     const tasks = db.prepare('SELECT * FROM maintenance_tasks ORDER BY name').all();
-    const printers = db.prepare('SELECT id, name, host, port, api_key, theme_mode, custom_css, runtime_s FROM printers WHERE enabled = 1 ORDER BY name').all();
+    const printers = db.prepare('SELECT id, name, host, port, api_key, theme_mode, custom_css, runtime_s FROM printers WHERE enabled = 1 ORDER BY sort_order, name').all();
     const intervals = db.prepare('SELECT task_id, printer_id, interval_hours FROM maintenance_intervals').all();
     const history = db.prepare(`
       SELECT task_id, printer_id, performed_at, runtime_s_at_performance

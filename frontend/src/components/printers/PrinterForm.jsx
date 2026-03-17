@@ -24,6 +24,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
     custom_css: printer?.custom_css ?? '',
     theme_mode: printer?.theme_mode ?? 'global',
     scrape_css_path: printer?.scrape_css_path ?? '',
+    slicer_api_key: printer?.slicer_api_key ?? '',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -150,6 +151,7 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
         filament_types: JSON.stringify(form.filament_types || []),
         hardened_tools: JSON.stringify(form.hardened_tools || []),
         scrape_css_path: form.scrape_css_path || null,
+        slicer_api_key: form.slicer_api_key || null,
         // If scrape mode was set but firmware changed away from Moonraker, reset to global
         theme_mode: form.firmware_type !== 'moonraker' && form.theme_mode === 'scrape'
           ? 'global'
@@ -299,6 +301,27 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                   </button>
                 </div>
               </label>
+
+              {form.firmware_type !== 'bambu' && (
+                <label className="form-label">
+                  Slicer API Key{' '}
+                  <span className="form-optional">(for OrcaSlicer "Upload and Print")</span>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input className="form-input" value={form.slicer_api_key}
+                      onChange={e => set('slicer_api_key', e.target.value)}
+                      placeholder="Paste into OrcaSlicer's API key field"
+                      style={{ flex: 1, fontFamily: 'monospace', fontSize: '12px' }} autoComplete="off" />
+                    <button type="button" className="btn btn-sm"
+                      onClick={() => set('slicer_api_key', crypto.randomUUID().replace(/-/g, ''))}
+                      style={{ whiteSpace: 'nowrap' }}>
+                      Generate
+                    </button>
+                  </div>
+                  <span className="form-optional" style={{ display: 'block', marginTop: '2px' }}>
+                    Set Marathon's URL as the OctoPrint host in your slicer and this key as the API key. "Upload and Print" will auto-start on this printer.
+                  </span>
+                </label>
+              )}
 
               {form.firmware_type !== 'moonraker' && (
                 <p className="text-muted" style={{ fontSize: '12px', marginTop: '4px' }}>

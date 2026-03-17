@@ -10,6 +10,7 @@ import { useRightPanel } from '../contexts/RightPanelContext';
 import ViewToggle from '../components/common/ViewToggle';
 import { normalizeFilamentType, isAbrasiveFilament } from '../utils/materialUtils';
 import { buildColorStyle, isMultiColor } from '../utils/colorUtils';
+import { getSettings } from '../api/settings';
 
 // Module-level drag source — lives outside React, no closure staleness possible
 let _dragSlotSource = null;
@@ -89,6 +90,7 @@ export default function SpoolmanPage() {
 
     const [showAddSpool, setShowAddSpool] = useState(false);
     const [storageLocation, setStorageLocationState] = useState('Storage');
+    const [modifierFieldKey, setModifierFieldKey] = useState('');
     const [openBusy, setOpenBusy] = useState({});
 
     // AMS state for Bambu printers
@@ -167,6 +169,13 @@ export default function SpoolmanPage() {
         const interval = setInterval(fetchSpools, 10000);
         return () => clearInterval(interval);
     }, [fetchSpools]);
+
+    // Load settings once
+    useEffect(() => {
+        getSettings().then(s => {
+            setModifierFieldKey(s?.material_modifier_field || '');
+        }).catch(() => {});
+    }, []);
 
     // Fetch bambu warnings once on load
     useEffect(() => { fetchWarningsIfNeeded(); }, [fetchWarningsIfNeeded]);
@@ -908,8 +917,11 @@ export default function SpoolmanPage() {
                                                     </div>
                                                     <span className="spool-card-material">
                                                         {f.material || '—'}
-                                                        {isAbrasiveFilament(f.material) && (
+                                                        {isAbrasiveFilament(f.material, modifierFieldKey && f.extra?.[modifierFieldKey]) && (
                                                             <span className="spool-card-abrasive-badge" title="Abrasive filler — requires hardened nozzle">⬡ HN</span>
+                                                        )}
+                                                        {modifierFieldKey && f.extra?.[modifierFieldKey] && (
+                                                            <span style={{ marginLeft: '4px', padding: '1px 5px', borderRadius: '3px', background: 'rgba(255,255,255,0.07)', fontSize: '10px' }}>{f.extra[modifierFieldKey]}</span>
                                                         )}
                                                         {f.multi_color_hexes
                                                             ? <span className="spool-card-hex">{f.multi_color_hexes.split(',').length} colors · {f.multi_color_direction === 'coaxial' ? 'coaxial' : 'longitudinal'}</span>
@@ -977,8 +989,11 @@ export default function SpoolmanPage() {
                                                     <span className="spool-card-name">{f.name || `Filament #${f.id}`}</span>
                                                     <span className="spool-card-material">
                                                         {f.material || '—'}
-                                                        {isAbrasiveFilament(f.material) && (
+                                                        {isAbrasiveFilament(f.material, modifierFieldKey && f.extra?.[modifierFieldKey]) && (
                                                             <span className="spool-card-abrasive-badge" title="Abrasive filler — requires hardened nozzle">⬡ HN</span>
+                                                        )}
+                                                        {modifierFieldKey && f.extra?.[modifierFieldKey] && (
+                                                            <span style={{ marginLeft: '4px', padding: '1px 5px', borderRadius: '3px', background: 'rgba(255,255,255,0.07)', fontSize: '10px' }}>{f.extra[modifierFieldKey]}</span>
                                                         )}
                                                         {f.multi_color_hexes
                                                             ? <span className="spool-card-hex">{f.multi_color_hexes.split(',').length} colors · {f.multi_color_direction === 'coaxial' ? 'coaxial' : 'longitudinal'}</span>

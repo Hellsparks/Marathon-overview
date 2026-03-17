@@ -48,6 +48,7 @@ export default function FilamentsPage() {
     const [swatchField, setSwatchField] = useState(null);
     const [urlField, setUrlField] = useState(null);
     const [orcaslicerField, setOrcaslicerField] = useState(null);
+    const [modifierField, setModifierField] = useState(null);
 
     const load = useCallback(async () => {
         try {
@@ -57,6 +58,7 @@ export default function FilamentsPage() {
             setSwatchField(s?.swatch_extra_field || null);
             setUrlField(s?.url_extra_field || null);
             setOrcaslicerField(s?.orcaslicer_config_field || null);
+            setModifierField(s?.material_modifier_field || null);
             setError(null);
         } catch (e) {
             setError(e.message);
@@ -197,7 +199,7 @@ export default function FilamentsPage() {
         );
     });
 
-    const displayExtraFields = extraFields.filter(f => f.key !== swatchField && f.key !== orcaslicerField);
+    const displayExtraFields = extraFields.filter(f => f.key !== swatchField && f.key !== orcaslicerField && f.key !== modifierField);
 
     return (
         <div className="page">
@@ -283,6 +285,7 @@ export default function FilamentsPage() {
                                     <th>Name</th>
                                     <th>Manufacturer</th>
                                     <th>Material</th>
+                                    {modifierField && <th>Modifier</th>}
                                     <th>Hex</th>
                                     <th>RAL</th>
                                     <th>Diameter</th>
@@ -306,6 +309,9 @@ export default function FilamentsPage() {
                                             <td className="sm-catalogue-name">{f.name}</td>
                                             <td className="sm-catalogue-muted">{f.vendor?.name || '—'}</td>
                                             <td className="sm-catalogue-muted">{f.material || '—'}</td>
+                                            {modifierField && (
+                                                <td className="sm-catalogue-muted">{f.extra?.[modifierField] || '—'}</td>
+                                            )}
                                             <td className="sm-catalogue-muted" style={{ fontFamily: 'monospace' }}>
                                                 {f.color_hex ? `#${f.color_hex.slice(0, 6).toUpperCase()}` : '—'}
                                             </td>
@@ -322,7 +328,7 @@ export default function FilamentsPage() {
                                             )}
                                             {displayExtraFields.map(ef => (
                                                 <td key={ef.key} className="sm-catalogue-muted">
-                                                    {ef.key === 'url' && f.extra?.[ef.key]
+                                                    {urlField && ef.key === urlField && f.extra?.[ef.key]
                                                         ? <a href={toAbsUrl(f.extra[ef.key])} target="_blank" rel="noopener noreferrer" className="sm-link">Link</a>
                                                         : (f.extra?.[ef.key] ?? '—')}
                                                 </td>
@@ -372,6 +378,9 @@ export default function FilamentsPage() {
                                             <span className="spool-card-name" style={{ fontSize: '15px' }}>{f.name}</span>
                                             <span className="spool-card-material">
                                                 {f.material || '—'}
+                                                {modifierField && f.extra?.[modifierField] && (
+                                                    <span style={{ marginLeft: '4px', padding: '1px 5px', borderRadius: '3px', background: 'rgba(255,255,255,0.07)', fontSize: '10px' }}>{f.extra[modifierField]}</span>
+                                                )}
                                                 {f.color_hex && (
                                                     <span className="spool-card-hex">#{f.color_hex.toUpperCase()}</span>
                                                 )}

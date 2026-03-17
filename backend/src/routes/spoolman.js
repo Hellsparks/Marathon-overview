@@ -700,8 +700,18 @@ router.post('/fields/:entity', async (req, res) => {
     if (!allowed.includes(req.params.entity))
         return res.status(400).json({ error: 'Invalid entity type' });
     try {
-        const { entity_type, ...fieldBody } = req.body;
-        const r = await fetch(`${url}/api/v1/field/${req.params.entity}`, {
+        const { entity_type, key, ...fieldBody } = req.body;
+        const entity = req.params.entity;
+        if (!key) return res.status(400).json({ error: 'key is required' });
+        // Check if field already exists by listing all fields and checking for key
+        const listRes = await fetch(`${url}/api/v1/field/${entity}`, { signal: AbortSignal.timeout(5000) });
+        if (listRes.ok) {
+            const fields = await listRes.json();
+            const existing = fields.find(f => f.key === key);
+            if (existing) return res.json(existing);
+        }
+        // Create: POST /api/v1/field/{entity}/{key} with {name, field_type, ...} in body
+        const r = await fetch(`${url}/api/v1/field/${entity}/${key}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(fieldBody),
@@ -711,7 +721,10 @@ router.post('/fields/:entity', async (req, res) => {
             const err = await r.json().catch(() => ({}));
             return res.status(r.status).json({ error: spoolmanErrorText(err, r.statusText) });
         }
-        res.json(await r.json());
+        // Spoolman returns the full list; find our newly created field
+        const result = await r.json();
+        const created = Array.isArray(result) ? result.find(f => f.key === key) : result;
+        res.json(created || { key });
     } catch (err) {
         res.status(502).json({ error: err.message });
     }
@@ -918,8 +931,27 @@ router.get('/settings', async (_req, res) => {
 
 // ── Export / Import ──────────────────────────────────────────────────────────
 
+/** Known material modifiers — parsed from material string for filtering. */
+const MATERIAL_MODIFIERS = ['Silk Rainbow', 'Silk TriColor', 'Silk BiColor', 'Silk', 'Matte', 'GF', 'CF', 'HF', 'HT', 'EF', 'HS', '95A', '85A', '70A', '60A', 'Tough', 'Pro', 'Galaxy', 'Glitter', 'Glow', 'Metal', 'BiColor', 'TriColor', 'Rainbow'];
+
+/** Parse a material string into { base, modifier }. e.g. "PLA Silk" → { base: "PLA", modifier: "Silk" } */
+function parseMaterial(material) {
+    if (!material) return { base: '', modifier: '' };
+    // Check extra field first — handled caller-side
+    // Parse from string: try known modifiers
+    const upper = material.toUpperCase();
+    for (const mod of MATERIAL_MODIFIERS) {
+        const modUpper = mod.toUpperCase();
+        if (upper.includes(modUpper) && upper !== modUpper) {
+            const base = material.replace(new RegExp(`\\s*${mod}\\s*`, 'i'), '').trim();
+            return { base: base || material, modifier: mod };
+        }
+    }
+    return { base: material, modifier: '' };
+}
+
 /** Shared helper: fetch all Spoolman data and build the export payload. */
-async function buildExportPayload(url, vendorIds) {
+async function buildExportPayload(url, { filamentIds, vendorIds, includeSpools = true } = {}) {
     const fetchJson = async (path) => {
         const r = await fetch(`${url}${path}`, { signal: AbortSignal.timeout(15000) });
         if (!r.ok) throw new Error(`Spoolman ${r.status} for ${path}`);
@@ -942,21 +974,38 @@ async function buildExportPayload(url, vendorIds) {
     let vendors = allVendors;
     let filaments = allFilaments;
     let spools = allSpools;
+    let partial = false;
 
-    // If vendor IDs provided, filter to only those vendors and their filaments/spools
-    if (vendorIds && vendorIds.length > 0) {
+    // Filter by specific filament IDs (finest granularity)
+    if (filamentIds && filamentIds.length > 0) {
+        const idSet = new Set(filamentIds);
+        filaments = allFilaments.filter(f => idSet.has(f.id));
+        // Auto-include vendors referenced by selected filaments
+        const neededVendorIds = new Set(filaments.map(f => f.vendor?.id).filter(Boolean));
+        vendors = allVendors.filter(v => neededVendorIds.has(v.id));
+        partial = true;
+    } else if (vendorIds && vendorIds.length > 0) {
         const idSet = new Set(vendorIds);
         vendors = allVendors.filter(v => idSet.has(v.id));
         filaments = allFilaments.filter(f => f.vendor?.id !== undefined && idSet.has(f.vendor.id));
-        const filamentIdSet = new Set(filaments.map(f => f.id));
-        spools = allSpools.filter(s => s.filament?.id !== undefined && filamentIdSet.has(s.filament.id));
+        partial = true;
+    }
+
+    // Filter spools to match selected filaments
+    if (includeSpools) {
+        if (partial) {
+            const filamentIdSet = new Set(filaments.map(f => f.id));
+            spools = allSpools.filter(s => s.filament?.id !== undefined && filamentIdSet.has(s.filament.id));
+        }
+    } else {
+        spools = [];
     }
 
     return {
         export_version: 2,
         exported_at: new Date().toISOString(),
         currency,
-        partial: !!(vendorIds && vendorIds.length > 0),
+        partial,
         vendors,
         filaments,
         spools,
@@ -964,7 +1013,7 @@ async function buildExportPayload(url, vendorIds) {
     };
 }
 
-// GET /api/spoolman/export/preview — list vendors with filament/spool counts for selection UI
+// GET /api/spoolman/export/preview — return filaments with vendor/material info for selection UI
 router.get('/export/preview', async (_req, res) => {
     const url = getSpoolmanUrl();
     if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
@@ -980,37 +1029,51 @@ router.get('/export/preview', async (_req, res) => {
             fetchJson('/api/v1/spool'),
         ]);
 
-        // Count filaments and spools per vendor
-        const filamentCounts = {};
-        const spoolCounts = {};
-        for (const f of filaments) {
-            const vid = f.vendor?.id;
-            if (vid !== undefined) filamentCounts[vid] = (filamentCounts[vid] || 0) + 1;
-        }
-        const filamentsByVendor = {};
-        for (const f of filaments) {
-            const vid = f.vendor?.id;
-            if (vid !== undefined) {
-                if (!filamentsByVendor[vid]) filamentsByVendor[vid] = new Set();
-                filamentsByVendor[vid].add(f.id);
-            }
-        }
+        // Spool count per filament
+        const spoolsByFilament = {};
         for (const s of spools) {
             const fid = s.filament?.id;
-            if (fid === undefined) continue;
-            for (const [vid, fids] of Object.entries(filamentsByVendor)) {
-                if (fids.has(fid)) spoolCounts[vid] = (spoolCounts[vid] || 0) + 1;
-            }
+            if (fid !== undefined) spoolsByFilament[fid] = (spoolsByFilament[fid] || 0) + 1;
         }
 
-        const preview = vendors.map(v => ({
-            id: v.id,
-            name: v.name,
-            filament_count: filamentCounts[v.id] || 0,
-            spool_count: spoolCounts[v.id] || 0,
-        }));
+        // Vendor name map
+        const vendorMap = Object.fromEntries(vendors.map(v => [v.id, v.name]));
 
-        res.json({ vendors: preview, total_filaments: filaments.length, total_spools: spools.length });
+        // Read modifier field key from settings (no hardcoded key)
+        const db = getDb();
+        const modRow = db.prepare("SELECT value FROM settings WHERE key = 'material_modifier_field'").get();
+        const modKey = modRow?.value || '';
+
+        // Build filament preview list
+        const filamentList = filaments.map(f => {
+            const extraMod = modKey ? (f.extra?.[modKey] || '') : '';
+            const { base, modifier } = parseMaterial(f.material);
+            return {
+                id: f.id,
+                name: f.name || '',
+                vendor_id: f.vendor?.id ?? null,
+                vendor_name: f.vendor?.id ? (vendorMap[f.vendor.id] || '') : '',
+                material: f.material || '',
+                material_base: base,
+                material_modifier: extraMod || modifier,
+                color_hex: f.color_hex || '',
+                multi_color_hexes: f.multi_color_hexes || null,
+                spool_count: spoolsByFilament[f.id] || 0,
+            };
+        });
+
+        // Unique values for filter dropdowns
+        const vendorNames = [...new Set(filamentList.map(f => f.vendor_name).filter(Boolean))].sort();
+        const materials = [...new Set(filamentList.map(f => f.material_base).filter(Boolean))].sort();
+        const modifiers = [...new Set(filamentList.map(f => f.material_modifier).filter(Boolean))].sort();
+
+        res.json({
+            filaments: filamentList,
+            vendors: vendorNames,
+            materials,
+            modifiers,
+            total_spools: spools.length,
+        });
     } catch (err) {
         res.status(502).json({ error: err.message });
     }
@@ -1021,7 +1084,7 @@ router.get('/export', async (_req, res) => {
     const url = getSpoolmanUrl();
     if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
     try {
-        const payload = await buildExportPayload(url, null);
+        const payload = await buildExportPayload(url);
         const dateStr = new Date().toISOString().slice(0, 10);
         res.setHeader('Content-Disposition', `attachment; filename="spoolman-backup-${dateStr}.json"`);
         res.setHeader('Content-Type', 'application/json');
@@ -1031,15 +1094,20 @@ router.get('/export', async (_req, res) => {
     }
 });
 
-// POST /api/spoolman/export — partial export filtered by vendor IDs
+// POST /api/spoolman/export — partial export filtered by filament/vendor IDs
 router.post('/export', async (req, res) => {
     const url = getSpoolmanUrl();
     if (!url) return res.status(400).json({ error: 'Spoolman URL not configured' });
-    const { vendor_ids } = req.body || {};
+    const { filament_ids, vendor_ids, include_spools } = req.body || {};
     try {
-        const payload = await buildExportPayload(url, vendor_ids || null);
+        const payload = await buildExportPayload(url, {
+            filamentIds: filament_ids || null,
+            vendorIds: vendor_ids || null,
+            includeSpools: include_spools !== false,
+        });
         const dateStr = new Date().toISOString().slice(0, 10);
-        const suffix = (vendor_ids && vendor_ids.length > 0) ? '-partial' : '';
+        const partial = (filament_ids?.length > 0 || vendor_ids?.length > 0);
+        const suffix = partial ? '-partial' : '';
         res.setHeader('Content-Disposition', `attachment; filename="spoolman-backup${suffix}-${dateStr}.json"`);
         res.setHeader('Content-Type', 'application/json');
         res.json(payload);
@@ -1175,12 +1243,13 @@ router.post('/import', async (req, res) => {
     try {
         // Create missing fields first
         for (const fieldDef of createFields) {
-            const { entity, ...def } = fieldDef;
+            const { entity, key, ...def } = fieldDef;
             try {
-                await spoolmanPost(`/api/v1/field/${entity}`, def);
-                push(`Created field "${def.name || def.key}" on ${entity}`);
+                // POST /api/v1/field/{entity}/{key}
+                await spoolmanPost(`/api/v1/field/${entity}/${key}`, def);
+                push(`Created field "${def.name || key}" on ${entity}`);
             } catch (err) {
-                push(`  Warning: could not create field "${def.key}": ${err.message}`);
+                push(`  Warning: could not create field "${key}": ${err.message}`);
             }
         }
 

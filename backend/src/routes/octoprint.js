@@ -7,6 +7,8 @@ const upload = require('../middleware/upload');
 const apiKeyAuth = require('../middleware/apiKeyAuth');
 const printerCache = require('../services/printerCache');
 const { parseGcodeFile } = require('../services/gcodeParser');
+const fileStorage = require('../services/fileStorage');
+const { getClient } = require('../services/clientFactory');
 
 // GET /api/version  — slicer connectivity test
 router.get('/version', (req, res) => {
@@ -60,19 +62,24 @@ router.get('/job', (req, res) => {
 });
 
 // POST /api/files/local  — slicer file upload (OctoPrint upload path)
-router.post('/files/local', apiKeyAuth, upload.single('file'), (req, res) => {
+// Supports "Upload and Print": if print=true in body AND a per-printer API key was used,
+// Marathon uploads the file to that printer and starts the print automatically.
+router.post('/files/local', apiKeyAuth, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const db = getDb();
   const slicerName = detectSlicer(req.headers['user-agent'] || '');
+  const wantPrint = req.body?.print === 'true' || req.body?.print === true;
+  const printer = req.targetPrinter || null;
 
   db.prepare(
     `INSERT OR IGNORE INTO gcode_files (filename, display_name, size_bytes, upload_source, slicer_name)
      VALUES (?, ?, ?, 'slicer', ?)`
   ).run(req.file.filename, req.file.originalname, req.file.size, slicerName);
 
-  // Parse G-code metadata for safety checks (runs in background after response)
   const record = db.prepare('SELECT * FROM gcode_files WHERE filename = ?').get(req.file.filename);
+
+  // Parse G-code metadata in background
   if (record) {
     parseGcodeFile(req.file.filename).then(meta => {
       if (meta) {
@@ -85,6 +92,34 @@ router.post('/files/local', apiKeyAuth, upload.single('file'), (req, res) => {
     }).catch(err => {
       console.error('[OctoPrint/GcodeParser]', err.message);
     });
+  }
+
+  // Auto-start on target printer if "Upload and Print" was requested
+  if (wantPrint && printer) {
+    const status = printerCache.get(String(printer.id));
+    const state = status?.print_stats?.state;
+    const isIdle = status?._online && (!state || state === 'standby' || state === 'complete' || state === 'cancelled' || state === 'error');
+
+    if (isIdle) {
+      try {
+        const fileBuffer = fileStorage.readFile(req.file.filename);
+        const client = getClient(printer);
+        await client.uploadFile(req.file.originalname, fileBuffer);
+        await client.startPrint(req.file.originalname);
+
+        // Record active job for poller tracking
+        db.prepare(
+          'INSERT OR REPLACE INTO printer_active_jobs (printer_id, plate_id, filename) VALUES (?, NULL, ?)'
+        ).run(printer.id, req.file.originalname);
+
+        console.log(`[OctoPrint] Auto-started "${req.file.originalname}" on "${printer.name}" (slicer upload-and-print)`);
+      } catch (err) {
+        console.error(`[OctoPrint] Auto-start failed on "${printer.name}":`, err.message);
+        // File is still saved — user can manually start from the UI
+      }
+    } else {
+      console.log(`[OctoPrint] Printer "${printer.name}" not idle (state=${state}), file saved but not auto-started`);
+    }
   }
 
   res.status(201).json({
