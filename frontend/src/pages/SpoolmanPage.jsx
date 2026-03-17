@@ -602,7 +602,7 @@ export default function SpoolmanPage() {
             <div className="spoolman-layout">
                 {/* Center: Spool inventory */}
                 <div className="spoolman-inventory">
-                    <div className="spoolman-filters-bar" style={{ position: 'relative' }}>
+                    <div className="spoolman-filters-bar" style={{ position: 'relative', zIndex: showFilterPopover ? 1000 : undefined }}>
                         <div className="spoolman-search-wrap" style={{ position: 'relative' }}>
                             <span className="spoolman-search-icon">🔍</span>
                             <input
@@ -622,6 +622,16 @@ export default function SpoolmanPage() {
                             </button>
                         </div>
 
+                        {showFilterPopover && (
+                            <div
+                                style={{
+                                    position: 'fixed',
+                                    inset: 0,
+                                    zIndex: 999,
+                                }}
+                                onClick={() => setShowFilterPopover(false)}
+                            />
+                        )}
                         {showFilterPopover && (
                             <div
                                 style={{
@@ -794,17 +804,6 @@ export default function SpoolmanPage() {
                             <button className="btn spoolman-add-btn" onClick={() => setShowAddSpool(true)} title="Add new spool" style={{ height: '40px', display: 'flex', alignItems: 'center' }}>+ Spool</button>
                         </div>
                     </div>
-
-                    {showFilterPopover && (
-                        <div
-                            style={{
-                                position: 'fixed',
-                                inset: 0,
-                                zIndex: 999,
-                            }}
-                            onClick={() => setShowFilterPopover(false)}
-                        />
-                    )}
 
                     <div className="spoolman-spool-list">
                     {loading ? (
