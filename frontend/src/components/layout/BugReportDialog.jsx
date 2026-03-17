@@ -54,11 +54,11 @@ export default function BugReportDialog({ onClose }) {
 
             const labels = [];
             if (issueType === 'bug') labels.push('bug');
-            if (issueType === 'feature') labels.push('enhancement');
+            if (issueType === 'feature') labels.push('Feature request');
             if (issueType === 'docs') labels.push('documentation');
 
             const url = new URL('https://github.com/Hellsparks/marathon-overview/issues/new');
-            url.searchParams.append('title', `[${issueType.toUpperCase()}] ${title}`);
+            url.searchParams.append('title', title);
             url.searchParams.append('body', body);
             url.searchParams.append('labels', labels.join(','));
 

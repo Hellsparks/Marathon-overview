@@ -83,7 +83,7 @@ router.post('/report-bug', async (req, res) => {
 
     const labels = [];
     if (type === 'bug') labels.push('bug');
-    if (type === 'feature') labels.push('enhancement');
+    if (type === 'feature') labels.push('Feature request');
     if (type === 'docs') labels.push('documentation');
 
     let body = description;
@@ -101,7 +101,7 @@ router.post('/report-bug', async (req, res) => {
                 'User-Agent': 'Marathon-Fleet-Manager'
             },
             body: JSON.stringify({
-                title: `[${type.toUpperCase()}] ${title}`,
+                title,
                 body,
                 labels
             })
