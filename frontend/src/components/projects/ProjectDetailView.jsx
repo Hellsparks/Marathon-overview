@@ -107,7 +107,8 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
     const [editName, setEditName] = useState('');
     const [editDueDate, setEditDueDate] = useState('');
     const [templateData, setTemplateData] = useState(null);
-    const [swapConfirm, setSwapConfirm] = useState(null); // { category_id, new_option_id, done_plates }
+    const [templateMap, setTemplateMap] = useState({}); // { templateId: templateData }
+    const [swapConfirm, setSwapConfirm] = useState(null); // { category_id, new_option_id, done_plates, instance_id }
 
     const fetchData = async () => {
         try {
@@ -124,12 +125,26 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
             setEditName(projRes.name);
             setEditDueDate(projRes.due_date || '');
 
-            // Fetch template data for category info (if from template)
-            if (projRes.template_id) {
-                fetch(`/api/templates/${projRes.template_id}`)
-                    .then(r => r.ok ? r.json() : null)
-                    .then(t => { if (t) setTemplateData(t); })
-                    .catch(() => {});
+            // Fetch template data for category info
+            // Multi-instance: fetch for each unique template used
+            const templateIds = new Set();
+            if (projRes.template_id) templateIds.add(projRes.template_id);
+            (projRes.instances || []).forEach(inst => templateIds.add(inst.template_id));
+
+            if (templateIds.size > 0) {
+                // Fetch all unique templates, merge into a map
+                const tplPromises = [...templateIds].map(tid =>
+                    fetch(`/api/templates/${tid}`).then(r => r.ok ? r.json() : null).catch(() => null)
+                );
+                Promise.all(tplPromises).then(results => {
+                    const tplMap = {};
+                    results.forEach(t => { if (t) tplMap[t.id] = t; });
+                    // For backwards compat, set templateData to the first/only template
+                    const first = results.find(Boolean);
+                    if (first) setTemplateData(first);
+                    // Store all template data keyed by id
+                    setTemplateMap(tplMap);
+                });
             }
 
             // Sync with Right Panel
@@ -312,17 +327,20 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
         }
     };
 
-    const handleSwapOption = async (categoryId, newOptionId, force = false) => {
+    const handleSwapOption = async (categoryId, newOptionId, instanceIdOrForce) => {
+        // instanceIdOrForce can be an instance_id (number) from the UI, or true/false for force
+        const force = instanceIdOrForce === true;
+        const instanceId = (typeof instanceIdOrForce === 'number') ? instanceIdOrForce : swapConfirm?.instance_id || null;
         try {
             setLoading(true);
             const res = await fetch(`/api/projects/${projectId}/swap-option`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ category_id: categoryId, new_option_id: newOptionId, force })
+                body: JSON.stringify({ category_id: categoryId, new_option_id: newOptionId, force, instance_id: instanceId })
             });
             const data = await res.json();
             if (data.warning && !force) {
-                setSwapConfirm({ category_id: categoryId, new_option_id: newOptionId, done_plates: data.done_plates, done_count: data.done_count });
+                setSwapConfirm({ category_id: categoryId, new_option_id: newOptionId, instance_id: instanceId, done_plates: data.done_plates, done_count: data.done_count });
                 setLoading(false);
                 return;
             }
@@ -339,24 +357,88 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
 
     // Group plates by category for display
     const groupPlates = () => {
-        if (!project?.plates) return [{ name: null, type: null, plates: [] }];
+        if (!project?.plates) return [];
+        const instances = project.instances || [];
+
+        // If multi-instance, group by instance first, then by category within each
+        if (instances.length > 0) {
+            const sections = [];
+            for (const inst of instances) {
+                const tplData = templateMap[inst.template_id];
+                const instPlates = project.plates.filter(p => p.instance_id === inst.id);
+
+                if (!tplData?.categories?.length) {
+                    sections.push({
+                        instanceId: inst.id,
+                        instanceLabel: inst.label || inst.template_name || `Instance #${inst.id}`,
+                        templateId: inst.template_id,
+                        groups: [{ name: null, type: null, categoryId: null, plates: instPlates }]
+                    });
+                    continue;
+                }
+
+                const groups = [];
+                const usedPlateIds = new Set();
+                for (const cat of tplData.categories) {
+                    const catPlates = instPlates.filter(p => p.category_id === cat.id);
+                    catPlates.forEach(p => usedPlateIds.add(p.id));
+
+                    if (cat.type === 'fixed') {
+                        groups.push({ name: cat.name, type: 'fixed', categoryId: cat.id, plates: catPlates });
+                    } else if (cat.type === 'choice') {
+                        const choice = project.category_choices?.find(c => c.category_id === cat.id && c.instance_id === inst.id);
+                        groups.push({
+                            name: cat.name, type: 'choice', categoryId: cat.id,
+                            chosenOptionId: choice?.option_id,
+                            chosenOptionName: choice?.option_name,
+                            options: cat.options,
+                            instanceId: inst.id,
+                            plates: catPlates
+                        });
+                    }
+                }
+                const uncategorized = instPlates.filter(p => !usedPlateIds.has(p.id));
+                if (uncategorized.length > 0) {
+                    groups.push({ name: null, type: null, categoryId: null, plates: uncategorized });
+                }
+
+                sections.push({
+                    instanceId: inst.id,
+                    instanceLabel: inst.label || inst.template_name || `Instance #${inst.id}`,
+                    templateId: inst.template_id,
+                    groups
+                });
+            }
+
+            // Loose files (no instance_id)
+            const loosePlates = project.plates.filter(p => !p.instance_id);
+            if (loosePlates.length > 0) {
+                sections.push({
+                    instanceId: null,
+                    instanceLabel: 'Additional Files',
+                    templateId: null,
+                    groups: [{ name: null, type: null, categoryId: null, plates: loosePlates }]
+                });
+            }
+
+            return sections;
+        }
+
+        // Legacy single-template (no instances array or empty)
         if (!templateData?.categories?.length) {
-            // No categories — single flat group
-            return [{ name: null, type: null, categoryId: null, plates: project.plates }];
+            return [{ instanceId: null, instanceLabel: null, templateId: null, groups: [{ name: null, type: null, categoryId: null, plates: project.plates }] }];
         }
 
         const groups = [];
         const usedPlateIds = new Set();
-
         for (const cat of templateData.categories) {
+            const catPlates = project.plates.filter(p => p.category_id === cat.id);
+            catPlates.forEach(p => usedPlateIds.add(p.id));
+
             if (cat.type === 'fixed') {
-                const catPlates = project.plates.filter(p => p.category_id === cat.id);
-                catPlates.forEach(p => usedPlateIds.add(p.id));
                 groups.push({ name: cat.name, type: 'fixed', categoryId: cat.id, plates: catPlates });
             } else if (cat.type === 'choice') {
                 const choice = project.category_choices?.find(c => c.category_id === cat.id);
-                const catPlates = project.plates.filter(p => p.category_id === cat.id);
-                catPlates.forEach(p => usedPlateIds.add(p.id));
                 groups.push({
                     name: cat.name, type: 'choice', categoryId: cat.id,
                     chosenOptionId: choice?.option_id,
@@ -366,14 +448,12 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                 });
             }
         }
-
-        // Uncategorized plates
         const uncategorized = project.plates.filter(p => !usedPlateIds.has(p.id));
         if (uncategorized.length > 0) {
             groups.push({ name: null, type: null, categoryId: null, plates: uncategorized });
         }
 
-        return groups;
+        return [{ instanceId: null, instanceLabel: null, templateId: null, groups }];
     };
 
     if (loading) return <div className="page"><div className="loading">Loading project...</div></div>;
@@ -467,41 +547,55 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                             <div style={{ fontSize: '14px', fontWeight: 600 }}>{progress}% Complete</div>
                         </div>
                         <div style={{ padding: '0 8px' }}>
-                            {groupPlates().map((group, gi) => (
-                                <React.Fragment key={group.categoryId ?? `uncategorized-${gi}`}>
-                                    {/* Category header */}
-                                    {group.name && (
+                            {groupPlates().map((section, si) => (
+                                <React.Fragment key={section.instanceId ?? `section-${si}`}>
+                                    {/* Instance header (only for multi-instance projects) */}
+                                    {section.instanceLabel && groupPlates().length > 1 && (
                                         <div style={{
-                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                            padding: '10px 12px 6px', marginTop: gi > 0 ? '4px' : 0,
-                                            borderTop: gi > 0 ? '2px solid var(--border)' : 'none'
+                                            padding: '12px 12px 4px',
+                                            marginTop: si > 0 ? '8px' : 0,
+                                            borderTop: si > 0 ? '3px solid var(--primary)' : 'none'
                                         }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-                                                    {group.name}
-                                                </span>
-                                                {group.type === 'choice' && group.chosenOptionName && (
-                                                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 15%, transparent)', padding: '2px 8px', borderRadius: '8px' }}>
-                                                        {group.chosenOptionName}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            {group.type === 'choice' && group.options && project.status !== 'archived' && (
-                                                <select
-                                                    className="form-select"
-                                                    value={group.chosenOptionId || ''}
-                                                    onChange={e => handleSwapOption(group.categoryId, Number(e.target.value))}
-                                                    style={{ width: 'auto', fontSize: '12px', padding: '2px 8px', height: '28px' }}
-                                                >
-                                                    {group.options.map(opt => (
-                                                        <option key={opt.id} value={opt.id}>{opt.name}</option>
-                                                    ))}
-                                                </select>
-                                            )}
+                                            <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text)' }}>
+                                                {section.instanceLabel}
+                                            </span>
                                         </div>
                                     )}
-                                    {/* Plates in this group */}
-                                    {group.plates.map((plate, i) => (
+                                    {section.groups.map((group, gi) => (
+                                        <React.Fragment key={group.categoryId ?? `uncategorized-${gi}`}>
+                                            {/* Category header */}
+                                            {group.name && (
+                                                <div style={{
+                                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                    padding: '10px 12px 6px', marginTop: gi > 0 ? '4px' : 0,
+                                                    borderTop: gi > 0 ? '2px solid var(--border)' : 'none'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                                                            {group.name}
+                                                        </span>
+                                                        {group.type === 'choice' && group.chosenOptionName && (
+                                                            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--primary)', background: 'color-mix(in srgb, var(--primary) 15%, transparent)', padding: '2px 8px', borderRadius: '8px' }}>
+                                                                {group.chosenOptionName}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {group.type === 'choice' && group.options && project.status !== 'archived' && (
+                                                        <select
+                                                            className="form-select"
+                                                            value={group.chosenOptionId || ''}
+                                                            onChange={e => handleSwapOption(group.categoryId, Number(e.target.value), group.instanceId)}
+                                                            style={{ width: 'auto', fontSize: '12px', padding: '2px 8px', height: '28px' }}
+                                                        >
+                                                            {group.options.map(opt => (
+                                                                <option key={opt.id} value={opt.id}>{opt.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {/* Plates in this group */}
+                                            {group.plates.map((plate, i) => (
                                         <div
                                             key={plate.id}
                                             style={{
@@ -518,7 +612,7 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                         >
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ fontWeight: 600, color: plate.status === 'done' ? 'var(--text-muted)' : 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {plate.display_name}
+                                                    {(plate.display_name || plate.filename || '').replace(/\.(gcode|3mf)$/i, '').replace(/^\d{10,}_/, '')}
                                                 </div>
                                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', display: 'flex', gap: '8px' }}>
                                                     {plate.estimated_time_s ? (
@@ -595,6 +689,8 @@ export default function ProjectDetailView({ projectId, onBack, filaments = [] })
                                                 )}
                                             </div>
                                         </div>
+                                    ))}
+                                        </React.Fragment>
                                     ))}
                                 </React.Fragment>
                             ))}

@@ -270,9 +270,24 @@ router.put('/:id', (req, res) => {
             const targetFolderId = folder_id !== undefined ? (folder_id || null) : existing.folder_id;
             updateTemplate.run(name, description || null, targetFolderId, templateId);
 
-            // Collect existing filenames before clearing
-            const existingPlates = db.prepare('SELECT id, filename FROM template_plates WHERE template_id = ?').all(templateId);
+            // Snapshot old template plates with their category/option context before we nuke everything
+            const existingPlates = db.prepare(`
+                SELECT tp.id, tp.filename, tp.category_id, tp.option_id,
+                       tc.name as cat_name, tco.name as opt_name
+                FROM template_plates tp
+                LEFT JOIN template_categories tc ON tp.category_id = tc.id
+                LEFT JOIN template_category_options tco ON tp.option_id = tco.id
+                WHERE tp.template_id = ?
+                ORDER BY tp.id
+            `).all(templateId);
             const existingFilenames = new Set(existingPlates.map(p => p.filename));
+
+            // Clean up project_category_choices that reference this template's categories
+            // (NOT NULL constraint on category_id conflicts with ON DELETE SET NULL)
+            const oldCatIds = db.prepare('SELECT id FROM template_categories WHERE template_id = ?').all(templateId).map(r => r.id);
+            if (oldCatIds.length > 0) {
+                db.prepare(`DELETE FROM project_category_choices WHERE category_id IN (${oldCatIds.map(() => '?').join(',')})`).run(...oldCatIds);
+            }
 
             // Clear everything (cascade handles plate_slots)
             db.prepare('DELETE FROM template_color_slots WHERE template_id = ?').run(templateId);
@@ -318,6 +333,79 @@ router.put('/:id', (req, res) => {
             for (const plate of plates) {
                 const fn = insertPlateRow(stmts, templateId, prefix, plate, null, null);
                 if (fn) newFilenames.add(fn);
+            }
+
+            // Remap project_plates.template_plate_id from old → new IDs
+            // Match by filename + category name + option name (not IDs, since those changed)
+            const newTemplatePlates = db.prepare(`
+                SELECT tp.id, tp.filename, tc.name as cat_name, tco.name as opt_name
+                FROM template_plates tp
+                LEFT JOIN template_categories tc ON tp.category_id = tc.id
+                LEFT JOIN template_category_options tco ON tp.option_id = tco.id
+                WHERE tp.template_id = ?
+                ORDER BY tp.id
+            `).all(templateId);
+
+            // Build composite key → [new_ids] for matching
+            const newByKey = {};
+            for (const np of newTemplatePlates) {
+                const key = `${np.filename}|${np.cat_name || ''}|${np.opt_name || ''}`;
+                (newByKey[key] = newByKey[key] || []).push(np.id);
+            }
+            // Build old_id → new_id by matching on same composite key, consuming in order
+            const oldByKey = {};
+            for (const op of existingPlates) {
+                const key = `${op.filename}|${op.cat_name || ''}|${op.opt_name || ''}`;
+                (oldByKey[key] = oldByKey[key] || []).push(op.id);
+            }
+            const oldToNew = {};
+            const usedNewIds = new Set();
+            // First pass: exact match on filename + category + option
+            for (const key of Object.keys(oldByKey)) {
+                const oldIds = oldByKey[key];
+                const newIds = newByKey[key] || [];
+                for (let k = 0; k < oldIds.length && k < newIds.length; k++) {
+                    oldToNew[oldIds[k]] = newIds[k];
+                    usedNewIds.add(newIds[k]);
+                }
+            }
+            // Second pass: unmatched old plates try filename-only match against unclaimed new plates
+            const unmatchedOld = existingPlates.filter(op => !(op.id in oldToNew));
+            if (unmatchedOld.length > 0) {
+                const newByFn = {};
+                for (const np of newTemplatePlates) {
+                    if (!usedNewIds.has(np.id)) {
+                        (newByFn[np.filename] = newByFn[np.filename] || []).push(np.id);
+                    }
+                }
+                for (const op of unmatchedOld) {
+                    const candidates = newByFn[op.filename];
+                    if (candidates && candidates.length > 0) {
+                        const newId = candidates.shift();
+                        oldToNew[op.id] = newId;
+                        usedNewIds.add(newId);
+                    }
+                }
+            }
+
+            // Update all project plates that reference this template
+            // Include both legacy (projects.template_id) and multi-instance (project_template_instances)
+            const affectedProjectIds = db.prepare(`
+                SELECT DISTINCT project_id FROM (
+                    SELECT id as project_id FROM projects WHERE template_id = ?
+                    UNION
+                    SELECT project_id FROM project_template_instances WHERE template_id = ?
+                )
+            `).all(templateId, templateId);
+            const updateRef = db.prepare('UPDATE project_plates SET template_plate_id = ? WHERE id = ?');
+            for (const proj of affectedProjectIds) {
+                const projPlates = db.prepare('SELECT id, template_plate_id FROM project_plates WHERE project_id = ?').all(proj.project_id);
+                for (const pp of projPlates) {
+                    const mapped = oldToNew[pp.template_plate_id];
+                    if (mapped) {
+                        updateRef.run(mapped, pp.id);
+                    }
+                }
             }
 
             // Cleanup files that were removed

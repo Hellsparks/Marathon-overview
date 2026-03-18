@@ -26,7 +26,7 @@ const embeddedLinks = [
   { to: '/extras', label: 'Extras', icon: '✦', end: true },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }) {
   const { printers } = usePrinters();
   const status = usePrinterStatus();
 
@@ -64,6 +64,8 @@ export default function Sidebar() {
   }
 
   // ── Normal browser mode ──────────────────────────────────────────────────
+  const handleClick = () => { if (onNavigate) onNavigate(); };
+
   return (
     <nav className="sidebar v-navigation-drawer v-navigation-drawer--fixed v-navigation-drawer--open">
       <div className="v-navigation-drawer__content" style={{ width: '100%' }}>
@@ -74,6 +76,7 @@ export default function Sidebar() {
             <NavLink
               to="/"
               end
+              onClick={handleClick}
               className={() => `sidebar-link nav-link v-list-item v-list-item--link${onDashboardExact ? activeClass : ''}`}
             >
               <span className="sidebar-icon">▦</span>
@@ -107,6 +110,7 @@ export default function Sidebar() {
           <li style={{ width: '100%' }}>
             <NavLink
               to="/files"
+              onClick={handleClick}
               className={() => `sidebar-link nav-link v-list-item v-list-item--link${onFiles ? activeClass : ''}`}
             >
               <span className="sidebar-icon">📁</span>
@@ -139,6 +143,7 @@ export default function Sidebar() {
           <li style={{ width: '100%' }}>
             <NavLink
               to="/spoolman"
+              onClick={handleClick}
               className={() => `sidebar-link nav-link v-list-item v-list-item--link${onSpoolman ? activeClass : ''}`}
             >
               <span className="sidebar-icon">🧵</span>
@@ -176,6 +181,7 @@ export default function Sidebar() {
             <li key={to} style={{ width: '100%' }}>
               <NavLink
                 to={to}
+                onClick={handleClick}
                 className={({ isActive }) => `sidebar-link nav-link v-list-item v-list-item--link${isActive ? activeClass : ''}`}
               >
                 <span className="sidebar-icon">{icon}</span>

@@ -47,7 +47,11 @@ router.get('/', (req, res) => {
             SELECT p.*,
                    (SELECT COUNT(*) FROM project_plates WHERE project_id = p.id) as total_plates,
                    (SELECT COUNT(*) FROM project_plates WHERE project_id = p.id AND status = 'done') as completed_plates,
-                   t.thumbnail_path
+                   COALESCE(t.thumbnail_path,
+                       (SELECT t2.thumbnail_path FROM project_template_instances pti
+                        JOIN project_templates t2 ON pti.template_id = t2.id
+                        WHERE pti.project_id = p.id ORDER BY pti.sort_order LIMIT 1)
+                   ) as thumbnail_path
             FROM projects p
             LEFT JOIN project_templates t ON p.template_id = t.id
             WHERE p.status = ?
@@ -101,86 +105,106 @@ router.get('/:id', (req, res) => {
             WHERE pcc.project_id = ?
         `).all(project.id);
 
+        // Include template instances for multi-template projects
+        project.instances = db.prepare(`
+            SELECT pti.*, t.name as template_name
+            FROM project_template_instances pti
+            LEFT JOIN project_templates t ON pti.template_id = t.id
+            WHERE pti.project_id = ?
+            ORDER BY pti.sort_order
+        `).all(project.id);
+
         res.json(project);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// POST /api/projects (Hybrid)
+/** Helper: insert plates for a single template instance into a project */
+function insertInstancePlates(projectId, instanceId, templateId, categoryChoices) {
+    const templatePlates = db.prepare(`SELECT * FROM template_plates WHERE template_id = ?`).all(templateId);
+    const categories = db.prepare(`SELECT * FROM template_categories WHERE template_id = ?`).all(templateId);
+    const insertPlate = db.prepare(`
+        INSERT INTO project_plates
+        (project_id, instance_id, filename, display_name, estimated_time_s, filament_usage_mm, filament_usage_g, sliced_for, sort_order,
+         filament_type, min_x, max_x, min_y, max_y, min_z, max_z, template_plate_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertChoice = db.prepare(`INSERT INTO project_category_choices (project_id, instance_id, category_id, option_id) VALUES (?, ?, ?, ?)`);
+
+    const selectedOptionIds = new Set();
+    const choiceCatIds = new Set();
+    for (const cat of categories) {
+        if (cat.type === 'choice') {
+            choiceCatIds.add(cat.id);
+            const chosenOptId = categoryChoices[cat.id] || categoryChoices[String(cat.id)];
+            if (chosenOptId) {
+                selectedOptionIds.add(Number(chosenOptId));
+                insertChoice.run(projectId, instanceId, cat.id, Number(chosenOptId));
+            }
+        }
+    }
+
+    for (const tp of templatePlates) {
+        if (tp.option_id && !selectedOptionIds.has(tp.option_id)) continue;
+        if (tp.category_id && choiceCatIds.has(tp.category_id) && !tp.option_id) continue;
+
+        insertPlate.run(
+            projectId, instanceId, tp.filename, tp.display_name,
+            tp.estimated_time_s, tp.filament_usage_mm, tp.filament_usage_g,
+            tp.sliced_for, tp.sort_order,
+            tp.filament_type || null,
+            tp.min_x || null, tp.max_x || null,
+            tp.min_y || null, tp.max_y || null,
+            tp.min_z || null, tp.max_z || null,
+            tp.id
+        );
+    }
+}
+
+// POST /api/projects (Hybrid — supports legacy single-template and new multi-instance)
 router.post('/', (req, res) => {
-    const { template_id, name, due_date, file_ids = [], color_assignments = [], category_choices = {}, folder_id } = req.body;
+    const { name, due_date, folder_id } = req.body;
     if (!name) return res.status(400).json({ error: 'Project name is required' });
 
     try {
         db.exec('BEGIN TRANSACTION');
         let projectId;
         try {
-            const run = db.prepare(`INSERT INTO projects (template_id, name, due_date, folder_id) VALUES (?, ?, ?, ?)`).run(template_id || null, name, due_date || null, folder_id || null);
+            const run = db.prepare(`INSERT INTO projects (template_id, name, due_date, folder_id) VALUES (?, ?, ?, ?)`).run(null, name, due_date || null, folder_id || null);
             projectId = run.lastInsertRowid;
 
-            if (template_id) {
-                // Flow A: Create from Template (category-aware)
-                const templatePlates = db.prepare(`SELECT * FROM template_plates WHERE template_id = ?`).all(template_id);
-                const categories = db.prepare(`SELECT * FROM template_categories WHERE template_id = ?`).all(template_id);
-                const insertPlate = db.prepare(`
-                    INSERT INTO project_plates
-                    (project_id, filename, display_name, estimated_time_s, filament_usage_mm, filament_usage_g, sliced_for, sort_order,
-                     filament_type, min_x, max_x, min_y, max_y, min_z, max_z, template_plate_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `);
-                const insertChoice = db.prepare(`INSERT INTO project_category_choices (project_id, category_id, option_id) VALUES (?, ?, ?)`);
+            const instances = req.body.instances || [];
+            const looseFiles = req.body.loose_files || [];
 
-                // Build set of selected option IDs
-                const selectedOptionIds = new Set();
-                // Also build set of choice category IDs (so we know which plates need option filtering)
-                const choiceCatIds = new Set();
-                for (const cat of categories) {
-                    if (cat.type === 'choice') {
-                        choiceCatIds.add(cat.id);
-                        const chosenOptId = category_choices[cat.id] || category_choices[String(cat.id)];
-                        if (chosenOptId) {
-                            selectedOptionIds.add(Number(chosenOptId));
-                            insertChoice.run(projectId, cat.id, Number(chosenOptId));
-                        }
-                    }
-                }
+            // Legacy compat: if no instances but template_id provided, create one instance
+            if (instances.length === 0 && req.body.template_id) {
+                instances.push({
+                    template_id: req.body.template_id,
+                    choices: req.body.category_choices || {},
+                    color_assignments: req.body.color_assignments || []
+                });
+            }
 
-                for (const tp of templatePlates) {
-                    // Skip plates from choice categories where a different option was selected
-                    if (tp.option_id && !selectedOptionIds.has(tp.option_id)) continue;
-                    // Skip plates from choice categories with no selection made
-                    if (tp.category_id && choiceCatIds.has(tp.category_id) && !tp.option_id) continue;
-
-                    insertPlate.run(
-                        projectId, tp.filename, tp.display_name,
-                        tp.estimated_time_s, tp.filament_usage_mm, tp.filament_usage_g,
-                        tp.sliced_for, tp.sort_order,
-                        tp.filament_type || null,
-                        tp.min_x || null, tp.max_x || null,
-                        tp.min_y || null, tp.max_y || null,
-                        tp.min_z || null, tp.max_z || null,
-                        tp.id
-                    );
-                }
-            } else if (file_ids.length > 0) {
-                // Flow B: Create from raw files
+            // Legacy compat: file_ids without instances
+            const legacyFileIds = req.body.file_ids || [];
+            if (instances.length === 0 && legacyFileIds.length > 0) {
                 const prefix = `prj${projectId}`;
                 const insertPlate = db.prepare(`
-                    INSERT INTO project_plates 
-                    (project_id, filename, display_name, estimated_time_s, filament_usage_mm, filament_usage_g, sliced_for, sort_order,
+                    INSERT INTO project_plates
+                    (project_id, instance_id, filename, display_name, estimated_time_s, filament_usage_mm, filament_usage_g, sliced_for, sort_order,
                      filament_type, min_x, max_x, min_y, max_y, min_z, max_z)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `);
 
                 let order = 0;
-                for (const fid of file_ids) {
+                for (const fid of legacyFileIds) {
                     const filename = facilitateFile(fid, prefix);
                     const meta = db.prepare(`SELECT * FROM gcode_metadata WHERE file_id = ?`).get(fid) || {};
                     const gfile = db.prepare(`SELECT filename, display_name FROM gcode_files WHERE id = ?`).get(fid);
 
                     insertPlate.run(
-                        projectId,
+                        projectId, null,
                         filename,
                         gfile?.display_name || filename,
                         meta.estimated_time_s || null,
@@ -189,25 +213,32 @@ router.post('/', (req, res) => {
                         meta.sliced_for || null,
                         order++,
                         meta.filament_type || null,
-                        meta.min_x || null,
-                        meta.max_x || null,
-                        meta.min_y || null,
-                        meta.max_y || null,
-                        meta.min_z || null,
-                        meta.max_z || null
+                        meta.min_x || null, meta.max_x || null,
+                        meta.min_y || null, meta.max_y || null,
+                        meta.min_z || null, meta.max_z || null
                     );
                 }
             }
 
-            // Insert color assignments if any
-            if (color_assignments.length > 0) {
-                const insertAssign = db.prepare(`
-                    INSERT INTO project_color_assignments (project_id, slot_key, spool_id, material, color_hex, vendor, spool_name)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                `);
-                for (const ca of color_assignments) {
+            // Process each template instance
+            const insertInstance = db.prepare(`INSERT INTO project_template_instances (project_id, template_id, label, sort_order) VALUES (?, ?, ?, ?)`);
+            const insertAssign = db.prepare(`
+                INSERT INTO project_color_assignments (project_id, instance_id, slot_key, spool_id, material, color_hex, vendor, spool_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            for (let i = 0; i < instances.length; i++) {
+                const inst = instances[i];
+                const instRun = insertInstance.run(projectId, inst.template_id, inst.label || null, i);
+                const instanceId = instRun.lastInsertRowid;
+
+                insertInstancePlates(projectId, instanceId, inst.template_id, inst.choices || {});
+
+                // Color assignments for this instance
+                const cas = Array.isArray(inst.color_assignments) ? inst.color_assignments : Object.values(inst.color_assignments || {});
+                for (const ca of cas) {
                     insertAssign.run(
-                        projectId,
+                        projectId, instanceId,
                         ca.slot_key,
                         ca.spool_id || null,
                         ca.material || null,
@@ -215,6 +246,51 @@ router.post('/', (req, res) => {
                         ca.vendor || null,
                         ca.spool_name || null
                     );
+                }
+            }
+
+            // Loose files
+            if (looseFiles.length > 0) {
+                const prefix = `prj${projectId}`;
+                const insertPlate = db.prepare(`
+                    INSERT INTO project_plates
+                    (project_id, instance_id, filename, display_name, estimated_time_s, filament_usage_mm, filament_usage_g, sliced_for, sort_order,
+                     filament_type, min_x, max_x, min_y, max_y, min_z, max_z)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+                let order = instances.length * 100; // offset loose files after instance plates
+                for (const lf of looseFiles) {
+                    const filename = facilitateFile(lf.file_id, prefix);
+                    const meta = db.prepare(`SELECT * FROM gcode_metadata WHERE file_id = ?`).get(lf.file_id) || {};
+                    const gfile = db.prepare(`SELECT filename, display_name FROM gcode_files WHERE id = ?`).get(lf.file_id);
+
+                    insertPlate.run(
+                        projectId, null,
+                        filename,
+                        gfile?.display_name || filename,
+                        meta.estimated_time_s || null,
+                        meta.filament_usage_mm || null,
+                        meta.filament_usage_g || null,
+                        meta.sliced_for || null,
+                        order++,
+                        meta.filament_type || null,
+                        meta.min_x || null, meta.max_x || null,
+                        meta.min_y || null, meta.max_y || null,
+                        meta.min_z || null, meta.max_z || null
+                    );
+
+                    // If a spool was assigned for the loose file, insert assignment
+                    if (lf.spool_id) {
+                        insertAssign.run(
+                            projectId, null,
+                            `loose_${lf.file_id}`,
+                            lf.spool_id,
+                            lf.material || null,
+                            lf.color_hex || null,
+                            lf.vendor || null,
+                            lf.spool_name || null
+                        );
+                    }
                 }
             }
 
@@ -300,27 +376,88 @@ router.patch('/:id/folder', (req, res) => {
     }
 });
 
+// POST /api/projects/:id/instances — add a template instance to an existing project
+router.post('/:id/instances', (req, res) => {
+    const { template_id, label, choices = {}, color_assignments = [] } = req.body;
+    if (!template_id) return res.status(400).json({ error: 'template_id is required' });
+
+    try {
+        const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        db.exec('BEGIN TRANSACTION');
+        try {
+            const maxOrder = db.prepare('SELECT MAX(sort_order) as m FROM project_template_instances WHERE project_id = ?').get(project.id);
+            const sortOrder = (maxOrder?.m ?? -1) + 1;
+
+            const instRun = db.prepare('INSERT INTO project_template_instances (project_id, template_id, label, sort_order) VALUES (?, ?, ?, ?)')
+                .run(project.id, template_id, label || null, sortOrder);
+            const instanceId = instRun.lastInsertRowid;
+
+            insertInstancePlates(project.id, instanceId, template_id, choices);
+
+            const insertAssign = db.prepare(`
+                INSERT INTO project_color_assignments (project_id, instance_id, slot_key, spool_id, material, color_hex, vendor, spool_name)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            const cas = Array.isArray(color_assignments) ? color_assignments : Object.values(color_assignments);
+            for (const ca of cas) {
+                insertAssign.run(project.id, instanceId, ca.slot_key, ca.spool_id || null, ca.material || null, ca.color_hex || null, ca.vendor || null, ca.spool_name || null);
+            }
+
+            db.exec('COMMIT');
+            res.status(201).json({ success: true, instance_id: instanceId });
+        } catch (txnErr) {
+            db.exec('ROLLBACK');
+            throw txnErr;
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE /api/projects/:id/instances/:instanceId — remove a template instance from a project
+router.delete('/:id/instances/:instanceId', (req, res) => {
+    try {
+        const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
+        if (!project) return res.status(404).json({ error: 'Project not found' });
+
+        // ON DELETE CASCADE on instance_id handles project_plates, project_category_choices, project_color_assignments
+        const info = db.prepare('DELETE FROM project_template_instances WHERE id = ? AND project_id = ?').run(req.params.instanceId, project.id);
+        if (info.changes === 0) return res.status(404).json({ error: 'Instance not found' });
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // PATCH /api/projects/:id/swap-option — swap a choice category's selected alternative
 router.patch('/:id/swap-option', (req, res) => {
-    const { category_id, new_option_id, force } = req.body;
+    const { category_id, new_option_id, force, instance_id } = req.body;
     if (!category_id || !new_option_id) return res.status(400).json({ error: 'category_id and new_option_id are required' });
 
     try {
         const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id);
         if (!project) return res.status(404).json({ error: 'Project not found' });
 
-        // Find current choice for this category
-        const currentChoice = db.prepare('SELECT * FROM project_category_choices WHERE project_id = ? AND category_id = ?')
-            .get(project.id, category_id);
+        // Find current choice for this category (scoped by instance_id if provided)
+        const currentChoice = instance_id
+            ? db.prepare('SELECT * FROM project_category_choices WHERE project_id = ? AND category_id = ? AND instance_id = ?').get(project.id, category_id, instance_id)
+            : db.prepare('SELECT * FROM project_category_choices WHERE project_id = ? AND category_id = ?').get(project.id, category_id);
 
         if (currentChoice && currentChoice.option_id === Number(new_option_id)) {
             return res.json({ success: true, message: 'Already selected' });
         }
 
-        // Find plates that belong to the old option
+        // Find plates that belong to the old option (scoped by instance_id)
+        const oldPlatesQuery = instance_id
+            ? 'SELECT * FROM project_plates WHERE project_id = ? AND instance_id = ? AND template_plate_id IN (SELECT id FROM template_plates WHERE option_id = ?)'
+            : 'SELECT * FROM project_plates WHERE project_id = ? AND template_plate_id IN (SELECT id FROM template_plates WHERE option_id = ?)';
         const oldPlates = currentChoice
-            ? db.prepare('SELECT * FROM project_plates WHERE project_id = ? AND template_plate_id IN (SELECT id FROM template_plates WHERE option_id = ?)')
-                .all(project.id, currentChoice.option_id)
+            ? (instance_id
+                ? db.prepare(oldPlatesQuery).all(project.id, instance_id, currentChoice.option_id)
+                : db.prepare(oldPlatesQuery).all(project.id, currentChoice.option_id))
             : [];
 
         // Check for printed plates
@@ -337,24 +474,29 @@ router.patch('/:id/swap-option', (req, res) => {
         // Perform swap in transaction
         db.exec('BEGIN TRANSACTION');
         try {
-            // Remove old option's plates
+            // Remove old option's plates (scoped by instance_id)
             if (currentChoice) {
-                db.prepare('DELETE FROM project_plates WHERE project_id = ? AND template_plate_id IN (SELECT id FROM template_plates WHERE option_id = ?)')
-                    .run(project.id, currentChoice.option_id);
+                if (instance_id) {
+                    db.prepare('DELETE FROM project_plates WHERE project_id = ? AND instance_id = ? AND template_plate_id IN (SELECT id FROM template_plates WHERE option_id = ?)')
+                        .run(project.id, instance_id, currentChoice.option_id);
+                } else {
+                    db.prepare('DELETE FROM project_plates WHERE project_id = ? AND template_plate_id IN (SELECT id FROM template_plates WHERE option_id = ?)')
+                        .run(project.id, currentChoice.option_id);
+                }
             }
 
             // Insert new option's plates from template
             const newTemplatePlates = db.prepare('SELECT * FROM template_plates WHERE option_id = ?').all(new_option_id);
             const insertPlate = db.prepare(`
                 INSERT INTO project_plates
-                (project_id, filename, display_name, estimated_time_s, filament_usage_mm, filament_usage_g, sliced_for, sort_order,
+                (project_id, instance_id, filename, display_name, estimated_time_s, filament_usage_mm, filament_usage_g, sliced_for, sort_order,
                  filament_type, min_x, max_x, min_y, max_y, min_z, max_z, template_plate_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
 
             for (const tp of newTemplatePlates) {
                 insertPlate.run(
-                    project.id, tp.filename, tp.display_name,
+                    project.id, instance_id || null, tp.filename, tp.display_name,
                     tp.estimated_time_s, tp.filament_usage_mm, tp.filament_usage_g,
                     tp.sliced_for, tp.sort_order,
                     tp.filament_type || null,
@@ -367,11 +509,16 @@ router.patch('/:id/swap-option', (req, res) => {
 
             // Update or insert the choice record
             if (currentChoice) {
-                db.prepare('UPDATE project_category_choices SET option_id = ? WHERE project_id = ? AND category_id = ?')
-                    .run(new_option_id, project.id, category_id);
+                if (instance_id) {
+                    db.prepare('UPDATE project_category_choices SET option_id = ? WHERE project_id = ? AND category_id = ? AND instance_id = ?')
+                        .run(new_option_id, project.id, category_id, instance_id);
+                } else {
+                    db.prepare('UPDATE project_category_choices SET option_id = ? WHERE project_id = ? AND category_id = ?')
+                        .run(new_option_id, project.id, category_id);
+                }
             } else {
-                db.prepare('INSERT INTO project_category_choices (project_id, category_id, option_id) VALUES (?, ?, ?)')
-                    .run(project.id, category_id, new_option_id);
+                db.prepare('INSERT INTO project_category_choices (project_id, instance_id, category_id, option_id) VALUES (?, ?, ?, ?)')
+                    .run(project.id, instance_id || null, category_id, new_option_id);
             }
 
             db.exec('COMMIT');
@@ -458,7 +605,7 @@ router.post('/:id/plates/:plateId/print', async (req, res) => {
 
 // Update project filament assignment
 router.patch('/:id/filament', async (req, res) => {
-    const { slot_key, spool_id } = req.body;
+    const { slot_key, spool_id, instance_id } = req.body;
     if (!slot_key) return res.status(400).json({ error: 'slot_key is required' });
 
     try {
@@ -481,11 +628,19 @@ router.patch('/:id/filament', async (req, res) => {
             }
         }
 
-        db.prepare(`
-            UPDATE project_color_assignments 
-            SET spool_id = ?, material = ?, color_hex = ?, vendor = ?, spool_name = ?
-            WHERE project_id = ? AND slot_key = ?
-        `).run(spool_id || null, material, color_hex, vendor, spool_name, req.params.id, slot_key);
+        if (instance_id) {
+            db.prepare(`
+                UPDATE project_color_assignments
+                SET spool_id = ?, material = ?, color_hex = ?, vendor = ?, spool_name = ?
+                WHERE project_id = ? AND slot_key = ? AND instance_id = ?
+            `).run(spool_id || null, material, color_hex, vendor, spool_name, req.params.id, slot_key, instance_id);
+        } else {
+            db.prepare(`
+                UPDATE project_color_assignments
+                SET spool_id = ?, material = ?, color_hex = ?, vendor = ?, spool_name = ?
+                WHERE project_id = ? AND slot_key = ?
+            `).run(spool_id || null, material, color_hex, vendor, spool_name, req.params.id, slot_key);
+        }
 
         res.json({ success: true });
     } catch (err) {

@@ -11,6 +11,7 @@ import ViewToggle from '../components/common/ViewToggle';
 import { normalizeFilamentType, isAbrasiveFilament } from '../utils/materialUtils';
 import { buildColorStyle, isMultiColor } from '../utils/colorUtils';
 import { getSettings } from '../api/settings';
+import useIsMobile from '../hooks/useIsMobile';
 
 // Module-level drag source — lives outside React, no closure staleness possible
 let _dragSlotSource = null;
@@ -64,6 +65,11 @@ function matchesColor(hex, queryTokens) {
 export default function SpoolmanPage() {
     const { printers } = usePrinters();
     const { selected, setSelected } = useRightPanel() || {};
+    const isMobile = useIsMobile();
+    const [tapSelectedSpool, setTapSelectedSpool] = useState(null);
+    // Mobile: which slot is being picked for — { printerId, type: 'single'|'tray'|'tool', trayId?, toolIndex? }
+    const [pickingSlot, setPickingSlot] = useState(null);
+    const [slotPickerSearch, setSlotPickerSearch] = useState('');
     const [spools, setSpools] = useState([]);
     const [search, setSearch] = useState('');
     const [viewMode, setViewMode] = useState('grid-small');
@@ -483,6 +489,46 @@ export default function SpoolmanPage() {
         }
     }
 
+    // Mobile: open spool picker for a specific slot
+    function openSlotPicker(printerId, type, extra = {}) {
+        if (!isMobile) return;
+        setPickingSlot({ printerId, type, ...extra });
+        setSlotPickerSearch('');
+    }
+
+    // Mobile: assign picked spool to the active slot
+    async function handleSlotPickSpool(spool) {
+        if (!pickingSlot) return;
+        const { printerId, type, trayId, toolIndex } = pickingSlot;
+        if (type === 'single') {
+            startGuard(spool, printerId);
+        } else if (type === 'tray') {
+            startGuard(spool, printerId, trayId);
+        } else if (type === 'tool') {
+            try {
+                await setToolSlot(printerId, toolIndex, spool.id);
+                setToolSlots(prev => ({
+                    ...prev,
+                    [printerId]: { ...(prev[printerId] || {}), [toolIndex]: spool.id },
+                }));
+                setToolSlotSpools(prev => ({ ...prev, [spool.id]: spool }));
+            } catch (err) {
+                alert(`Failed to assign spool: ${err.message}`);
+            }
+        }
+        setPickingSlot(null);
+    }
+
+    // Legacy tap-to-assign (kept for non-slot contexts)
+    function handleSpoolTap(spool) {
+        if (!isMobile) return;
+        if (tapSelectedSpool?.id === spool.id) {
+            setTapSelectedSpool(null);
+        } else {
+            setTapSelectedSpool(spool);
+        }
+    }
+
     async function handleClearSpool(printerId) {
         try {
             await setActiveSpool(printerId, null);
@@ -841,10 +887,10 @@ export default function SpoolmanPage() {
                                         return (
                                             <tr
                                                 key={spool.id}
-                                                style={{ cursor: 'pointer', backgroundColor: isSelected ? 'var(--surface2)' : 'transparent' }}
-                                                onClick={() => setSelected?.({ data: spool })}
-                                                draggable
-                                                onDragStart={e => onDragStart(e, spool)}
+                                                style={{ cursor: 'pointer', backgroundColor: isSelected ? 'var(--surface2)' : tapSelectedSpool?.id === spool.id ? 'var(--primary-d)' : 'transparent' }}
+                                                onClick={() => { handleSpoolTap(spool); setSelected?.({ data: spool }); }}
+                                                draggable={!isMobile}
+                                                onDragStart={!isMobile ? e => onDragStart(e, spool) : undefined}
                                                 onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'var(--surface2)'; }}
                                                 onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent'; }}
                                             >
@@ -890,10 +936,10 @@ export default function SpoolmanPage() {
                                     return (
                                         <div
                                             key={spool.id}
-                                            className={`spoolman-spool-card${selected?.data?.id === spool.id ? ' spool-card-selected' : ''}`}
-                                            draggable
-                                            onDragStart={e => onDragStart(e, spool)}
-                                            onClick={() => setSelected?.({ data: spool })}
+                                            className={`spoolman-spool-card${selected?.data?.id === spool.id ? ' spool-card-selected' : ''}${tapSelectedSpool?.id === spool.id ? ' spool-tap-selected' : ''}`}
+                                            draggable={!isMobile}
+                                            onDragStart={!isMobile ? e => onDragStart(e, spool) : undefined}
+                                            onClick={() => { handleSpoolTap(spool); setSelected?.({ data: spool }); }}
                                             style={{ backgroundColor: 'var(--surface)' }}
                                         >
                                             <div className="spool-card-header">
@@ -1025,7 +1071,7 @@ export default function SpoolmanPage() {
                 {/* Right column: Printer list */}
                 <div className="spoolman-printers">
                     <h3 className="spoolman-column-title">Printers</h3>
-                    <p className="spoolman-hint">Drag a spool onto a printer to assign it</p>
+                    <p className="spoolman-hint">{isMobile ? 'Tap a slot to assign a spool' : 'Drag a spool onto a printer to assign it'}</p>
                     {printers.map(p => {
                         const active = getActiveSpool(p.id);
                         const isTarget = dropTarget === p.id;
@@ -1036,28 +1082,33 @@ export default function SpoolmanPage() {
                                 printer={p}
                                 activeSpool={active}
                                 isTarget={isTarget}
-                                onDragOver={e => onDragOver(e, p.id)}
-                                onDragLeave={onDragLeave}
-                                onDrop={e => onDrop(e, p)}
+                                onDragOver={!isMobile ? e => onDragOver(e, p.id) : undefined}
+                                onDragLeave={!isMobile ? onDragLeave : undefined}
+                                onDrop={!isMobile ? e => onDrop(e, p) : undefined}
                                 onClearSpool={() => handleClearSpool(p.id)}
                                 printerStatus={pStatus}
+                                // Mobile tap-to-pick
+                                onTapAssign={isMobile ? () => openSlotPicker(p.id, 'single') : undefined}
+                                onTrayTap={isMobile ? (trayId) => openSlotPicker(p.id, 'tray', { trayId }) : undefined}
+                                onToolSlotTap={isMobile ? (toolIndex) => openSlotPicker(p.id, 'tool', { toolIndex }) : undefined}
+                                tapActive={false}
                                 // Bambu AMS props
                                 amsSlots={amsSlots[p.id] || {}}
                                 amsSpools={amsSpools}
                                 dropTargetTray={dropTargetTray}
-                                onTrayDragOver={onTrayDragOver}
-                                onTrayDragLeave={onTrayDragLeave}
-                                onTrayDrop={onTrayDrop}
+                                onTrayDragOver={!isMobile ? onTrayDragOver : undefined}
+                                onTrayDragLeave={!isMobile ? onTrayDragLeave : undefined}
+                                onTrayDrop={!isMobile ? onTrayDrop : undefined}
                                 onClearTray={handleClearTray}
                                 mmuAssignments={printerMmus[p.id] || []}
                                 toolSlots={toolSlots[p.id] || {}}
                                 toolSlotSpools={toolSlotSpools}
                                 dropTargetToolSlot={dropTargetToolSlot}
-                                onToolSlotMouseDown={onToolSlotMouseDown}
-                                onToolSlotDragStart={onToolSlotDragStart}
-                                onToolSlotDragOver={onToolSlotDragOver}
-                                onToolSlotDragLeave={onToolSlotDragLeave}
-                                onToolSlotDrop={onToolSlotDrop}
+                                onToolSlotMouseDown={!isMobile ? onToolSlotMouseDown : undefined}
+                                onToolSlotDragStart={!isMobile ? onToolSlotDragStart : undefined}
+                                onToolSlotDragOver={!isMobile ? onToolSlotDragOver : undefined}
+                                onToolSlotDragLeave={!isMobile ? onToolSlotDragLeave : undefined}
+                                onToolSlotDrop={!isMobile ? onToolSlotDrop : undefined}
                                 onClearToolSlot={handleClearToolSlot}
                             />
                         );
@@ -1161,6 +1212,69 @@ export default function SpoolmanPage() {
                     onCreated={() => { setShowAddSpool(false); fetchSpools(); }}
                 />
             )}
+
+            {/* Mobile: spool search picker when a printer slot is tapped */}
+            {isMobile && pickingSlot && (() => {
+                const printer = printers.find(p => p.id === pickingSlot.printerId);
+                const slotLabel = pickingSlot.type === 'tray' ? `Slot ${pickingSlot.trayId + 1}`
+                    : pickingSlot.type === 'tool' ? `T${pickingSlot.toolIndex}`
+                    : 'Active spool';
+                const pickerSpools = spools.filter(s => {
+                    if (!slotPickerSearch) return true;
+                    const q = slotPickerSearch.toLowerCase();
+                    const f = s.filament || {};
+                    return f.name?.toLowerCase().includes(q) || f.material?.toLowerCase().includes(q) || f.vendor?.name?.toLowerCase().includes(q);
+                });
+                return (
+                    <>
+                        <div className="mobile-sheet-backdrop" onClick={() => setPickingSlot(null)} />
+                        <div className="mobile-spool-picker">
+                            <div className="mobile-picker-header">
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 700, fontSize: '15px' }}>{printer?.name}</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{slotLabel}</div>
+                                </div>
+                                <button className="btn btn-sm" onClick={() => setPickingSlot(null)} style={{ padding: '6px 12px' }}>Cancel</button>
+                            </div>
+                            <div className="mobile-picker-search">
+                                <input
+                                    type="text"
+                                    className="input"
+                                    placeholder="Search spools..."
+                                    value={slotPickerSearch}
+                                    onChange={e => setSlotPickerSearch(e.target.value)}
+                                    autoFocus
+                                    style={{ fontSize: '16px' }}
+                                />
+                            </div>
+                            <div className="mobile-picker-list">
+                                {pickerSpools.map(s => {
+                                    const f = s.filament || {};
+                                    const colorStyle = buildColorStyle(f);
+                                    return (
+                                        <button
+                                            key={s.id}
+                                            className="mobile-picker-spool"
+                                            onClick={() => handleSlotPickSpool(s)}
+                                        >
+                                            <div className="spool-color-circle" style={{ ...colorStyle, width: '28px', height: '28px', flexShrink: 0 }} />
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontWeight: 600, fontSize: '14px' }}>{f.name || `Spool #${s.id}`}</div>
+                                                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                                    {f.material || '—'} &bull; {f.vendor?.name || 'Unknown'} &bull; {Math.round(s.remaining_weight || 0)}g
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                                {pickerSpools.length === 0 && (
+                                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>No spools found</div>
+                                )}
+                            </div>
+                        </div>
+                    </>
+                );
+            })()}
         </div>
     );
 }

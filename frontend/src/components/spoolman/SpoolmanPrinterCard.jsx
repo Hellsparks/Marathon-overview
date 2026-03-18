@@ -63,7 +63,7 @@ function buildMmuSlotLayout(mmuAssignments) {
     return slots;
 }
 
-function renderSlot(slotIndex, label, printer, toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot) {
+function renderSlot(slotIndex, label, printer, toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot, onToolSlotTap, tapActive) {
     const spoolId = toolSlots?.[slotIndex];
     const spool = spoolId ? toolSlotSpools?.[spoolId] : null;
     const f = spool?.filament || {};
@@ -72,11 +72,12 @@ function renderSlot(slotIndex, label, printer, toolSlots, toolSlotSpools, dropTa
     return (
         <div
             key={slotIndex}
-            className={`ams-drop-slot${isSlotTarget ? ' ams-drop-hover' : ''}${spool ? ' ams-slot-filled' : ''}`}
+            className={`ams-drop-slot${isSlotTarget ? ' ams-drop-hover' : ''}${spool ? ' ams-slot-filled' : ''}${tapActive ? ' tap-target' : ''}`}
             onDragEnter={e => { e.preventDefault(); e.stopPropagation(); }}
             onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; onToolSlotDragOver?.(e, printer.id, slotIndex); }}
             onDragLeave={() => onToolSlotDragLeave?.()}
             onDrop={e => { e.preventDefault(); e.stopPropagation(); onToolSlotDrop?.(e, printer, slotIndex); }}
+            onClick={onToolSlotTap ? () => onToolSlotTap(slotIndex) : undefined}
         >
             <div className="ams-slot-header">
                 <span className="ams-slot-num">{label}</span>
@@ -111,6 +112,8 @@ const scrapedCssCache = new Map();
 
 export default function SpoolmanPrinterCard({
     printer, activeSpool, isTarget, onDragOver, onDragLeave, onDrop, onClearSpool, printerStatus,
+    // Mobile tap-to-assign
+    onTapAssign, onTrayTap, onToolSlotTap, tapActive,
     // Bambu AMS props
     amsSlots, amsSpools, dropTargetTray, onTrayDragOver, onTrayDragLeave, onTrayDrop, onClearTray,
     // Multi-toolhead / MMU Moonraker props
@@ -206,10 +209,11 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
             )}
 
             <div
-                className={`printer-card v-card theme--dark${isIsolated ? ' isolated-theme' : ''} spoolman-printer-card${!isBambu && !slotLayout && isTarget ? ' drop-hover' : ''}`}
+                className={`printer-card v-card theme--dark${isIsolated ? ' isolated-theme' : ''} spoolman-printer-card${!isBambu && !slotLayout && isTarget ? ' drop-hover' : ''}${tapActive ? ' tap-target' : ''}`}
                 onDragOver={!isBambu && !slotLayout ? onDragOver : undefined}
                 onDragLeave={!isBambu && !slotLayout ? onDragLeave : undefined}
                 onDrop={!isBambu && !slotLayout ? onDrop : undefined}
+                onClick={!isBambu && !slotLayout && onTapAssign ? onTapAssign : undefined}
                 style={{ cursor: isBambu || slotLayout ? 'default' : 'pointer', marginBottom: '12px' }}
             >
                 <div className={`printer-card-header v-card__title${isBambu ? ' bambu-header' : ''}`}>
@@ -236,10 +240,11 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                 return (
                                     <div
                                         key={trayId}
-                                        className={`ams-drop-slot${isTrayTarget ? ' ams-drop-hover' : ''}${(spool || hasPhysical) ? ' ams-slot-filled' : ''}`}
+                                        className={`ams-drop-slot${isTrayTarget ? ' ams-drop-hover' : ''}${(spool || hasPhysical) ? ' ams-slot-filled' : ''}${tapActive ? ' tap-target' : ''}`}
                                         onDragOver={e => onTrayDragOver?.(e, printer.id, trayId)}
                                         onDragLeave={() => onTrayDragLeave?.()}
                                         onDrop={e => onTrayDrop?.(e, printer, trayId)}
+                                        onClick={onTrayTap ? () => onTrayTap(trayId) : undefined}
                                     >
                                         <div className="ams-slot-header">
                                             <span className="ams-slot-num">{trayId + 1}</span>
@@ -298,7 +303,7 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                                                 gridTemplateColumns: `repeat(${Math.min(m.slot_count, 5)}, 1fr)`,
                                                 borderRadius: '0 0 4px 4px',
                                             }}>
-                                                {groupSlots.map(({ slotIndex, mmuSlot }) => renderSlot(slotIndex, mmuSlot + 1, printer, toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot))}
+                                                {groupSlots.map(({ slotIndex, mmuSlot }) => renderSlot(slotIndex, mmuSlot + 1, printer, toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot, onToolSlotTap, tapActive))}
                                             </div>
                                         </div>
                                     );
@@ -307,7 +312,7 @@ ${cardSel} .spoolman-printer-card, ${cardSel} .printer-card {
                         ) : (
                             /* Plain multi-toolhead without MMU */
                             <div className="ams-slot-grid" style={{ gridTemplateColumns: `repeat(${Math.min(totalSlotCount, 4)}, 1fr)` }}>
-                                {slotLayout.map(({ slotIndex, label }) => renderSlot(slotIndex, label, printer, toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot))}
+                                {slotLayout.map(({ slotIndex, label }) => renderSlot(slotIndex, label, printer, toolSlots, toolSlotSpools, dropTargetToolSlot, onToolSlotDragOver, onToolSlotDragLeave, onToolSlotDrop, onToolSlotDragStart, onClearToolSlot, onToolSlotTap, tapActive))}
                             </div>
                         )
                     ) : (

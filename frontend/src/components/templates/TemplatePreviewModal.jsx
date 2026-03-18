@@ -16,7 +16,7 @@ export default function TemplatePreviewModal({ template, filaments, onClose, onE
     // Calculate filament usage per slot (type + color)
     const usageBySlot = {};
     template.plates?.forEach(p => {
-        const slotKey = p.slot_keys?.[0] || '1'; // Default to first slot if missing
+        const slotKey = p.slot_keys?.[0] || '1';
         const slot = template.color_slots?.find(s => s.slot_key === slotKey);
 
         if (!usageBySlot[slotKey]) {
@@ -29,6 +29,93 @@ export default function TemplatePreviewModal({ template, filaments, onClose, onE
         }
         usageBySlot[slotKey].weight += (p.filament_usage_g || 0);
     });
+
+    const categories = template.categories || [];
+    const hasCategories = categories.length > 0;
+
+    const renderPlateRow = (plate, idx) => (
+        <div
+            key={plate.id}
+            className="template-preview-plate-card"
+        >
+            {/* Plate Thumbnail */}
+            <div style={{
+                width: '100px',
+                height: '100px',
+                borderRadius: '8px',
+                background: 'var(--bg)',
+                overflow: 'hidden',
+                border: '1px solid var(--border)',
+                flexShrink: 0
+            }}>
+                {plate.has_thumbnail ? (
+                    <img
+                        src={`/api/templates/thumb/${encodeURIComponent(plate.filename)}.png`}
+                        alt={plate.display_name}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '24px' }}>
+                        📦
+                    </div>
+                )}
+            </div>
+
+            <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <h4 style={{ margin: 0 }}>{plate.display_name || `Plate ${idx + 1}`}</h4>
+                    <div className="badge badge-info">{plate.sliced_for || 'Generic Printer'}</div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                    <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Print Time</div>
+                        <div style={{ fontSize: '13px', fontWeight: 500 }}>{formatTime(plate.estimated_time_s)}</div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Filament Selection</div>
+                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                            {plate.slot_keys?.map(key => {
+                                const slot = template.color_slots?.find(s => s.slot_key === key);
+                                const filament = filaments?.find(f => f.id === slot?.pref_filament_id);
+                                const color = slot?.pref_hex || filament?.color_hex || 'cccccc';
+                                return (
+                                    <div
+                                        key={key}
+                                        title={slot?.label || key}
+                                        style={{
+                                            width: '14px',
+                                            height: '14px',
+                                            borderRadius: '50%',
+                                            backgroundColor: color.startsWith('#') ? color : `#${color}`,
+                                            border: '1px solid rgba(255,255,255,0.2)'
+                                        }}
+                                    />
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Usage (Length / Weight)</div>
+                        <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                            {plate.filament_usage_mm ? `${(plate.filament_usage_mm / 1000).toFixed(1)}m` : '-'}
+                            {plate.filament_usage_g ? ` / ${plate.filament_usage_g.toFixed(1)}g` : ''}
+                        </div>
+                    </div>
+                    <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Material</div>
+                        <div style={{ marginTop: '2px' }}>
+                            {plate.filament_type ? (
+                                <span className={`badge badge-filament filament-${plate.filament_type}`} style={{ padding: '0px 6px', fontSize: '10px' }}>
+                                    {plate.filament_type}
+                                </span>
+                            ) : <span style={{ fontSize: '13px' }}>—</span>}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 
     return (
         <div className="template-preview-overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -107,93 +194,78 @@ export default function TemplatePreviewModal({ template, filaments, onClose, onE
                         ))}
                     </div>
 
-                    <h3 style={{ marginBottom: '16px', fontSize: '18px' }}>Plates & Requirements</h3>
+                    {/* Categories / Groups View */}
+                    {hasCategories ? (
+                        <>
+                            <h3 style={{ marginBottom: '16px', fontSize: '18px' }}>Groups & Plates</h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                {categories.map((cat) => (
+                                    <div key={cat.id} style={{ border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
+                                        <div style={{
+                                            padding: '10px 16px',
+                                            background: 'var(--surface2)',
+                                            borderBottom: '1px solid var(--border)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px'
+                                        }}>
+                                            <span style={{
+                                                fontSize: '10px',
+                                                fontWeight: 700,
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '.05em',
+                                                padding: '2px 8px',
+                                                borderRadius: '4px',
+                                                background: cat.type === 'choice' ? 'color-mix(in srgb, var(--primary) 20%, transparent)' : 'color-mix(in srgb, var(--text-muted) 20%, transparent)',
+                                                color: cat.type === 'choice' ? 'var(--primary)' : 'var(--text-muted)'
+                                            }}>
+                                                {cat.type === 'choice' ? 'Pick One' : 'Fixed'}
+                                            </span>
+                                            <span style={{ fontWeight: 600, fontSize: '15px' }}>{cat.name}</span>
+                                        </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        {template.plates?.map((plate, idx) => (
-                            <div
-                                key={plate.id}
-                                className="template-preview-plate-card"
-                            >
-                                {/* Plate Thumbnail */}
-                                <div style={{
-                                    width: '100px',
-                                    height: '100px',
-                                    borderRadius: '8px',
-                                    background: 'var(--bg)',
-                                    overflow: 'hidden',
-                                    border: '1px solid var(--border)',
-                                    flexShrink: 0
-                                }}>
-                                    {plate.has_thumbnail ? (
-                                        <img
-                                            src={`/api/templates/thumb/${encodeURIComponent(plate.filename)}.png`}
-                                            alt={plate.display_name}
-                                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                        />
-                                    ) : (
-                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '24px' }}>
-                                            📦
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                        <h4 style={{ margin: 0 }}>{plate.display_name || `Plate ${idx + 1}`}</h4>
-                                        <div className="badge badge-info">{plate.sliced_for || 'Generic Printer'}</div>
-                                    </div>
-
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
-                                        <div>
-                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Print Time</div>
-                                            <div style={{ fontSize: '13px', fontWeight: 500 }}>{formatTime(plate.estimated_time_s)}</div>
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Filament Selection</div>
-                                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                                {plate.slot_keys?.map(key => {
-                                                    const slot = template.color_slots?.find(s => s.slot_key === key);
-                                                    const filament = filaments?.find(f => f.id === slot?.pref_filament_id);
-                                                    const color = slot?.pref_hex || filament?.color_hex || 'cccccc';
-                                                    return (
-                                                        <div
-                                                            key={key}
-                                                            title={slot?.label || key}
-                                                            style={{
-                                                                width: '14px',
-                                                                height: '14px',
-                                                                borderRadius: '50%',
-                                                                backgroundColor: color.startsWith('#') ? color : `#${color}`,
-                                                                border: '1px solid rgba(255,255,255,0.2)'
-                                                            }}
-                                                        />
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Usage (Length / Weight)</div>
-                                            <div style={{ fontSize: '13px', fontWeight: 500 }}>
-                                                {plate.filament_usage_mm ? `${(plate.filament_usage_mm / 1000).toFixed(1)}m` : '-'}
-                                                {plate.filament_usage_g ? ` / ${plate.filament_usage_g.toFixed(1)}g` : ''}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Material</div>
-                                            <div style={{ marginTop: '2px' }}>
-                                                {plate.filament_type ? (
-                                                    <span className={`badge badge-filament filament-${plate.filament_type}`} style={{ padding: '0px 6px', fontSize: '10px' }}>
-                                                        {plate.filament_type}
-                                                    </span>
-                                                ) : <span style={{ fontSize: '13px' }}>—</span>}
-                                            </div>
+                                        <div style={{ padding: '16px' }}>
+                                            {cat.type === 'fixed' ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                                    {cat.plates?.map((plate, idx) => renderPlateRow(plate, idx))}
+                                                    {(!cat.plates || cat.plates.length === 0) && (
+                                                        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No plates in this group</span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                    {cat.options?.map((opt) => (
+                                                        <div key={opt.id} style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                                                            <div style={{ padding: '6px 12px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 700 }}>ALT</span>
+                                                                {opt.name}
+                                                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>
+                                                                    ({opt.plates?.length || 0} plate{(opt.plates?.length || 0) !== 1 ? 's' : ''})
+                                                                </span>
+                                                            </div>
+                                                            <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                                {opt.plates?.map((plate, idx) => renderPlateRow(plate, idx))}
+                                                                {(!opt.plates || opt.plates.length === 0) && (
+                                                                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No plates</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        </>
+                    ) : (
+                        <>
+                            <h3 style={{ marginBottom: '16px', fontSize: '18px' }}>Plates & Requirements</h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {template.plates?.map((plate, idx) => renderPlateRow(plate, idx))}
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

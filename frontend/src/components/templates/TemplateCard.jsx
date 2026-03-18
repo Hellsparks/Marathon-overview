@@ -109,6 +109,11 @@ export default function TemplateCard({ template, filaments, onEdit, onDelete, on
                         <div className="file-card-name" style={{ fontSize: '15px', fontWeight: 600, lineHeight: 1.2 }}>{template.name}</div>
                         <div className="file-card-meta" style={{ fontSize: '12px', opacity: 0.8, marginTop: '2px' }}>
                             {template.plate_count || 0} Plates
+                            {template.categories?.some(c => c.type === 'choice') && (
+                                <span style={{ marginLeft: '6px', color: 'var(--primary)', fontWeight: 500 }}>
+                                    {template.categories.filter(c => c.type === 'choice').length} choice{template.categories.filter(c => c.type === 'choice').length !== 1 ? 's' : ''}
+                                </span>
+                            )}
                         </div>
                     </div>
                     {printerModels.length > 0 && (

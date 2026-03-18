@@ -5016,3 +5016,407 @@ input[type="checkbox"]:checked::after {
 input[type="checkbox"]:hover {
   border-color: var(--primary, #0ea5e9) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — everything below is additive, desktop untouched
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Mobile spool tap-to-assign ───────────────────────────────── */
+.spool-tap-selected {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: -2px;
+  box-shadow: 0 0 12px rgba(79, 142, 247, 0.4) !important;
+}
+
+.tap-target {
+  animation: tap-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tap-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(79, 142, 247, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(79, 142, 247, 0.3); }
+}
+
+/* ─── Mobile bottom sheet backdrop ─────────────────────────────── */
+.mobile-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ─── Mobile spool picker (bottom sheet) ──────────────────────── */
+.mobile-spool-picker {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 10vh;
+  background: var(--bg);
+  border-radius: 16px 16px 0 0;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.mobile-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 8px;
+  flex-shrink: 0;
+}
+
+.mobile-picker-search {
+  padding: 0 16px 12px;
+  flex-shrink: 0;
+}
+
+.mobile-picker-search .input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.mobile-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 8px 8px;
+}
+
+.mobile-picker-spool {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s;
+}
+
+.mobile-picker-spool:active {
+  background: var(--surface2);
+}
+
+/* ─── Mobile hamburger button ──────────────────────────────────── */
+.mobile-hamburger {
+  background: none;
+  border: none;
+  color: var(--text);
+  padding: 8px;
+  margin-right: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-hamburger:active {
+  background: var(--surface2);
+}
+
+/* ─── Mobile drawer (sidebar overlay) ──────────────────────────── */
+.mobile-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 900;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 280px;
+  z-index: 901;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-drawer.open {
+  transform: translateX(0);
+}
+
+.mobile-drawer .sidebar {
+  position: static;
+  width: 100%;
+  height: auto;
+  border-right: none;
+}
+
+/* ─── Mobile bottom tab bar ────────────────────────────────────── */
+.mobile-tab-bar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  height: 56px;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 2px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 10px;
+  padding: 6px 0;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-tab.active {
+  color: var(--primary);
+}
+
+.mobile-tab-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.mobile-tab-label {
+  font-weight: 600;
+}
+
+/* ─── Mobile breakpoint ────────────────────────────────────────── */
+@media (max-width: 767px) {
+
+  /* Prevent iOS zoom on input focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Hide desktop sidebar */
+  .app-body > .sidebar {
+    display: none;
+  }
+
+  /* Hide desktop right panel (handled by AppShell conditionally) */
+  .sidebar-right {
+    display: none;
+  }
+
+  /* Navbar compact */
+  .navbar {
+    height: 48px;
+    padding: 0 12px;
+  }
+
+  .navbar-brand {
+    font-size: 16px;
+    gap: 6px;
+  }
+
+  .navbar-right {
+    gap: 8px;
+  }
+
+  .navbar-status {
+    font-size: 12px;
+  }
+
+  /* Main content: full width, adjust for bottom tab bar */
+  .app-main {
+    padding: 12px;
+  }
+
+  /* Page titles smaller */
+  .page-title {
+    font-size: 18px;
+    margin-bottom: 16px;
+  }
+
+  /* Printer grid: single column on phones */
+  .printer-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* Printer cards: tighter padding */
+  .printer-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  /* Spoolman grid: 2 columns on phone */
+  .spoolman-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+  }
+
+  .spoolman-spool-card {
+    padding: 10px;
+  }
+
+  /* Spoolman page: allow normal scrolling on mobile, no horizontal scroll */
+  .app-main:has(.spoolman-page) {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .spoolman-page {
+    height: auto !important;
+    overflow: visible !important;
+    max-width: 100%;
+  }
+
+  .spoolman-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    gap: 16px;
+  }
+
+  .spoolman-inventory {
+    min-height: auto !important;
+    overflow: visible !important;
+    order: 2;
+  }
+
+  .spoolman-printers {
+    overflow: visible !important;
+    padding-right: 0;
+    order: 1;
+  }
+
+  /* Prevent horizontal overflow on printer cards */
+  .spoolman-printer-card {
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .ams-slot-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    max-width: 100%;
+  }
+
+  /* Queue page already has 700px breakpoint, extend */
+  .queue-page-layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* Dialogs: full-screen on mobile */
+  .dialog {
+    min-width: unset;
+    max-width: unset;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .spool-dialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    overflow-y: auto;
+  }
+
+  .bug-report-dialog {
+    max-width: 100vw;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+    overflow-y: auto;
+  }
+
+  /* File cards: compact */
+  .file-card {
+    padding: 10px;
+  }
+
+  /* Maintenance cards */
+  .maintenance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* History charts — constrain width */
+  .history-chart-container {
+    overflow-x: auto;
+  }
+
+  /* Touch targets: all buttons minimum 44px */
+  .btn,
+  .btn-sm,
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Exception: icon-only tiny buttons inside cards keep small size */
+  .printer-card .btn-sm,
+  .spoolman-spool-card .btn-sm {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  /* Settings page: full-width sections */
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Template cards */
+  .template-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  /* Wider error banners */
+  .error-banner {
+    margin: 0 -12px 12px -12px;
+    border-radius: 0;
+  }
+}
+
+/* ─── Tablet breakpoint ────────────────────────────────────────── */
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Narrower sidebar */
+  .sidebar {
+    width: 180px;
+  }
+
+  /* Narrower right panel */
+  .sidebar-right {
+    width: 200px;
+  }
+
+  /* Main content slightly tighter */
+  .app-main {
+    padding: 16px;
+  }
+
+  /* Printer grid: auto-fill at smaller min */
+  .printer-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
