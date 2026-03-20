@@ -1,5 +1,10 @@
 FROM node:24-slim
 
+# Copy docker CLI + compose plugin from official image so the update route
+# can run `docker compose pull && up` against the host socket.
+COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker:cli /usr/local/libexec/docker/cli-plugins/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose
+
 WORKDIR /app
 
 COPY package*.json ./

@@ -319,45 +319,25 @@ function logLine(line) {
 }
 
 function applyDockerUpdate() {
-  const containerName = process.env.MARATHON_CONTAINER_NAME || 'marathon-backend';
-  const socketPath = '/var/run/docker.sock';
-  const net = require('net');
+  const composeFile = '/app/docker-compose.yml';
 
-  logLine(`Pulling latest image from ${GHCR_IMAGE}:latest ...`);
-
-  function dockerRequest(method, path, body, cb) {
-    const client = net.createConnection({ path: socketPath });
-    let response = '';
-    let bodyStr = body ? JSON.stringify(body) : '';
-    let req = `${method} ${path} HTTP/1.1\r\nHost: localhost\r\n`;
-    if (bodyStr) req += `Content-Type: application/json\r\nContent-Length: ${Buffer.byteLength(bodyStr)}\r\n`;
-    req += '\r\n';
-    if (bodyStr) req += bodyStr;
-    client.write(req);
-    client.on('data', d => { response += d.toString(); });
-    client.on('end', () => {
-      const idx = response.indexOf('\r\n\r\n');
-      const responseBody = idx >= 0 ? response.slice(idx + 4) : response;
-      cb(null, responseBody);
-    });
-    client.on('error', cb);
-  }
-
-  const pullPath = `/images/create?fromImage=${encodeURIComponent(GHCR_IMAGE)}&tag=latest`;
-  dockerRequest('POST', pullPath, null, (err, body) => {
+  logLine('Pulling latest images from registry...');
+  exec(`docker compose -f ${composeFile} pull`, { timeout: 120000 }, (err, stdout, stderr) => {
     if (err) {
-      logLine(`Pull failed: ${err.message}`);
+      logLine(`Pull failed: ${stderr || err.message}`);
       applyRunning = false;
       return;
     }
-    logLine('Image pulled. Restarting container...');
-    dockerRequest('POST', `/containers/${containerName}/restart`, null, (err2) => {
+    logLine(stdout.trim() || 'Images pulled.');
+    logLine('Recreating containers with new images...');
+    exec(`docker compose -f ${composeFile} up -d`, { timeout: 60000 }, (err2, stdout2, stderr2) => {
       if (err2) {
-        logLine(`Restart failed: ${err2.message}`);
+        logLine(`Recreate failed: ${stderr2 || err2.message}`);
         applyRunning = false;
         return;
       }
-      logLine('Container restart signal sent. Update complete.');
+      logLine('Containers recreated. Backend restarting with new image...');
+      // Docker will restart this container — log will cut off here
     });
   });
 }

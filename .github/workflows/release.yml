@@ -7,7 +7,7 @@ on:
 
 jobs:
   release:
-    name: Create Release & Publish Docker Image
+    name: Create Release & Publish Docker Images
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -64,12 +64,35 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./backend
+          dockerfile: ./backend/Dockerfile
           push: true
           build-args: |
             APP_VERSION=${{ steps.version.outputs.version }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/marathon-overview:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/marathon-overview:latest
+            ghcr.io/${{ github.repository_owner }}/marathon-overview-backend:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/marathon-overview-backend:latest
+
+      - name: Build and push frontend image
+        if: steps.changed.outputs.changed == 'true' && steps.tag_check.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/marathon-overview-frontend:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/marathon-overview-frontend:latest
+
+      - name: Build and push swatch image
+        if: steps.changed.outputs.changed == 'true' && steps.tag_check.outputs.exists == 'false'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: ./swatch-service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/marathon-overview-swatch:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/marathon-overview-swatch:latest
 
       - name: Create GitHub Release
         if: steps.changed.outputs.changed == 'true' && steps.tag_check.outputs.exists == 'false'

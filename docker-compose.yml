@@ -1,10 +1,9 @@
-version: '3.9'
-
 services:
   swatch:
     build:
       context: .
       dockerfile: swatch-service/Dockerfile
+    image: ghcr.io/hellsparks/marathon-overview-swatch:latest
     container_name: marathon-swatch
     restart: unless-stopped
     networks:
@@ -16,6 +15,7 @@ services:
       dockerfile: Dockerfile
       args:
         APP_VERSION: ${APP_VERSION:-dev}
+    image: ghcr.io/hellsparks/marathon-overview-backend:latest
     container_name: marathon-backend
     restart: unless-stopped
     environment:
@@ -32,6 +32,7 @@ services:
       - backend_data:/app/data
       - gcode_uploads:/app/uploads
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
     depends_on:
       - swatch
     expose:
@@ -43,6 +44,7 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+    image: ghcr.io/hellsparks/marathon-overview-frontend:latest
     restart: unless-stopped
     ports:
       - "80:80"
