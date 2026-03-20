@@ -15,7 +15,17 @@ export function useUpdateCheck() {
         // Silent — don't break the app if update check fails
       }
     }, 10000);
-    return () => clearTimeout(timer);
+
+    // For dev channel, re-check periodically (every 5 min)
+    const interval = setInterval(async () => {
+      try {
+        const info = await checkForUpdate();
+        if (info.available) setUpdateInfo(info);
+        else setUpdateInfo(null);
+      } catch { /* silent */ }
+    }, 5 * 60 * 1000);
+
+    return () => { clearTimeout(timer); clearInterval(interval); };
   }, []);
 
   return {

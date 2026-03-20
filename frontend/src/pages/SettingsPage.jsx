@@ -6,7 +6,7 @@ import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
 import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation, getFilaments } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
-import { checkForUpdate } from '../api/updates';
+import { checkForUpdate, getUpdateChannel, setUpdateChannel, getReleases, getDevCommits, applyUpdate, pullAndRestart, getApplyStatus } from '../api/updates';
 import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
 import UpdateDialog from '../components/layout/UpdateDialog';
 import ImportFieldMappingDialog from '../components/spoolman/ImportFieldMappingDialog';
@@ -67,6 +67,12 @@ export default function SettingsPage() {
   const [updateChecked, setUpdateChecked] = useState(false);
   const [showOrcaDefaults, setShowOrcaDefaults] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateChannel, setUpdateChannelState] = useState('release');
+  const [releases, setReleases] = useState([]);
+  const [devCommits, setDevCommits] = useState([]);
+  const [devGitInfo, setDevGitInfo] = useState(null);
+  const [updateApplying, setUpdateApplying] = useState(false);
+  const [updateLog, setUpdateLog] = useState([]);
 
   // Marathon DB backup
   const [dbExportBusy, setDbExportBusy] = useState(false);
@@ -150,6 +156,7 @@ export default function SettingsPage() {
       if (s.port) setMcpPort(String(s.port));
       if (s.marathonUrl) setMcpMarathonUrl(s.marathonUrl);
     }).catch(() => { });
+    getUpdateChannel().then(r => setUpdateChannelState(r.channel || 'release')).catch(() => { });
 
     getSettings().then(s => {
       setGithubToken(s.github_token || '');
@@ -398,8 +405,69 @@ export default function SettingsPage() {
       const info = await checkForUpdate();
       setUpdateInfo(info.available ? info : null);
       setUpdateChecked(true);
+      // Load release list or dev commits depending on channel
+      if (updateChannel === 'dev') {
+        const dc = await getDevCommits();
+        setDevCommits(dc.commits || []);
+        setDevGitInfo(dc.gitInfo || null);
+      } else {
+        const rl = await getReleases();
+        setReleases(rl.releases || []);
+      }
     } catch { /* ignore */ } finally {
       setUpdateChecking(false);
+    }
+  }
+
+  async function handleChannelChange(ch) {
+    setUpdateChannelState(ch);
+    setUpdateChecked(false);
+    setUpdateInfo(null);
+    setReleases([]);
+    setDevCommits([]);
+    try { await setUpdateChannel(ch); } catch { /* ignore */ }
+  }
+
+  async function handleApplyTag(tag) {
+    setUpdateApplying(true);
+    setUpdateLog(['Starting update...']);
+    try {
+      await applyUpdate(tag);
+      // Poll status
+      const poll = setInterval(async () => {
+        try {
+          const s = await getApplyStatus();
+          setUpdateLog(s.log || []);
+          if (!s.running && s.log?.length > 0) {
+            setUpdateApplying(false);
+            clearInterval(poll);
+          }
+        } catch { /* ignore */ }
+      }, 1000);
+    } catch (e) {
+      setUpdateLog([`Failed: ${e.message}`]);
+      setUpdateApplying(false);
+    }
+  }
+
+  async function handlePullRestart() {
+    setUpdateApplying(true);
+    setUpdateLog(['Pulling latest changes...']);
+    try {
+      await pullAndRestart();
+      const poll = setInterval(async () => {
+        try {
+          const s = await getApplyStatus();
+          setUpdateLog(s.log || []);
+          if (!s.running && s.log?.length > 0) {
+            setUpdateApplying(false);
+            clearInterval(poll);
+          }
+        } catch { /* ignore */ }
+      }, 1000);
+    } catch (e) {
+      setUpdateLog([`Failed: ${e.message}`]);
+      setUpdateApplying(false);
     }
   }
 
@@ -1676,31 +1744,164 @@ export default function SettingsPage() {
       <Section title="Updates" defaultOpen={false}>
         <div className="settings-card">
           <h3 className="settings-card-title">About &amp; Updates</h3>
-          <div style={{ display: 'flex', gap: '16px', fontSize: '14px', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', gap: '16px', fontSize: '14px', marginBottom: '10px', flexWrap: 'wrap' }}>
             <span><strong>Version:</strong> {__APP_VERSION__}</span>
             <span style={{ opacity: 0.6 }}>
               Deploy mode: {import.meta.env.MODE === 'production' ? 'production' : 'development'}
             </span>
           </div>
-          <div className="settings-row">
+
+          {/* Channel selector */}
+          <div style={{ marginBottom: '16px' }}>
+            <span className="form-label" style={{ marginBottom: '6px', display: 'block' }}>Update Channel</span>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <label className="radio-label">
+                <input type="radio" name="update_channel" value="release"
+                  checked={updateChannel === 'release'}
+                  onChange={() => handleChannelChange('release')} />
+                <strong>Releases</strong>
+                <span className="text-muted" style={{ fontSize: '12px', marginLeft: '4px' }}>— Stable tagged versions</span>
+              </label>
+              <label className="radio-label">
+                <input type="radio" name="update_channel" value="dev"
+                  checked={updateChannel === 'dev'}
+                  onChange={() => handleChannelChange('dev')} />
+                <strong>Dev</strong>
+                <span className="text-muted" style={{ fontSize: '12px', marginLeft: '4px' }}>— Latest commits, watchdog checks every 5 min</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="settings-row" style={{ marginBottom: '12px' }}>
             <button
               className="btn btn-sm"
               onClick={handleCheckUpdate}
-              disabled={updateChecking}
+              disabled={updateChecking || updateApplying}
             >
               {updateChecking ? 'Checking…' : 'Check for Updates'}
             </button>
-            {updateChecked && !updateInfo && (
+            {updateChecked && !updateInfo && updateChannel === 'release' && (
               <span style={{ fontSize: '13px', color: 'var(--success)' }}>You are up to date &#10003;</span>
             )}
-            {updateInfo && (
+            {updateChecked && !updateInfo && updateChannel === 'dev' && (
+              <span style={{ fontSize: '13px', color: 'var(--success)' }}>Up to date with dev &#10003;</span>
+            )}
+            {updateInfo && updateChannel === 'release' && (
               <button className="btn btn-sm btn-primary" onClick={() => setUpdateDialogOpen(true)}>
                 v{updateInfo.latest} available — Update Now
               </button>
             )}
+            {updateInfo && updateChannel === 'dev' && updateInfo.devStatus && (
+              <span style={{ fontSize: '13px', color: 'var(--warning, #f59e0b)' }}>
+                {updateInfo.devStatus.ahead} new commit{updateInfo.devStatus.ahead !== 1 ? 's' : ''} available
+              </span>
+            )}
           </div>
+
+          {/* Dev channel: pull & restart button + commit list */}
+          {updateChannel === 'dev' && (
+            <>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={handlePullRestart}
+                  disabled={updateApplying}
+                >
+                  {updateApplying ? 'Updating…' : 'Pull & Restart'}
+                </button>
+                {devGitInfo && (
+                  <span style={{ fontSize: '12px', opacity: 0.6 }}>
+                    Current: <code style={{ fontSize: '11px' }}>{devGitInfo.sha}</code> on <code style={{ fontSize: '11px' }}>{devGitInfo.branch}</code>
+                  </span>
+                )}
+              </div>
+              {devCommits.length > 0 && (
+                <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--surface2)' }}>
+                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>SHA</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>Message</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left' }}>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {devCommits.map(c => (
+                        <tr key={c.sha} style={{
+                          borderBottom: '1px solid var(--border)',
+                          background: devGitInfo?.sha === c.sha ? 'rgba(59,130,246,0.1)' : undefined,
+                        }}>
+                          <td style={{ padding: '4px 8px', fontFamily: 'monospace' }}>
+                            {c.sha}
+                            {devGitInfo?.sha === c.sha && <span style={{ marginLeft: '4px', color: 'var(--primary)', fontFamily: 'inherit' }}>(you)</span>}
+                          </td>
+                          <td style={{ padding: '4px 8px', maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.message}</td>
+                          <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', opacity: 0.6 }}>{c.date ? new Date(c.date).toLocaleDateString() : ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Release channel: release list */}
+          {updateChannel === 'release' && releases.length > 0 && (
+            <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: '12px' }}>
+              {releases.map(r => {
+                const isCurrent = r.tag.replace(/^v/, '') === __APP_VERSION__;
+                return (
+                  <div key={r.tag} style={{
+                    padding: '8px 12px',
+                    borderBottom: '1px solid var(--border)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: isCurrent ? 'rgba(59,130,246,0.1)' : undefined,
+                  }}>
+                    <div>
+                      <strong>{r.tag}</strong>
+                      {r.prerelease && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '9999px', background: 'rgba(245,158,11,0.2)', color: 'var(--warning, #f59e0b)' }}>pre-release</span>}
+                      {isCurrent && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '9999px', background: 'rgba(34,197,94,0.2)', color: 'var(--success)' }}>current</span>}
+                      <span style={{ marginLeft: '8px', opacity: 0.5 }}>{r.published ? new Date(r.published).toLocaleDateString() : ''}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      {r.url && (
+                        <a href={r.url} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ fontSize: '11px', padding: '2px 8px' }}>Notes</a>
+                      )}
+                      {!isCurrent && (
+                        <button
+                          className="btn btn-sm btn-primary"
+                          style={{ fontSize: '11px', padding: '2px 8px' }}
+                          onClick={() => handleApplyTag(r.tag)}
+                          disabled={updateApplying}
+                        >
+                          {updateApplying ? '…' : 'Install'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Update log */}
+          {updateLog.length > 0 && (
+            <div style={{ marginTop: '12px', padding: '10px', background: 'var(--surface2)', borderRadius: 'var(--radius)', fontSize: '12px', fontFamily: 'monospace', maxHeight: '200px', overflowY: 'auto' }}>
+              {updateLog.map((line, i) => <div key={i}>{line}</div>)}
+              {updateApplying && <div style={{ opacity: 0.5 }}>_</div>}
+              {!updateApplying && updateLog.some(l => l.includes('Restarting')) && (
+                <div style={{ marginTop: '8px' }}>
+                  <button className="btn btn-sm btn-primary" onClick={() => window.location.reload()}>Reload Page</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        {updateDialogOpen && updateInfo && (
+
+        {updateDialogOpen && updateInfo && updateChannel === 'release' && (
           <UpdateDialog
             updateInfo={updateInfo}
             onDismiss={() => { setUpdateDialogOpen(false); setUpdateInfo(null); }}

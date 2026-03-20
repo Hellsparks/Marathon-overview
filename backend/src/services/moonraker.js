@@ -25,6 +25,7 @@ class MoonrakerClient {
       i === 0 ? 'extruder' : `extruder${i}`
     ).join('&');
 
+    // Single combined query — includes spoolman active spool to avoid a second HTTP round-trip
     const url = `${this.baseUrl}/printer/objects/query` +
       `?print_stats&display_status&virtual_sdcard&${extruderParams}&heater_bed&toolhead&idle_timeout`;
     const r = await fetch(url, {

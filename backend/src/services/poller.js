@@ -3,15 +3,19 @@ const { getClient } = require('./clientFactory');
 const bambuManager = require('./bambuManager');
 const printerCache = require('./printerCache');
 
-const POLL_INTERVAL_MS = 3000;
+const POLL_INTERVAL_ACTIVE_MS = 3000;  // When any printer is printing
+const POLL_INTERVAL_IDLE_MS   = 10000; // When all printers are idle
 let pollTimer = null;
-
-const scrapeCache = new Map();
-const SCRAPE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+let polling = false; // stacking guard
 
 // Spool detail cache: spoolId → { data, fetchedAt }
 const spoolCache = new Map();
 const SPOOL_CACHE_TTL_MS = 30_000; // 30 seconds
+
+// Active spool ID cache: printerId → { spoolId, fetchedAt }
+// Avoids hitting Moonraker's /server/spoolman/spool_id every poll cycle
+const activeSpoolIdCache = new Map();
+const ACTIVE_SPOOL_ID_TTL_MS = 15_000; // 15 seconds — spool changes are rare
 
 // Printer state tracking to log finished/cancelled jobs
 // Maps printerId -> { state, filename, startTime, activeSpool }
@@ -45,6 +49,19 @@ async function getSpoolDetails(spoolId, spoolmanUrl) {
 }
 
 async function pollAll() {
+  // Stacking guard: if previous poll hasn't finished, skip this cycle entirely.
+  // This prevents request pile-up that can starve Klipper's MCU scheduler.
+  if (polling) return;
+  polling = true;
+
+  try {
+    await _pollAllInner();
+  } finally {
+    polling = false;
+  }
+}
+
+async function _pollAllInner() {
   const db = getDb();
   const printers = db.prepare('SELECT * FROM printers WHERE enabled = 1').all();
 
@@ -65,33 +82,18 @@ async function pollAll() {
       try {
         const status = await client.getStatus();
 
-        // Auto-scrape Mainsail CSS — Moonraker-only feature
-        if (printer.firmware_type === 'moonraker' || !printer.firmware_type) {
-          if (printer.theme_mode === 'scrape') {
-            const lastScrape = scrapeCache.get(printer.id) || 0;
-            if (!printer.custom_css || Date.now() - lastScrape > SCRAPE_COOLDOWN_MS) {
-              try {
-                const url = `http://${printer.host}:${printer.port || 7125}/server/files/config/.theme/custom.css`;
-                const res = await fetch(url);
-                if (res.ok) {
-                  const css = await res.text();
-                  if (css !== printer.custom_css) {
-                    db.prepare('UPDATE printers SET custom_css = ? WHERE id = ?').run(css, printer.id);
-                    printer.custom_css = css;
-                  }
-                  scrapeCache.set(printer.id, Date.now());
-                }
-              } catch (scrapeErr) {
-                console.error(`[Poller] Failed to auto-scrape theme for printer ${printer.id}:`, scrapeErr.message);
-              }
-            }
-          }
-        }
-
         // Fetch active spool from Moonraker → Spoolman (Moonraker-only)
+        // Cached to avoid an extra HTTP round-trip to the printer every cycle
         let activeSpool = null;
         if (spoolmanUrl && (!printer.firmware_type || printer.firmware_type === 'moonraker')) {
-          const spoolId = await client.getActiveSpoolId();
+          const cachedId = activeSpoolIdCache.get(printer.id);
+          let spoolId;
+          if (cachedId && Date.now() - cachedId.fetchedAt < ACTIVE_SPOOL_ID_TTL_MS) {
+            spoolId = cachedId.spoolId;
+          } else {
+            spoolId = await client.getActiveSpoolId();
+            activeSpoolIdCache.set(printer.id, { spoolId, fetchedAt: Date.now() });
+          }
           if (spoolId) {
             activeSpool = await getSpoolDetails(spoolId, spoolmanUrl);
           }
@@ -284,23 +286,36 @@ async function pollAll() {
   );
 }
 
+function scheduleNext() {
+  // Adaptive interval: poll faster when any printer is actively printing
+  const anyActive = Object.values(printerCache.getAll()).some(s => {
+    const st = s?.print_stats?.state;
+    return st === 'printing' || st === 'paused' || st === 'cancelling';
+  });
+  const interval = anyActive ? POLL_INTERVAL_ACTIVE_MS : POLL_INTERVAL_IDLE_MS;
+  pollTimer = setTimeout(async () => {
+    await pollAll();
+    if (pollTimer !== null) scheduleNext(); // only continue if not stopped
+  }, interval);
+}
+
 function startPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-  pollAll(); // immediate first poll
-  pollTimer = setInterval(pollAll, POLL_INTERVAL_MS);
-  console.log('[Poller] Started polling every', POLL_INTERVAL_MS, 'ms');
+  stopPolling();
+  pollAll().then(() => scheduleNext()); // immediate first poll, then chain
+  console.log(`[Poller] Started polling (active: ${POLL_INTERVAL_ACTIVE_MS}ms, idle: ${POLL_INTERVAL_IDLE_MS}ms)`);
 }
 
 function stopPolling() {
   if (pollTimer) {
-    clearInterval(pollTimer);
+    clearTimeout(pollTimer);
     pollTimer = null;
   }
 }
 
 /** Evict a spool from the cache (call when set-active changes the active spool) */
-function clearSpoolCache(spoolId) {
+function clearSpoolCache(spoolId, printerId) {
   if (spoolId != null) spoolCache.delete(spoolId);
+  if (printerId != null) activeSpoolIdCache.delete(printerId);
 }
 
 module.exports = { startPolling, stopPolling, pollAll, clearSpoolCache };

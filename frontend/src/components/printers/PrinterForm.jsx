@@ -458,8 +458,8 @@ export default function PrinterForm({ printer, onSaved, onCancel }) {
                     checked={form.theme_mode === 'scrape'}
                     disabled={form.firmware_type !== 'moonraker'}
                     onChange={() => set('theme_mode', 'scrape')} />
-                  <strong>Auto-Scrape Klipper</strong>
-                  <span className="text-muted" style={{ fontSize: '12px', marginLeft: '6px' }}>— Automatically synchronizes with Mainsail CSS in the background. (Moonraker only)</span>
+                  <strong>Fetch from Klipper</strong>
+                  <span className="text-muted" style={{ fontSize: '12px', marginLeft: '6px' }}>— Fetches Mainsail CSS on page load. (Moonraker only)</span>
                 </label>
 
                 <label className="radio-label">
