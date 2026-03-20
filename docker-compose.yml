@@ -1,6 +1,15 @@
 version: '3.9'
 
 services:
+  swatch:
+    build:
+      context: .
+      dockerfile: swatch-service/Dockerfile
+    container_name: marathon-swatch
+    restart: unless-stopped
+    networks:
+      - marathon_net
+
   backend:
     build:
       context: ./backend
@@ -17,11 +26,14 @@ services:
       MARATHON_DEPLOY_MODE: docker
       MARATHON_CONTAINER_NAME: marathon-backend
       APP_VERSION: ${APP_VERSION:-dev}
+      SWATCH_SERVICE_URL: http://swatch:7321
       # OCTOPRINT_API_KEY: changeme
     volumes:
       - backend_data:/app/data
       - gcode_uploads:/app/uploads
       - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - swatch
     expose:
       - "3000"
     networks:

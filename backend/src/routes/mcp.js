@@ -57,6 +57,7 @@ function currentStatus() {
         port,
         marathonUrl,
         endpoint: `http://localhost:${port}/mcp`,
+        mcpEntry: MCP_ENTRY,
     };
 }
 

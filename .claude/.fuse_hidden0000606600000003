@@ -22,18 +22,7 @@
       "Bash(sed -i 's/\\\\r//' /run/media/hellspark/CC1C5A4A1C5A3026/Github/Marathon-overview/install.sh)",
       "Bash(chmod +x /run/media/hellspark/CC1C5A4A1C5A3026/Github/Marathon-overview/install.sh)",
       "Bash(bash /run/media/hellspark/CC1C5A4A1C5A3026/Github/Marathon-overview/install.sh)",
-      "WebSearch",
-      "Bash(python3 -c \"import cadquery\")",
-      "Bash(echo \"exit: $?\")",
-      "Bash(git -C /mnt/windows/Github/Marathon-overview ls-files frontend/package.json frontend/package-lock.json)",
-      "Bash(ls /mnt/windows/Github/Marathon-overview/*.py /mnt/windows/Github/Marathon-overview/*.step /mnt/windows/Github/Marathon-overview/*.ttf)",
-      "Bash(ls /mnt/windows/Github/Marathon-overview/swatch* /mnt/windows/Github/Marathon-overview/Arial*)",
-      "Bash(ls /mnt/windows/Github/Marathon-overview/swatch*)",
-      "Bash(git -C /mnt/windows/Github/Marathon-overview ls-files swatch.step swatch-service/server.py backend/src/services/Arial.ttf backend/src/services/swatch_generator.py backend/src/services/swatch.step)",
-      "Bash(git -C /mnt/windows/Github/Marathon-overview status --short)",
-      "Bash(git -C /mnt/windows/Github/Marathon-overview diff HEAD -- swatch-service/ backend/Dockerfile)",
-      "Bash(git -C /mnt/windows/Github/Marathon-overview add backend/Dockerfile swatch-service/Dockerfile swatch-service/server.py)",
-      "Bash(git -C:*)"
+      "WebSearch"
     ]
   }
 }

@@ -63,23 +63,13 @@ def cut_text(solid, text, y_center):
         ) from exc
 
 
-def main():
-    if len(sys.argv) < 3:
-        sys.stderr.write("Usage: swatch_generator.py '<json>' <out_path>\n")
-        sys.exit(1)
-
-    data   = json.loads(sys.argv[1])
-    line1  = data.get("line1", "").strip()
-    line2  = data.get("line2", "").strip()
-    out    = sys.argv[2]
-
+def generate(line1, line2, out):
     if not os.path.isfile(STEP_PATH):
-        sys.stderr.write(f"[swatch_generator] STEP file not found: {STEP_PATH}\n")
-        sys.exit(1)
+        raise FileNotFoundError(f"STEP file not found: {STEP_PATH}")
 
     swatch = cq.importers.importStep(STEP_PATH)
-    swatch = cut_text(swatch, line1, UPPER_Y_CENTER)
-    swatch = cut_text(swatch, line2, LOWER_Y_CENTER)
+    swatch = cut_text(swatch, line1.strip(), UPPER_Y_CENTER)
+    swatch = cut_text(swatch, line2.strip(), LOWER_Y_CENTER)
 
     cq.exporters.export(
         swatch,
@@ -88,6 +78,21 @@ def main():
         tolerance=0.05,
         angularTolerance=0.3,
     )
+
+
+def main():
+    if len(sys.argv) < 3:
+        sys.stderr.write("Usage: swatch_generator.py '<json>' <out_path>\n")
+        sys.exit(1)
+
+    data  = json.loads(sys.argv[1])
+    out   = sys.argv[2]
+
+    try:
+        generate(data.get("line1", ""), data.get("line2", ""), out)
+    except Exception as e:
+        sys.stderr.write(f"[swatch_generator] {e}\n")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

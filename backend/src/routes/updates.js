@@ -418,24 +418,99 @@ function applyReleaseTagUpdate(tag) {
 }
 
 function installAndRestart() {
+  const path = require('path');
+  const backendDir = path.join(__dirname, '../../');
+  const frontendDir = path.join(__dirname, '../../../frontend');
+
   logLine('Installing backend dependencies...');
-  exec('npm ci --omit=dev', { cwd: require('path').join(__dirname, '../../') }, (err2, out2) => {
+  exec('npm ci --omit=dev', { cwd: backendDir, timeout: 120000 }, (err2, out2) => {
     if (err2) {
       logLine(`npm ci failed: ${err2.message}`);
       applyRunning = false;
       return;
     }
     logLine('Dependencies installed. Building frontend...');
-    exec('npm run build', { cwd: require('path').join(__dirname, '../../../frontend') }, (err3, out3) => {
+    exec('npm run build', { cwd: frontendDir, timeout: 120000 }, (err3, out3) => {
       if (err3) {
         logLine(`Frontend build failed: ${err3.message}`);
         applyRunning = false;
         return;
       }
-      logLine('Build complete. Restarting server (exit 42)...');
-      setTimeout(() => process.exit(42), 500);
+      logLine('Build complete. Restarting...');
+      selfRestart(backendDir);
     });
   });
+}
+
+function selfRestart(backendDir) {
+  const path = require('path');
+  const { spawn } = require('child_process');
+  const fs = require('fs');
+
+  // pm2
+  if (process.env.PM2_HOME || process.env.pm_id) {
+    logLine('Restarting via pm2...');
+    exec('pm2 restart ' + (process.env.pm_id || 'marathon'), { timeout: 10000 }, () => {});
+    return;
+  }
+
+  // systemd (Restart=always or on-failure will bring it back)
+  if (process.env.INVOCATION_ID) {
+    logLine('Restarting via systemd...');
+    setTimeout(() => process.exit(0), 500);
+    return;
+  }
+
+  // Touch index.js to trigger nodemon restart (works if nodemon is watching).
+  // If not under nodemon, this is harmless and we fall through to spawn.
+  const entryPoint = path.join(backendDir, 'src/index.js');
+  try {
+    const now = new Date();
+    fs.utimesSync(entryPoint, now, now);
+    // If nodemon is watching, it will detect the mtime change and restart.
+    // Give it a moment — if we're still alive after 3s, nodemon didn't restart us,
+    // so fall through to the spawn approach.
+    logLine('Triggered file change for auto-restart watcher...');
+    setTimeout(() => {
+      // Still alive — no watcher. Spawn replacement.
+      logLine('No watcher detected, spawning replacement process...');
+      spawnReplacement(backendDir, entryPoint);
+    }, 3000);
+    return;
+  } catch {
+    // utimes failed, fall through
+  }
+
+  spawnReplacement(backendDir, entryPoint);
+}
+
+function spawnReplacement(backendDir, entryPoint) {
+  const { spawn } = require('child_process');
+  const fs = require('fs');
+  const isWin = process.platform === 'win32';
+
+  // Write a tiny restart script that waits for port release then starts node
+  const restartScript = require('path').join(backendDir, '.restart-tmp.' + (isWin ? 'cmd' : 'sh'));
+  if (isWin) {
+    fs.writeFileSync(restartScript,
+      `@echo off\r\nping -n 3 127.0.0.1 >nul\r\nnode "${entryPoint}"\r\ndel "%~f0"\r\n`);
+    const child = spawn('cmd', ['/c', restartScript], {
+      cwd: backendDir, detached: true, stdio: 'ignore',
+      env: { ...process.env },
+    });
+    child.unref();
+  } else {
+    fs.writeFileSync(restartScript,
+      `#!/bin/sh\nsleep 2\nnode "${entryPoint}"\nrm -f "${restartScript}"\n`);
+    fs.chmodSync(restartScript, '755');
+    const child = spawn('/bin/sh', [restartScript], {
+      cwd: backendDir, detached: true, stdio: 'ignore',
+      env: { ...process.env },
+    });
+    child.unref();
+  }
+
+  setTimeout(() => process.exit(0), 500);
 }
 
 module.exports = router;

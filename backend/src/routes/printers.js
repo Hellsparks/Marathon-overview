@@ -53,6 +53,29 @@ router.post('/', (req, res) => {
   res.status(201).json(normalizePrinter(printer));
 });
 
+// PUT /api/printers/reorder — bulk update sort_order
+router.put('/reorder', (req, res) => {
+  const { order } = req.body; // Array of printer IDs in desired order
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array of printer IDs' });
+
+  const db = getDb();
+  const update = db.prepare('UPDATE printers SET sort_order = ?, updated_at = datetime(\'now\') WHERE id = ?');
+  console.log(`[printers/reorder] Updating order for ${order.length} printers:`, order);
+  db.exec('BEGIN');
+  try {
+    for (let i = 0; i < order.length; i++) {
+      update.run(i, order[i]);
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: err.message });
+  }
+
+  const printers = db.prepare('SELECT * FROM printers ORDER BY sort_order, name').all();
+  res.json(printers.map(normalizePrinter));
+});
+
 // PUT /api/printers/:id
 router.put('/:id', (req, res) => {
   const { name, host, port, api_key, enabled, bed_width, bed_depth, bed_height, filament_types, toolhead_count, preset_id, custom_css, theme_mode, firmware_type, serial_number, scrape_css_path, hardened_tools, slicer_api_key } = req.body;
@@ -97,29 +120,6 @@ router.put('/:id', (req, res) => {
 
   const updated = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id);
   res.json(normalizePrinter(updated));
-});
-
-// PUT /api/printers/reorder — bulk update sort_order
-router.put('/reorder', (req, res) => {
-  const { order } = req.body; // Array of printer IDs in desired order
-  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array of printer IDs' });
-
-  const db = getDb();
-  const update = db.prepare('UPDATE printers SET sort_order = ?, updated_at = datetime(\'now\') WHERE id = ?');
-  console.log(`[printers/reorder] Updating order for ${order.length} printers:`, order);
-  db.exec('BEGIN');
-  try {
-    for (let i = 0; i < order.length; i++) {
-      update.run(i, order[i]);
-    }
-    db.exec('COMMIT');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    return res.status(500).json({ error: err.message });
-  }
-
-  const printers = db.prepare('SELECT * FROM printers ORDER BY sort_order, name').all();
-  res.json(printers.map(normalizePrinter));
 });
 
 // POST /api/printers/scrape-theme

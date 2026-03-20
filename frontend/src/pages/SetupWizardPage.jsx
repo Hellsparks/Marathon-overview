@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PrinterForm from '../components/printers/PrinterForm';
 
 const STEPS = ['Welcome', 'Spoolman', 'Add Printers', 'Done'];
 
 export default function SetupWizardPage() {
+    const navigate = useNavigate();
     const [step, setStep] = useState(0);
     const [loading, setLoading] = useState(false);
 
@@ -407,6 +409,19 @@ export default function SetupWizardPage() {
                 background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '24px',
                 width: '100%', maxWidth: '780px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', overflow: 'hidden'
             }}>
+                {/* Skip setup link */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 0' }}>
+                    <button
+                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px', padding: '4px 8px' }}
+                        onClick={async () => {
+                            await fetch('/api/setup/complete', { method: 'POST' });
+                            window.location.href = '/';
+                        }}
+                    >
+                        Skip Setup
+                    </button>
+                </div>
+
                 {/* Progress bar */}
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
                     {STEPS.map((s, i) => (

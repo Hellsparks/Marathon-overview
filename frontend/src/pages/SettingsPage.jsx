@@ -772,7 +772,7 @@ export default function SettingsPage() {
       mcpServers: {
         marathon: {
           command: 'node',
-          args: ['PATH_TO/mcp-server/src/index.js'],
+          args: [mcpStatus?.mcpEntry || 'PATH_TO/mcp-server/src/index.js'],
           env: { MARATHON_URL: mcpMarathonUrl },
         },
       },
@@ -1659,13 +1659,15 @@ export default function SettingsPage() {
                 <code style={{ userSelect: 'all' }}>{mcpStatus.endpoint}</code>
               </div>
               <div style={{ marginBottom: '14px' }}>
-                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Claude Desktop config (<code>%APPDATA%\Claude\claude_desktop_config.json</code>):</span>
+                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                  Claude Desktop config — Linux: <code>~/.config/Claude/claude_desktop_config.json</code> &nbsp;|&nbsp; Windows: <code>%APPDATA%\Claude\claude_desktop_config.json</code>
+                </span>
                 <pre style={{
                   background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '4px',
                   padding: '10px', fontSize: '12px', overflowX: 'auto', margin: 0, userSelect: 'all',
                 }}>{`"marathon": {
   "command": "node",
-  "args": ["D:/Github/Marathon-overview/mcp-server/src/index.js"],
+  "args": ["${mcpStatus.mcpEntry || '/path/to/mcp-server/src/index.js'}"],
   "env": { "MARATHON_URL": "${mcpStatus.marathonUrl}" }
 }`}</pre>
               </div>
