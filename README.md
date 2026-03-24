@@ -25,25 +25,23 @@
 
 ---
 
-## Running with Docker (recommended)
+## Install
 
-### Prerequisites
+### Docker (recommended)
 
-- [Docker](https://docs.docker.com/get-docker/) and Docker Compose
+```bash
+curl -fsSL https://raw.githubusercontent.com/Hellsparks/Marathon-overview/main/install-docker.sh | bash
+```
 
-### First-time setup
+Installs Docker if needed, downloads `docker-compose.yml` to `~/marathon`, and starts the stack. Open `http://localhost` when done.
+
+### Local (Node.js)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Hellsparks/Marathon-overview/main/install.sh | bash
 ```
 
-Then open `http://localhost` — done.
-
-Or if you already have the repo cloned:
-
-```bash
-docker compose up -d --build
-```
+Installs Node.js 22, clones the repo to `~/marathon`, builds the frontend, and sets up a systemd service. Open `http://localhost:3000` when done.
 
 The wizard walks you through:
 - Fresh install, or restore from a Marathon/Spoolman database backup
@@ -100,19 +98,13 @@ Data is persisted in Docker volumes:
 
 ---
 
-## Running Locally (development)
-
-### Prerequisites
-
-- **Node.js** ≥ 18
-- **npm**
+## Development
 
 ### Quick start
 
 ```bash
 git clone https://github.com/Hellsparks/Marathon-overview.git
 cd Marathon-overview
-
 npm run install:all
 npm run dev
 ```
