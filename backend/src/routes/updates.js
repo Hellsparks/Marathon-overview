@@ -7,7 +7,7 @@ const router = express.Router();
 
 const REPO = 'Hellsparks/Marathon-overview';
 const GHCR_IMAGE = 'ghcr.io/hellsparks/marathon-overview';
-const DEV_BRANCH = 'dev';
+const DEV_BRANCH = 'main';
 
 // Caches
 let releaseCache = null;
@@ -321,22 +321,25 @@ function logLine(line) {
 function applyDockerUpdate() {
   const composeFile = '/app/docker-compose.yml';
 
-  logLine('Pulling latest images from registry...');
-  exec(`docker compose -f ${composeFile} pull`, { timeout: 120000 }, (err, stdout, stderr) => {
+  // Derive the repo directory from the compose file location (mounted from host)
+  // The compose file is at <repo>/docker-compose.yml on the host
+  // We use Docker socket to run a helper container that pulls and rebuilds
+  logLine('Pulling latest source from GitHub...');
+  exec(`docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $(dirname ${composeFile}):/repo alpine/git -C /repo pull origin ${DEV_BRANCH}`, { timeout: 60000 }, (err, stdout, stderr) => {
     if (err) {
-      logLine(`Pull failed: ${stderr || err.message}`);
-      applyRunning = false;
-      return;
+      // Fall back: just rebuild with current source
+      logLine('Git pull unavailable in container — rebuilding with current source...');
+    } else {
+      logLine(stdout.trim() || 'Source updated.');
     }
-    logLine(stdout.trim() || 'Images pulled.');
-    logLine('Recreating containers with new images...');
-    exec(`docker compose -f ${composeFile} up -d`, { timeout: 60000 }, (err2, stdout2, stderr2) => {
+    logLine('Rebuilding and restarting containers...');
+    exec(`docker compose -f ${composeFile} up -d --build`, { timeout: 1800000 }, (err2, stdout2, stderr2) => {
       if (err2) {
-        logLine(`Recreate failed: ${stderr2 || err2.message}`);
+        logLine(`Rebuild failed: ${stderr2 || err2.message}`);
         applyRunning = false;
         return;
       }
-      logLine('Containers recreated. Backend restarting with new image...');
+      logLine('Containers rebuilt. Backend restarting...');
       // Docker will restart this container — log will cut off here
     });
   });
@@ -356,23 +359,15 @@ function applyDirectUpdate() {
 }
 
 function applyDevUpdate() {
-  logLine(`Fetching origin/${DEV_BRANCH}...`);
-  exec(`git fetch origin ${DEV_BRANCH}`, { cwd: process.cwd(), timeout: 30000 }, (err) => {
+  logLine(`Pulling latest from origin/${DEV_BRANCH}...`);
+  exec(`git pull origin ${DEV_BRANCH}`, { cwd: process.cwd(), timeout: 30000 }, (err, stdout) => {
     if (err) {
-      logLine(`Fetch failed: ${err.message}`);
+      logLine(`Pull failed: ${err.message}`);
       applyRunning = false;
       return;
     }
-    logLine(`Checking out ${DEV_BRANCH} and pulling...`);
-    exec(`git checkout ${DEV_BRANCH} && git pull origin ${DEV_BRANCH}`, { cwd: process.cwd(), timeout: 30000 }, (err2, stdout2) => {
-      if (err2) {
-        logLine(`Pull failed: ${err2.message}`);
-        applyRunning = false;
-        return;
-      }
-      logLine(stdout2.trim() || 'Pull OK');
-      installAndRestart();
-    });
+    logLine(stdout.trim() || 'Pull OK');
+    installAndRestart();
   });
 }
 

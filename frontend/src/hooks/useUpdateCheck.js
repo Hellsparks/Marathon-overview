@@ -1,22 +1,31 @@
 import { useState, useEffect } from 'react';
 import { checkForUpdate } from '../api/updates';
 
+const NOTIFS_KEY = 'marathon_update_notifs_enabled';
+
+export function getUpdateNotifsEnabled() {
+  return localStorage.getItem(NOTIFS_KEY) !== 'false';
+}
+
+export function setUpdateNotifsEnabled(val) {
+  localStorage.setItem(NOTIFS_KEY, val ? 'true' : 'false');
+}
+
 export function useUpdateCheck() {
   const [updateInfo, setUpdateInfo] = useState(null);
   const [dismissed, setDismissed] = useState(false);
+  const [notifsEnabled, setNotifsEnabled] = useState(getUpdateNotifsEnabled);
 
   useEffect(() => {
-    // Delay check so it doesn't compete with page load
+    if (!notifsEnabled) return;
+
     const timer = setTimeout(async () => {
       try {
         const info = await checkForUpdate();
         if (info.available) setUpdateInfo(info);
-      } catch {
-        // Silent — don't break the app if update check fails
-      }
+      } catch { /* silent */ }
     }, 10000);
 
-    // For dev channel, re-check periodically (every 5 min)
     const interval = setInterval(async () => {
       try {
         const info = await checkForUpdate();
@@ -26,10 +35,18 @@ export function useUpdateCheck() {
     }, 5 * 60 * 1000);
 
     return () => { clearTimeout(timer); clearInterval(interval); };
-  }, []);
+  }, [notifsEnabled]);
+
+  function toggleNotifs(val) {
+    setUpdateNotifsEnabled(val);
+    setNotifsEnabled(val);
+    if (!val) setUpdateInfo(null);
+  }
 
   return {
-    updateInfo: dismissed ? null : updateInfo,
+    updateInfo: dismissed || !notifsEnabled ? null : updateInfo,
+    notifsEnabled,
+    toggleNotifs,
     dismiss: () => setDismissed(true),
     recheck: async () => {
       setDismissed(false);

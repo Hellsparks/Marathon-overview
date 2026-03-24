@@ -7,6 +7,7 @@ import { getSettings, updateSetting } from '../api/settings';
 import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, stopSpoolman, startSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation, getFilaments, installSwatchDocker, uninstallSwatchDocker, getSwatchLocalStatus, startSwatchLocal, stopSwatchLocal } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate, getUpdateChannel, setUpdateChannel, getReleases, getDevCommits, applyUpdate, pullAndRestart, getApplyStatus } from '../api/updates';
+import { getUpdateNotifsEnabled, setUpdateNotifsEnabled } from '../hooks/useUpdateCheck';
 import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
 import UpdateDialog from '../components/layout/UpdateDialog';
 import ImportFieldMappingDialog from '../components/spoolman/ImportFieldMappingDialog';
@@ -73,6 +74,7 @@ export default function SettingsPage() {
   const [devGitInfo, setDevGitInfo] = useState(null);
   const [updateApplying, setUpdateApplying] = useState(false);
   const [updateLog, setUpdateLog] = useState([]);
+  const [notifsEnabled, setNotifsEnabledState] = useState(getUpdateNotifsEnabled);
 
   // Marathon DB backup
   const [dbExportBusy, setDbExportBusy] = useState(false);
@@ -1991,10 +1993,25 @@ export default function SettingsPage() {
                 <input type="radio" name="update_channel" value="dev"
                   checked={updateChannel === 'dev'}
                   onChange={() => handleChannelChange('dev')} />
-                <strong>Dev</strong>
-                <span className="text-muted" style={{ fontSize: '12px', marginLeft: '4px' }}>— Latest commits, watchdog checks every 5 min</span>
+                <strong>Main</strong>
+                <span className="text-muted" style={{ fontSize: '12px', marginLeft: '4px' }}>— Latest commits on main, checks every 5 min</span>
               </label>
             </div>
+          </div>
+
+          {/* Notification toggle */}
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={notifsEnabled}
+                onChange={e => {
+                  setUpdateNotifsEnabled(e.target.checked);
+                  setNotifsEnabledState(e.target.checked);
+                }}
+              />
+              <span>Show update notifications in navbar</span>
+            </label>
           </div>
 
           <div className="settings-row" style={{ marginBottom: '12px' }}>
@@ -2009,7 +2026,7 @@ export default function SettingsPage() {
               <span style={{ fontSize: '13px', color: 'var(--success)' }}>You are up to date &#10003;</span>
             )}
             {updateChecked && !updateInfo && updateChannel === 'dev' && (
-              <span style={{ fontSize: '13px', color: 'var(--success)' }}>Up to date with dev &#10003;</span>
+              <span style={{ fontSize: '13px', color: 'var(--success)' }}>Up to date with main &#10003;</span>
             )}
             {updateInfo && updateChannel === 'release' && (
               <button className="btn btn-sm btn-primary" onClick={() => setUpdateDialogOpen(true)}>
