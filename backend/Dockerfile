@@ -1,5 +1,7 @@
 FROM node:24-slim
 
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+
 # Copy docker CLI + compose plugin from official image so the update route
 # can run `docker compose pull && up` against the host socket.
 COPY --from=docker:cli /usr/local/bin/docker /usr/local/bin/docker
