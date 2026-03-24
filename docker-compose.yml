@@ -1,14 +1,4 @@
 services:
-  swatch:
-    build:
-      context: .
-      dockerfile: swatch-service/Dockerfile
-    image: ghcr.io/hellsparks/marathon-overview-swatch:latest
-    container_name: marathon-swatch
-    restart: unless-stopped
-    networks:
-      - marathon_net
-
   backend:
     build:
       context: ./backend
@@ -33,8 +23,6 @@ services:
       - gcode_uploads:/app/uploads
       - /var/run/docker.sock:/var/run/docker.sock
       - ./docker-compose.yml:/app/docker-compose.yml:ro
-    depends_on:
-      - swatch
     expose:
       - "3000"
     networks:
