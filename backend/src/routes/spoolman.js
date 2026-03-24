@@ -1700,12 +1700,7 @@ router.post('/swatch/install', async (req, res) => {
                 const isNotPublished = msg.includes('denied') || msg.includes('not found') || msg.includes('manifest unknown') || msg.includes('no such host');
                 if (!isNotPublished || !hasLocalDockerfile) throw pullErr;
                 push('Image not found on GHCR — building locally (this may take 10-15 min on first run)…');
-                if (IS_DOCKER) {
-                    // Docker-in-Docker: can't build via socket easily; use CLI if available
-                    await cliRun(`docker build -t ${SWATCH_IMAGE} -f swatch-service/Dockerfile .`, { cwd: DOCKERFILE_CTX });
-                } else {
-                    await cliRun(`docker build -t ${SWATCH_IMAGE} -f swatch-service/Dockerfile .`, { cwd: DOCKERFILE_CTX });
-                }
+                await cliRun(`docker build -t ${SWATCH_IMAGE} -f swatch-service/Dockerfile .`, { cwd: DOCKERFILE_CTX, timeoutMs: 1800000 });
                 push('Local build complete.');
             }
         }

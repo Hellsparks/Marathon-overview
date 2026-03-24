@@ -22,6 +22,8 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
+        proxyTimeout: 1800000, // 30 min — allows long-running ops like Docker builds
+        timeout: 1800000,
       },
       '/themes': {
         target: 'http://localhost:3000',
