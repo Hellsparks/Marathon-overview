@@ -34,10 +34,16 @@
 ### First-time setup
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Hellsparks/marathon-overview/main/docker-compose.yml -o docker-compose.yml && docker compose up -d
+curl -fsSL https://raw.githubusercontent.com/Hellsparks/Marathon-overview/main/install.sh | bash
 ```
 
-Then open `http://localhost` — the setup wizard launches automatically on first run.
+Then open `http://localhost` — done.
+
+Or if you already have the repo cloned:
+
+```bash
+docker compose up -d --build
+```
 
 The wizard walks you through:
 - Fresh install, or restore from a Marathon/Spoolman database backup
