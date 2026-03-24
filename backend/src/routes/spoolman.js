@@ -1614,9 +1614,9 @@ router.get('/swatch/status', async (_req, res) => {
             return res.json({ available: true, created: true, running: info.State?.Running || false, status: info.State?.Status || 'unknown' });
         }
         if (!await dockerCliAvailable()) return res.json({ available: false });
-        const { stdout } = await cliRun(`docker inspect --format "{{.State.Status}}" ${SWATCH_CONTAINER}`).catch(() => ({ stdout: '' }));
-        if (!stdout.trim()) return res.json({ available: true, created: false });
-        return res.json({ available: true, created: true, running: stdout.trim() === 'running', status: stdout.trim() });
+        const status = await cliRun(`docker inspect --format "{{.State.Status}}" ${SWATCH_CONTAINER}`).catch(() => '');
+        if (!status) return res.json({ available: true, created: false });
+        return res.json({ available: true, created: true, running: status === 'running', status });
     } catch {
         return res.json({ available: true, created: false });
     }
