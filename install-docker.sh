@@ -25,24 +25,35 @@ INSTALL_DIR="$HOME/marathon"
 
 # ── 1. Docker ───────────────────────────────────────────────────────────────
 step "Checking Docker..."
-if command -v docker &>/dev/null && docker compose version &>/dev/null 2>&1; then
-    ok "$(docker --version)"
-    ok "$(docker compose version)"
-else
+if ! command -v docker &>/dev/null; then
     step "Installing Docker..."
     curl -fsSL https://get.docker.com | sh
-    sudo systemctl enable docker
-    sudo systemctl start docker
     sudo usermod -aG docker "$USER"
-    ok "Docker installed and started"
-    warn "You may need to log out and back in for group permissions, or run: newgrp docker"
+    ok "Docker installed"
 fi
 
-# Ensure daemon is running
-if ! docker info &>/dev/null 2>&1; then
+# Start daemon — try systemctl, fall back to service
+start_docker() {
+    if command -v systemctl &>/dev/null && systemctl is-system-running --quiet 2>/dev/null; then
+        sudo systemctl enable docker 2>/dev/null || true
+        sudo systemctl start docker 2>/dev/null || true
+    elif command -v service &>/dev/null; then
+        sudo service docker start 2>/dev/null || true
+    fi
+}
+
+if ! sudo docker info &>/dev/null 2>&1; then
     step "Starting Docker daemon..."
-    sudo systemctl start docker
-    ok "Docker daemon started"
+    start_docker
+    # Wait up to 30s for the socket to appear
+    for i in $(seq 1 30); do
+        sudo docker info &>/dev/null 2>&1 && break
+        sleep 1
+    done
+    sudo docker info &>/dev/null 2>&1 || fail "Docker daemon did not start. Try: sudo systemctl start docker"
+    ok "Docker daemon running"
+else
+    ok "$(docker --version)"
 fi
 
 # ── 2. Clone repo ───────────────────────────────────────────────────────────
@@ -60,8 +71,8 @@ fi
 cd "$INSTALL_DIR"
 
 # ── 3. Build and start ──────────────────────────────────────────────────────
-step "Building and starting Marathon (this takes a few minutes)..."
-docker compose up -d --build
+step "Building and starting Marathon (this takes a few minutes on first run)..."
+sudo docker compose up -d --build
 ok "Marathon is running"
 
 echo ""
@@ -72,6 +83,6 @@ echo ""
 echo -e "  Install location: ${BOLD}$INSTALL_DIR${NC}"
 echo -e "  Open ${CYAN}http://localhost${NC} in your browser"
 echo ""
-echo -e "  To stop:   ${GRAY}cd $INSTALL_DIR && docker compose down${NC}"
+echo -e "  To stop:   ${GRAY}cd $INSTALL_DIR && sudo docker compose down${NC}"
 echo -e "  To update: go to ${CYAN}Settings → Updates${NC} inside Marathon"
 echo ""
