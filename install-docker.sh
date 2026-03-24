@@ -31,24 +31,37 @@ if command -v docker &>/dev/null && docker compose version &>/dev/null 2>&1; the
 else
     step "Installing Docker..."
     curl -fsSL https://get.docker.com | sh
+    sudo systemctl enable docker
+    sudo systemctl start docker
     sudo usermod -aG docker "$USER"
-    ok "Docker installed"
-    warn "You may need to log out and back in for Docker group permissions to take effect"
-    warn "If 'docker compose' fails, run: newgrp docker"
+    ok "Docker installed and started"
+    warn "You may need to log out and back in for group permissions, or run: newgrp docker"
 fi
 
-# ── 2. Get docker-compose.yml ───────────────────────────────────────────────
+# Ensure daemon is running
+if ! docker info &>/dev/null 2>&1; then
+    step "Starting Docker daemon..."
+    sudo systemctl start docker
+    ok "Docker daemon started"
+fi
+
+# ── 2. Clone repo ───────────────────────────────────────────────────────────
 step "Setting up Marathon..."
-mkdir -p "$INSTALL_DIR"
+REPO_URL="https://github.com/Hellsparks/Marathon-overview.git"
+
+if [ -d "$INSTALL_DIR/.git" ]; then
+    ok "Existing install found — pulling latest..."
+    git -C "$INSTALL_DIR" pull --ff-only
+else
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    ok "Cloned to $INSTALL_DIR"
+fi
+
 cd "$INSTALL_DIR"
 
-COMPOSE_URL="https://raw.githubusercontent.com/Hellsparks/Marathon-overview/main/docker-compose.yml"
-curl -fsSL "$COMPOSE_URL" -o docker-compose.yml
-ok "docker-compose.yml downloaded to $INSTALL_DIR"
-
-# ── 3. Pull and start ───────────────────────────────────────────────────────
-step "Starting Marathon..."
-docker compose up -d
+# ── 3. Build and start ──────────────────────────────────────────────────────
+step "Building and starting Marathon (this takes a few minutes)..."
+docker compose up -d --build
 ok "Marathon is running"
 
 echo ""
