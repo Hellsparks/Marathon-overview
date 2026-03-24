@@ -1,134 +1,187 @@
 # Marathon
 
-**Klipper Fleet Manager** — A web dashboard for monitoring and controlling multiple Klipper/Moonraker 3D printers from a single interface.
+**Klipper Fleet Manager** — A web dashboard for monitoring and controlling multiple 3D printers from a single interface. Supports Klipper/Moonraker, Bambu Lab, OctoPrint, and Duet/RepRapFirmware.
 
 ![GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)
 
 ## Features
 
-- **Multi-printer dashboard** — View all your printers at a glance with live status, temperatures, and progress
-- **Mainsail iframe view** — Click any printer in the sidebar to open its full Mainsail UI embedded in a full-screen iframe, maximising workspace
-- **Per-printer theming** — Each card can adopt the CSS from its host Mainsail instance, so your dashboard mirrors each printer's UI
-- **Global themes** — Built-in themes (Dark, Light, Cyberpunk, Ocean, Sunset) plus community Mainsail theme support via GitHub repos
-- **Print control** — Start, pause, resume, cancel prints directly from the dashboard
+- **Multi-printer dashboard** — Live status, temperatures, and progress across all printers at a glance
+- **Print control** — Start, pause, resume, cancel from the dashboard
 - **Temperature control** — Set hotend and bed temperatures with presets
+- **Print queue** — Per-printer queues with auto-start
 - **File management** — Upload, browse, and send G-code files to any printer
-- **Print queue** — Per-printer queues with auto-start capability
 - **Macro support** — Execute Klipper macros from the UI
 - **Webcam integration** — Embedded webcam streams per printer
-- **Spoolman integration** — View active spool info, automated swatch tracking prompts, generate 3D swatch STLs, quickly Auto-Create Spoolman extra fields, and export HueForge catalogues
-- **Print history & statistics** — Tracks completed prints with duration, filament used, material, and spool data
-- **Preventive maintenance tracking** — Track maintenance tasks (lubrication, belt checks, etc.) per printer based on cumulative print-time runtime hours
-
-## Architecture
-
-```
-frontend/          React 18 + Vite (SPA)
-backend/           Express + SQLite (REST API)
-docker-compose.yml Production deployment (nginx + node)
-```
-
-The frontend talks to the backend API, which proxies requests to each printer's Moonraker instance. Status is polled at a configurable interval and cached in the backend.
+- **Bambu Lab support** — AMS slot display, LAN mode control
+- **Per-printer theming** — Each card can adopt the CSS from its host Mainsail instance
+- **Global themes** — Built-in themes (Dark, Light, Cyberpunk, Ocean, Sunset) plus community Mainsail theme support
+- **Spoolman integration** — Active spool tracking, filament inventory, swatch STL generation, OrcaSlicer profile export, HueForge catalogue export
+- **Shrinkage calibration** — Ported Calistar/fleur_de_cali workflow for dimensional accuracy calibration with per-axis correction output
+- **Print history & statistics** — Completed prints with duration, filament used, material, and spool data
+- **Preventive maintenance tracking** — Per-printer maintenance tasks based on cumulative print-time hours
+- **One-click updates** — Pull new Marathon versions from GHCR directly from the UI
+- **Setup wizard** — Guided first-run setup for Spoolman, printers, and optional features
 
 ---
 
-## Running Locally
+## Running with Docker (recommended)
 
 ### Prerequisites
 
-- **Node.js** ≥ 18
-- **npm**
-- **Git** (for community theme support)
-- **Python 3** + **CadQuery** — required for the filament swatch STL generator
-  ```bash
-  pip install cadquery
-  ```
+- [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 
-### Quick Start
+### First-time setup
+
+**1. Get the compose file**
 
 ```bash
-# Clone the repo
-git clone https://github.com/Hellsparks/Marathon-overview.git
-cd Marathon-overview
-
-# Install all dependencies (root + backend + frontend)
-npm run install:all
-
-# Start both backend and frontend dev servers
-npm run dev
+curl -O https://raw.githubusercontent.com/Hellsparks/marathon-overview/main/docker-compose.yml
 ```
 
-This runs:
-- **Backend** on `http://localhost:3000` (with nodemon for auto-reload)
-- **Frontend** on `http://localhost:5173` (Vite dev server with HMR, proxies API to backend)
-
-### Adding Printers
-
-1. Go to **Settings** in the sidebar
-2. Enter a name, hostname/IP, and Moonraker port (default 7125)
-3. Set the theme mode: `Global` (uses app theme), `Scrape` (uses printer's Mainsail CSS), or `Custom`
-
----
-
-## Running with Docker
-
-### Prerequisites
-
-- **Docker** and **Docker Compose**
-
-### Deploy
+**2. Start Marathon**
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-This starts:
-- **Frontend** — nginx serving the built React app on port **80**, proxying `/api` to the backend
-- **Backend** — Node.js on port 3000 (internal only)
+**3. Open Marathon**
 
-Data is persisted in Docker volumes:
-- `backend_data` — SQLite database
-- `gcode_uploads` — Uploaded G-code files
+Go to `http://localhost` — the setup wizard launches automatically on first run.
 
-### Environment Variables
+The wizard walks you through:
+- Fresh install, or restore from a Marathon/Spoolman database backup
+- Spoolman URL configuration (auto-creates all required extra fields)
+- Adding your printers (Klipper, Bambu Lab, OctoPrint, Duet)
+- Enabling optional features (OrcaSlicer profiles, swatch generation, HueForge)
+
+### Installing Spoolman
+
+You don't need to set up Spoolman separately. After the wizard, go to **Settings → Docker Setup** and click **Install Spoolman**. Marathon pulls the container, starts it, and configures the URL automatically.
+
+### Swatch generator (optional)
+
+The swatch generator produces printable STL colour swatches per filament. Two options, both managed from **Settings → Swatch Generator**:
+
+| Option | Requirements | Notes |
+|---|---|---|
+| **Docker** | Docker (already running) | Marathon pulls and manages the container for you |
+| **Local (uv)** | [uv](https://docs.astral.sh/uv/) | No Docker needed. First start downloads cadquery (~500 MB). |
+
+Install uv:
+```bash
+# Mac/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows
+winget install astral-sh.uv
+```
+
+### How Marathon manages Docker containers
+
+Marathon mounts the host Docker socket (`/var/run/docker.sock`) into the backend container. When it installs Spoolman or the swatch service, it talks directly to the host Docker daemon via the socket API — no `docker` CLI needed inside the container. All containers Marathon creates are **siblings** on the host daemon:
+
+```
+Host Docker Daemon
+├── marathon-backend    ← mounts /var/run/docker.sock
+├── marathon-frontend
+├── marathon-swatch     ← installed via Settings
+└── marathon-spoolman   ← installed via Settings
+```
+
+### Environment variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3000` | Backend listen port |
 | `DB_PATH` | `/app/data/marathon.db` | SQLite database path |
 | `UPLOADS_DIR` | `/app/uploads` | G-code upload directory |
+| `SWATCH_SERVICE_URL` | `http://swatch:7321` | Swatch generator URL (overridden by DB setting) |
+
+Data is persisted in Docker volumes:
+- `backend_data` — SQLite database + Spoolman data
+- `gcode_uploads` — Uploaded G-code files
 
 ---
 
-## Project Structure
+## Running Locally (development)
+
+### Prerequisites
+
+- **Node.js** ≥ 18
+- **npm**
+
+### Quick start
+
+```bash
+git clone https://github.com/Hellsparks/Marathon-overview.git
+cd Marathon-overview
+
+npm run install:all
+npm run dev
+```
+
+This starts:
+- **Backend** on `http://localhost:3000` (nodemon, auto-reloads)
+- **Frontend** on `http://localhost:5173` (Vite HMR, proxies `/api` to backend)
+
+### Swatch generator in dev
+
+Use the combined dev scripts to start the swatch service alongside the app:
+
+```bash
+npm run dev:docker   # backend + frontend + swatch via Docker
+npm run dev:local    # backend + frontend + swatch via uv (Python 3.12)
+```
+
+Or start the swatch service on its own:
+
+```bash
+npm run swatch:docker
+npm run swatch:local
+```
+
+---
+
+## Architecture
+
+```
+frontend/          React 18 + Vite (SPA)
+backend/           Express + SQLite (REST API)
+swatch-service/    Python/CadQuery STL generator (Flask microservice)
+mcp-server/        MCP server for AI assistant integration
+docker-compose.yml Production deployment (nginx + node + swatch)
+```
 
 ```
 Marathon-overview/
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/          Dashboard, PrinterIframePage, Files, Queue, Spoolman, Maintenance, Settings
-│   │   ├── components/     UI components (PrinterCard, PrinterTab, MaintenancePrinterCard, layout, etc.)
-│   │   ├── contexts/       PrinterStatusContext, RightPanelContext
+│   │   ├── pages/          Dashboard, Files, Queue, Spoolman, Calibration, Maintenance, Settings, Setup
+│   │   ├── components/     UI components (PrinterCard, dialogs, layout, etc.)
 │   │   ├── api/            API client functions
 │   │   ├── hooks/          Custom React hooks
-│   │   ├── services/       Shared singletons (scrapedCssCache)
-│   │   ├── utils/          scopeCSS.js — shared CSS scoping utility
+│   │   ├── utils/          Color, CSS scoping utilities
 │   │   ├── index.css       Base styles + CSS variable system
-│   │   ├── themes.css      Built-in theme definitions (variables only)
+│   │   ├── themes.css      Built-in theme definitions
 │   │   └── App.jsx         Router + layout
 │   ├── Dockerfile          Multi-stage build (Vite → nginx)
 │   └── nginx.conf          Reverse proxy config
 ├── backend/
 │   ├── src/
-│   │   ├── routes/         REST endpoints (printers, files, control, etc.)
-│   │   ├── services/       Poller, Moonraker proxy
+│   │   ├── routes/         REST endpoints (printers, spoolman, files, setup, extras, etc.)
+│   │   ├── services/       Poller, Moonraker/Bambu clients, swatch generator
 │   │   ├── db/             SQLite schema + migrations
-│   │   ├── middleware/     Upload handling
 │   │   └── app.js          Express app setup
-│   └── Dockerfile          Node.js production image
-├── docker-compose.yml      Production deployment
-├── THEMING.md              Detailed theming architecture docs
-├── AGENTS.md               AI agent system document
+│   └── Dockerfile
+├── swatch-service/
+│   ├── server.py           Flask microservice
+│   ├── start.js            Cross-platform launcher (docker|local)
+│   └── Dockerfile
+├── mcp-server/
+├── docker-compose.yml
+├── THEMING.md
 └── package.json            Dev runner (concurrently)
 ```
 
@@ -136,30 +189,27 @@ Marathon-overview/
 
 ## TODO
 
-### High Priority
+### High priority
 - [ ] **WebSocket status updates** — Replace polling with Moonraker WebSocket subscriptions for real-time updates
-- [ ] **Authentication** — Add user login / API key support for multi-user or public-facing deployments
-- [ ] **Print status feedback** — Implement logic to check if assigned print finished or failed for tracking purposes
-- [ ] **Project templates** — Create templates from a series of gcode files with tracking and prefered color per file. (to track and print multiple versions of the same project several time)
+- [ ] **Authentication** — User login / API key support for multi-user or public-facing deployments
+- [ ] **Print status feedback** — Detect print completion/failure for accurate tracking
+- [ ] **Project templates** — Templates from a series of G-code files with per-file colour tracking
 
 ### Features
 - [ ] **Multi-file upload** — Drag-and-drop multiple G-code files at once
-- [ ] **Notifications** — Email/Discord/push alerts for print completion, errors, or temperature warnings
-- [ ] **OctoPrint support** — Extend beyond Klipper/Moonraker to support OctoPrint instances (partially stubbed in `routes/octoprint.js`)
-- [ ] **Mobile-responsive layout** — Optimize the grid and controls for phone/tablet screens
-- [ ] **Timelapse viewer** — Integrate with Moonraker's timelapse plugin to view/download timelapses
-- [ ] **Shopify addin?** — Able to take shopify orders and link an order to project templates with color wishes and put in project queue
+- [ ] **Notifications** — Email/Discord/push alerts for print completion, errors, temperature warnings
+- [ ] **Mobile layout** — Optimise grid and controls for phone/tablet screens
+- [ ] **Timelapse viewer** — Integrate with Moonraker's timelapse plugin
+- [ ] **Shopify integration** — Link orders to project templates with colour preferences and print queue
+- [ ] **OpenPrintTag support** — RFID spool tagging via ESP32 scanner + Spoolman
 
 ### Theming
-- [ ] **Theme editor** — Visual CSS variable editor in the Settings page
-- [ ] **Cache invalidation** — Add a "refresh theme" button to re-scrape Mainsail CSS without full page reload
+- [ ] **Theme editor** — Visual CSS variable editor in Settings
+- [ ] **Cache invalidation** — "Refresh theme" button to re-scrape Mainsail CSS without reload
 
 ### Infrastructure
-- [ ] **better-sqlite3 integration** — Currently using a lightweight SQLite wrapper; migrate to better-sqlite3 for WAL mode and better performance
+- [ ] **HTTPS support** — TLS termination in nginx config or Traefik/Caddy
 - [ ] **Database backups** — Auto-export DB snapshots to a configurable path
-- [ ] **HTTPS support** — Add TLS termination to the nginx config or a Traefik/Caddy alternative
-- [ ] **CI/CD pipeline** — GitHub Actions for automated builds and Docker image publishing
-- [ ] **OpenPrintTag support** — Ability to take spoolman spools and create RFID tags or reassign tags using a esp32 scanner device.
 
 ---
 
