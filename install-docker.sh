@@ -16,8 +16,8 @@ fail()  { echo -e "   ${RED}FAIL: $1${NC}"; exit 1; }
 
 echo ""
 echo -e "  ${MAGENTA}╔══════════════════════════════════════════╗${NC}"
-echo -e "  ${MAGENTA}║    Marathon Docker Installer for Linux    ║${NC}"
-echo -e "  ${MAGENTA}║       3D Printer Fleet Manager            ║${NC}"
+echo -e "  ${MAGENTA}║    Marathon Docker Installer for Linux   ║${NC}"
+echo -e "  ${MAGENTA}║       3D Printer Fleet Manager           ║${NC}"
 echo -e "  ${MAGENTA}╚══════════════════════════════════════════╝${NC}"
 echo ""
 
