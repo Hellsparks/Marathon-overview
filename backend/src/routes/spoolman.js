@@ -1394,6 +1394,11 @@ const SWATCH_IMAGE = 'ghcr.io/hellsparks/marathon-overview-swatch:latest';
 
 const IS_DOCKER = process.env.MARATHON_DEPLOY_MODE === 'docker';
 
+// Swatch install background job state (polled by frontend)
+let swatchInstallLog = [];
+let swatchInstallRunning = false;
+let swatchInstallDone = null; // { ok, swatchUrl } | { error: '...' }
+
 /** HTTP call over the Docker socket (Docker-mode only). */
 function dockerCall(method, path, body) {
     return new Promise((resolve, reject) => {
@@ -1416,6 +1421,16 @@ function dockerCall(method, path, body) {
             if (statusCode >= 400) {
                 reject(new Error((typeof parsed === 'object' && parsed?.message) ? parsed.message : `Docker ${statusCode}`));
             } else {
+                // For streaming responses (e.g. image pull), Docker returns NDJSON lines.
+                // Scan for an error field in any line.
+                if (typeof parsed !== 'object' || parsed === null) {
+                    for (const line of bodyText.split('\n')) {
+                        try {
+                            const obj = JSON.parse(line.trim());
+                            if (obj?.error) { reject(new Error(obj.error)); return; }
+                        } catch { /* not JSON */ }
+                    }
+                }
                 resolve(parsed);
             }
         });
@@ -1664,83 +1679,102 @@ router.post('/swatch/start', async (_req, res) => {
     }
 });
 
-// POST /api/spoolman/swatch/install — pull & run the swatch Docker container
+// GET /api/spoolman/swatch/install-status — poll progress of background install
+router.get('/swatch/install-status', (_req, res) => {
+    res.json({ running: swatchInstallRunning, log: [...swatchInstallLog], result: swatchInstallDone });
+});
+
+// POST /api/spoolman/swatch/install — pull & run the swatch Docker container (non-blocking)
 // Body: { port: 7321 }
 router.post('/swatch/install', async (req, res) => {
+    if (swatchInstallRunning) return res.status(409).json({ error: 'Install already in progress' });
+
     const port = parseInt(req.body?.port) || 7321;
-    const log = [];
-    const push = msg => { log.push(msg); console.log('[swatch-install]', msg); };
-    try {
-        // Remove any existing container
-        if (IS_DOCKER) {
-            await dockerCall('POST', `/containers/${SWATCH_CONTAINER}/stop`).catch(() => {});
-            await dockerCall('DELETE', `/containers/${SWATCH_CONTAINER}`).catch(() => {});
-        } else {
-            if (!await dockerCliAvailable()) return res.status(400).json({ error: 'Docker not available', log });
-            await cliRun(`docker stop ${SWATCH_CONTAINER}`).catch(() => {});
-            await cliRun(`docker rm ${SWATCH_CONTAINER}`).catch(() => {});
-        }
 
-        // Pull image (fall back to local build if not yet published on GHCR)
-        // In Docker mode the repo is mounted at /repo; locally __dirname=…/backend/src/routes → ../../.. = repo root
-        const DOCKERFILE_CTX = IS_DOCKER
-            ? '/repo'
-            : path.join(__dirname, '..', '..', '..');
-        const SWATCH_DOCKERFILE = path.join(DOCKERFILE_CTX, 'swatch-service', 'Dockerfile');
-        const hasLocalDockerfile = fs.existsSync(SWATCH_DOCKERFILE);
-
-        async function pullOrBuild() {
-            try {
-                push('Pulling swatch image…');
-                if (IS_DOCKER) {
-                    await dockerCall('POST', `/images/create?fromImage=${encodeURIComponent(SWATCH_IMAGE)}`);
-                } else {
-                    await cliRun(`docker pull ${SWATCH_IMAGE}`);
-                }
-                push('Image pulled.');
-            } catch (pullErr) {
-                const msg = pullErr.message || '';
-                const isNotPublished = msg.includes('denied') || msg.includes('not found') || msg.includes('manifest unknown') || msg.includes('no such host');
-                if (!isNotPublished || !hasLocalDockerfile) throw pullErr;
-                push('Image not found on GHCR — building locally (this may take 10-15 min on first run)…');
-                await cliRun(`docker build -t ${SWATCH_IMAGE} -f swatch-service/Dockerfile .`, { cwd: DOCKERFILE_CTX, timeoutMs: 1800000 });
-                push('Local build complete.');
-            }
-        }
-
-        await pullOrBuild();
-
-        push('Creating container…');
-        if (IS_DOCKER) {
-            await dockerCall('POST', `/containers/create?name=${SWATCH_CONTAINER}`, {
-                Image: SWATCH_IMAGE,
-                ExposedPorts: { '7321/tcp': {} },
-                HostConfig: {
-                    PortBindings: { '7321/tcp': [{ HostPort: String(port) }] },
-                    RestartPolicy: { Name: 'unless-stopped' },
-                    NetworkMode: 'marathon_net',
-                },
-            });
-            push('Starting container…');
-            await dockerCall('POST', `/containers/${SWATCH_CONTAINER}/start`);
-        } else {
-            push('Starting container…');
-            await cliRun(
-                `docker run -d --name ${SWATCH_CONTAINER} --restart unless-stopped` +
-                ` -p ${port}:7321 ${SWATCH_IMAGE}`
-            );
-        }
-
-        push('Swatch service started.');
-        const swatchUrl = `http://localhost:${port}`;
-        getDb().prepare(`INSERT INTO settings (key, value) VALUES ('swatch_service_url', ?)
-            ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(swatchUrl);
-        push(`Swatch URL set to ${swatchUrl}`);
-        res.json({ ok: true, log, swatchUrl });
-    } catch (err) {
-        push(`Error: ${err.message}`);
-        res.status(500).json({ error: err.message, log });
+    if (!IS_DOCKER && !await dockerCliAvailable()) {
+        return res.status(400).json({ error: 'Docker not available' });
     }
+
+    swatchInstallLog = ['Starting swatch install…'];
+    swatchInstallRunning = true;
+    swatchInstallDone = null;
+    res.json({ started: true });
+
+    const push = msg => { swatchInstallLog.push(msg); console.log('[swatch-install]', msg); };
+
+    (async () => {
+        try {
+            // Remove any existing container
+            if (IS_DOCKER) {
+                await dockerCall('POST', `/containers/${SWATCH_CONTAINER}/stop`).catch(() => {});
+                await dockerCall('DELETE', `/containers/${SWATCH_CONTAINER}`).catch(() => {});
+            } else {
+                await cliRun(`docker stop ${SWATCH_CONTAINER}`).catch(() => {});
+                await cliRun(`docker rm ${SWATCH_CONTAINER}`).catch(() => {});
+            }
+
+            // Pull image (fall back to local build if not yet published on GHCR)
+            const DOCKERFILE_CTX = IS_DOCKER
+                ? '/repo'
+                : path.join(__dirname, '..', '..', '..');
+            const SWATCH_DOCKERFILE = path.join(DOCKERFILE_CTX, 'swatch-service', 'Dockerfile');
+            const hasLocalDockerfile = fs.existsSync(SWATCH_DOCKERFILE);
+
+            async function pullOrBuild() {
+                try {
+                    push('Pulling swatch image from GHCR…');
+                    if (IS_DOCKER) {
+                        await dockerCall('POST', `/images/create?fromImage=${encodeURIComponent(SWATCH_IMAGE)}`);
+                    } else {
+                        await cliRun(`docker pull ${SWATCH_IMAGE}`);
+                    }
+                    push('Image pulled.');
+                } catch (pullErr) {
+                    const msg = pullErr.message || '';
+                    const isNotPublished = msg.includes('denied') || msg.includes('not found') || msg.includes('manifest unknown') || msg.includes('no such host');
+                    if (!isNotPublished || !hasLocalDockerfile) throw pullErr;
+                    push('Image not on GHCR — building locally (10-15 min on first run)…');
+                    await cliRun(`docker build -t ${SWATCH_IMAGE} -f swatch-service/Dockerfile .`, { cwd: DOCKERFILE_CTX, timeoutMs: 1800000 });
+                    push('Local build complete.');
+                }
+            }
+
+            await pullOrBuild();
+
+            push('Creating container…');
+            if (IS_DOCKER) {
+                await dockerCall('POST', `/containers/create?name=${SWATCH_CONTAINER}`, {
+                    Image: SWATCH_IMAGE,
+                    ExposedPorts: { '7321/tcp': {} },
+                    HostConfig: {
+                        PortBindings: { '7321/tcp': [{ HostPort: String(port) }] },
+                        RestartPolicy: { Name: 'unless-stopped' },
+                        NetworkMode: 'marathon_net',
+                    },
+                });
+                push('Starting container…');
+                await dockerCall('POST', `/containers/${SWATCH_CONTAINER}/start`);
+            } else {
+                push('Starting container…');
+                await cliRun(
+                    `docker run -d --name ${SWATCH_CONTAINER} --restart unless-stopped` +
+                    ` -p ${port}:7321 ${SWATCH_IMAGE}`
+                );
+            }
+
+            push('Swatch service started.');
+            const swatchUrl = `http://localhost:${port}`;
+            getDb().prepare(`INSERT INTO settings (key, value) VALUES ('swatch_service_url', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(swatchUrl);
+            push(`Swatch URL set to ${swatchUrl}`);
+            swatchInstallDone = { ok: true, swatchUrl };
+        } catch (err) {
+            push(`Error: ${err.message}`);
+            swatchInstallDone = { error: err.message };
+        } finally {
+            swatchInstallRunning = false;
+        }
+    })();
 });
 
 // DELETE /api/spoolman/swatch/uninstall

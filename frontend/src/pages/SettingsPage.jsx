@@ -4,7 +4,7 @@ import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
-import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, stopSpoolman, startSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation, getFilaments, installSwatchDocker, uninstallSwatchDocker, getSwatchLocalStatus, startSwatchLocal, stopSwatchLocal } from '../api/spoolman';
+import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, stopSpoolman, startSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation, getFilaments, installSwatchDocker, getSwatchInstallStatus, uninstallSwatchDocker, getSwatchLocalStatus, startSwatchLocal, stopSwatchLocal } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate, getUpdateChannel, setUpdateChannel, getReleases, getDevCommits, applyUpdate, pullAndRestart, getApplyStatus } from '../api/updates';
 import { getUpdateNotifsEnabled, setUpdateNotifsEnabled } from '../hooks/useUpdateCheck';
@@ -282,13 +282,26 @@ export default function SettingsPage() {
   async function handleSwatchDockerInstall() {
     setSwatchDockerBusy(true); setSwatchDockerLog([]); setSwatchDockerError('');
     try {
-      const result = await installSwatchDocker(parseInt(swatchDockerPort) || 7321);
-      setSwatchDockerLog(result.log || []);
-      if (result.swatchUrl) { setSwatchUrl(result.swatchUrl); setSwatchUrlSaved(result.swatchUrl); }
-      const s = await fetch('/api/spoolman/swatch/status').then(r => r.json());
-      setSwatchDockerStatus(s);
-    } catch (e) { setSwatchDockerError(e.message); }
-    finally { setSwatchDockerBusy(false); }
+      await installSwatchDocker(parseInt(swatchDockerPort) || 7321);
+      // Poll for progress
+      const poll = setInterval(async () => {
+        try {
+          const s = await getSwatchInstallStatus();
+          setSwatchDockerLog(s.log || []);
+          if (!s.running) {
+            clearInterval(poll);
+            setSwatchDockerBusy(false);
+            if (s.result?.error) setSwatchDockerError(s.result.error);
+            if (s.result?.swatchUrl) { setSwatchUrl(s.result.swatchUrl); setSwatchUrlSaved(s.result.swatchUrl); }
+            const st = await fetch('/api/spoolman/swatch/status').then(r => r.json());
+            setSwatchDockerStatus(st);
+          }
+        } catch { /* keep polling */ }
+      }, 1000);
+    } catch (e) {
+      setSwatchDockerError(e.message);
+      setSwatchDockerBusy(false);
+    }
   }
 
   async function handleSwatchDockerUninstall() {
@@ -1213,8 +1226,8 @@ export default function SettingsPage() {
                 </button>
               ) : (
                 <button className="btn btn-sm btn-primary" onClick={async () => {
-                  setDockerBusy(true);
-                  try { await startSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message); }
+                  setDockerBusy(true); setDockerError('');
+                  try { await startSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message || 'Failed to start container'); }
                   finally { setDockerBusy(false); }
                 }} disabled={dockerBusy}>
                   {dockerBusy ? 'Starting…' : 'Start'}
@@ -1304,7 +1317,12 @@ export default function SettingsPage() {
             )}
 
             {swatchDockerError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{swatchDockerError}</p>}
-            {swatchDockerLog.length > 0 && <div className="log-output">{swatchDockerLog.join('\n')}</div>}
+            {swatchDockerLog.length > 0 && (
+              <div className="log-output">
+                {swatchDockerLog.map((line, i) => <div key={i}>{line}</div>)}
+                {swatchDockerBusy && <div style={{ opacity: 0.5 }}>_</div>}
+              </div>
+            )}
           </div>
         )}
 

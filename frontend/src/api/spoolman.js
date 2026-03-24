@@ -480,7 +480,7 @@ export async function patchSpool(id, data) {
 
 // ── Swatch generator management ───────────────────────────────────────────────
 
-/** Install the swatch Docker container. */
+/** Start a swatch Docker install (non-blocking). Poll getSwatchInstallStatus() for progress. */
 export async function installSwatchDocker(port = 7321) {
     const r = await fetch(`${API}/swatch/install`, {
         method: 'POST',
@@ -490,6 +490,13 @@ export async function installSwatchDocker(port = 7321) {
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
     return body;
+}
+
+/** Poll progress of a swatch Docker install. */
+export async function getSwatchInstallStatus() {
+    const r = await fetch(`${API}/swatch/install-status`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
 }
 
 /** Remove the swatch Docker container. */
