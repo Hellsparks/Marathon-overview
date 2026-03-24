@@ -64,6 +64,8 @@ if [ -d "$INSTALL_DIR/.git" ]; then
     ok "Existing install found — pulling latest..."
     git -C "$INSTALL_DIR" pull --ff-only
 else
+    # Remove leftover directory from a previous failed install
+    [ -d "$INSTALL_DIR" ] && rm -rf "$INSTALL_DIR"
     git clone "$REPO_URL" "$INSTALL_DIR"
     ok "Cloned to $INSTALL_DIR"
 fi
