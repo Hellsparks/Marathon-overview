@@ -16,13 +16,12 @@ services:
       MARATHON_DEPLOY_MODE: docker
       MARATHON_CONTAINER_NAME: marathon-backend
       APP_VERSION: ${APP_VERSION:-dev}
-      SWATCH_SERVICE_URL: http://swatch:7321
       # OCTOPRINT_API_KEY: changeme
     volumes:
       - backend_data:/app/data
       - gcode_uploads:/app/uploads
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./docker-compose.yml:/app/docker-compose.yml:ro
+      - .:/repo                              # full repo root — enables git pull + docker build from container
     expose:
       - "3000"
     networks:
@@ -32,6 +31,8 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     image: ghcr.io/hellsparks/marathon-overview-frontend:latest
     restart: unless-stopped
     ports:
@@ -49,4 +50,5 @@ volumes:
 
 networks:
   marathon_net:
+    name: marathon_net
     driver: bridge

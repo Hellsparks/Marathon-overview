@@ -25,7 +25,11 @@ const PID_FILE   = path.join(DATA_DIR, 'mcp.pid');
 const PORT_FILE  = path.join(DATA_DIR, 'mcp.port');
 const URL_FILE   = path.join(DATA_DIR, 'mcp.url');
 const LOG_FILE   = path.join(DATA_DIR, 'mcp.log');
-const MCP_ENTRY  = path.join(__dirname, '../../../mcp-server/src/index.js');
+const IS_DOCKER  = process.env.MARATHON_DEPLOY_MODE === 'docker';
+// In Docker mode the repo is mounted at /repo; locally __dirname=…/backend/src/routes → ../../.. = repo root
+const MCP_ENTRY  = IS_DOCKER
+    ? '/repo/mcp-server/src/index.js'
+    : path.join(__dirname, '../../../mcp-server/src/index.js');
 const NODE_BIN   = process.execPath; // same node binary that runs the backend
 
 // ---------------------------------------------------------------------------

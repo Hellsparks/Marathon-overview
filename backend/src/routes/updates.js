@@ -39,13 +39,19 @@ function getCurrentVersion() {
   return process.env.APP_VERSION || require('../../../package.json').version;
 }
 
+const IS_DOCKER = process.env.MARATHON_DEPLOY_MODE === 'docker';
+const GIT_DIR   = IS_DOCKER ? '/repo' : process.cwd();
+
 function getCurrentGitInfo() {
   try {
-    const sha = execSync('git rev-parse --short HEAD', { encoding: 'utf8', cwd: process.cwd() }).trim();
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8', cwd: process.cwd() }).trim();
-    const date = execSync('git log -1 --format=%ci', { encoding: 'utf8', cwd: process.cwd() }).trim();
+    const sha    = execSync('git rev-parse --short HEAD', { encoding: 'utf8', cwd: GIT_DIR }).trim();
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8', cwd: GIT_DIR }).trim();
+    const date   = execSync('git log -1 --format=%ci', { encoding: 'utf8', cwd: GIT_DIR }).trim();
     return { sha, branch, date };
-  } catch { return { sha: 'unknown', branch: 'unknown', date: null }; }
+  } catch {
+    const ver = process.env.APP_VERSION;
+    return { sha: ver || 'unknown', branch: IS_DOCKER ? 'docker' : 'unknown', date: null };
+  }
 }
 
 function semverParse(v) {
@@ -96,18 +102,15 @@ async function fetchDevCommits() {
 
 async function checkDevAhead() {
   try {
-    const gitInfo = getCurrentGitInfo();
-    const localSha = execSync('git rev-parse HEAD', { encoding: 'utf8', cwd: process.cwd() }).trim();
+    const localSha = execSync('git rev-parse HEAD', { encoding: 'utf8', cwd: GIT_DIR }).trim();
 
-    // Fetch remote without pulling
-    execSync('git fetch origin ' + DEV_BRANCH, { encoding: 'utf8', cwd: process.cwd(), timeout: 15000 });
+    execSync('git fetch origin ' + DEV_BRANCH, { encoding: 'utf8', cwd: GIT_DIR, timeout: 15000 });
 
-    // Count commits ahead
-    const ahead = execSync(`git rev-list HEAD..origin/${DEV_BRANCH} --count`, { encoding: 'utf8', cwd: process.cwd() }).trim();
+    const ahead = execSync(`git rev-list HEAD..origin/${DEV_BRANCH} --count`, { encoding: 'utf8', cwd: GIT_DIR }).trim();
     const aheadCount = parseInt(ahead, 10) || 0;
 
     if (aheadCount > 0) {
-      const latestLine = execSync(`git log origin/${DEV_BRANCH} -1 --format=%H|||%s|||%ci`, { encoding: 'utf8', cwd: process.cwd() }).trim();
+      const latestLine = execSync(`git log origin/${DEV_BRANCH} -1 --format=%H|||%s|||%ci`, { encoding: 'utf8', cwd: GIT_DIR }).trim();
       const [latestSha, latestMsg, latestDate] = latestLine.split('|||');
       return { ahead: aheadCount, latestSha: latestSha?.slice(0, 7), latestMsg, latestDate, localSha: localSha.slice(0, 7) };
     }
@@ -319,29 +322,34 @@ function logLine(line) {
 }
 
 function applyDockerUpdate() {
-  const composeFile = '/app/docker-compose.yml';
+  // /repo is the host's repo root, mounted in docker-compose.yml as - .:/repo
+  const repoDir     = '/repo';
+  const composeFile = `${repoDir}/docker-compose.yml`;
 
-  // Derive the repo directory from the compose file location (mounted from host)
-  // The compose file is at <repo>/docker-compose.yml on the host
-  // We use Docker socket to run a helper container that pulls and rebuilds
-  logLine('Pulling latest source from GitHub...');
-  exec(`docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $(dirname ${composeFile}):/repo alpine/git -C /repo pull origin ${DEV_BRANCH}`, { timeout: 60000 }, (err, stdout, stderr) => {
-    if (err) {
-      // Fall back: just rebuild with current source
-      logLine('Git pull unavailable in container — rebuilding with current source...');
+  logLine(`Pulling latest from origin/${DEV_BRANCH}...`);
+  exec(`git -C ${repoDir} pull origin ${DEV_BRANCH}`, { timeout: 60000 }, (pullErr, pullOut) => {
+    if (pullErr) {
+      logLine(`Git pull failed: ${pullErr.message}`);
+      // Continue anyway — rebuild whatever source is there
     } else {
-      logLine(stdout.trim() || 'Source updated.');
+      logLine(pullOut.trim() || 'Already up to date.');
     }
+
+    // Get the new SHA to stamp the rebuilt containers
+    let version = 'dev';
+    try { version = execSync(`git -C ${repoDir} rev-parse --short HEAD`, { encoding: 'utf8' }).trim(); } catch {}
+
     logLine('Rebuilding and restarting containers...');
-    exec(`docker compose -f ${composeFile} up -d --build`, { timeout: 1800000 }, (err2, stdout2, stderr2) => {
-      if (err2) {
-        logLine(`Rebuild failed: ${stderr2 || err2.message}`);
-        applyRunning = false;
-        return;
-      }
-      logLine('Containers rebuilt. Backend restarting...');
-      // Docker will restart this container — log will cut off here
-    });
+    exec(`APP_VERSION=${version} docker compose -f ${composeFile} up -d --build`,
+      { timeout: 1800000 }, (err2, _out2, stderr2) => {
+        if (err2) {
+          logLine(`Rebuild failed: ${stderr2 || err2.message}`);
+          applyRunning = false;
+          return;
+        }
+        logLine(`Containers rebuilt (${version}). Backend restarting...`);
+        // Docker will restart this container — log cuts off here
+      });
   });
 }
 

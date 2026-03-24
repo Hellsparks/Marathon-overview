@@ -947,81 +947,52 @@ export default function SettingsPage() {
 
       {/* ════════════════════ 2. Connections ════════════════════ */}
       <Section title="Connections" defaultOpen={true}>
-        {/* Spoolman URL */}
-        {/* Service Ports */}
-        <div className="settings-card">
-          <h3 className="settings-card-title">Service Ports</h3>
-          <p className="settings-card-desc">
-            Overview of ports used by Marathon services. Change ports via the relevant URL fields below or by setting environment variables before starting the service.
-          </p>
-          <table style={{ fontSize: '13px', borderCollapse: 'collapse', width: '100%' }}>
-            <tbody>
-              {[
-                { label: 'Marathon',       value: `${window.location.hostname}:${backendPort}`, note: 'Change via PORT env var + restart' },
-                { label: 'Spoolman',       value: spoolmanUrl || '—',                           note: 'Edit in Spoolman URL card below' },
-                { label: 'Swatch service', value: swatchUrl || '— not configured',              note: 'Edit in Filaments → Swatch Generator below' },
-              ].map(({ label, value, note }) => (
-                <tr key={label} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '8px 12px 8px 0', fontWeight: 500, whiteSpace: 'nowrap' }}>{label}</td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: '12px', color: value.startsWith('—') ? 'var(--text-muted)' : 'var(--primary)' }}>{value}</td>
-                  <td style={{ padding: '8px 0', fontSize: '11px', color: 'var(--text-muted)' }}>{note}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="settings-card">
-          <h3 className="settings-card-title">Spoolman URL</h3>
-          <p className="settings-card-desc">
-            Connect to a <a href="https://github.com/Donkie/Spoolman" target="_blank" rel="noopener noreferrer">Spoolman</a> instance to track filament spools on each printer.
-          </p>
-          <div className="settings-row">
-            <input
-              type="url"
-              className="form-input"
-              placeholder="http://10.0.0.24:32000"
-              value={spoolmanUrl}
-              onChange={e => setSpoolmanUrl(e.target.value)}
-              style={{ flex: 1, minWidth: '200px', maxWidth: '400px', fontSize: '14px', padding: '10px 14px' }}
-            />
-            <button className="btn btn-sm btn-primary" onClick={handleSpoolmanSave}>
-              Save
-            </button>
-            <button className="btn btn-sm" onClick={handleSpoolmanTest}>
-              Test Connection
-            </button>
-          </div>
-          {spoolmanMsg && (
-            <p className={`settings-status ${spoolmanStatus || ''}`} style={{ marginTop: '8px', color: spoolmanStatus === 'ok' ? 'var(--success)' : spoolmanStatus === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
-              {spoolmanMsg}
+        <div className="settings-2col">
+          {/* Spoolman URL */}
+          <div className="settings-card">
+            <h3 className="settings-card-title">Spoolman URL</h3>
+            <p className="settings-card-desc">
+              Connect to <a href="https://github.com/Donkie/Spoolman" target="_blank" rel="noopener noreferrer">Spoolman</a> to track filament spools on each printer.
             </p>
-          )}
-        </div>
-
-        {/* Teamster URL */}
-        <div className="settings-card">
-          <h3 className="settings-card-title">Teamster Scale URL</h3>
-          <p className="settings-card-desc">
-            Connect to a <strong>Teamster</strong> ESP32 load cell device to auto-measure spool weights.
-          </p>
-          <div className="settings-row">
-            <input
-              type="url"
-              className="form-input"
-              placeholder="http://192.168.1.50"
-              value={teamsterUrl}
-              onChange={e => setTeamsterUrl(e.target.value)}
-              style={{ flex: 1, minWidth: '200px', maxWidth: '400px', fontSize: '14px', padding: '10px 14px' }}
-            />
-            <button className="btn btn-sm btn-primary" onClick={handleTeamsterSave}>Save</button>
-            <button className="btn btn-sm" onClick={handleTeamsterTest}>Test Connection</button>
+            <div className="settings-row">
+              <input
+                type="url"
+                className="form-input"
+                placeholder="http://10.0.0.24:32000"
+                value={spoolmanUrl}
+                onChange={e => setSpoolmanUrl(e.target.value)}
+                style={{ flex: 1, minWidth: '140px' }}
+              />
+              <button className="btn btn-sm btn-primary" onClick={handleSpoolmanSave}>Save</button>
+              <button className="btn btn-sm" onClick={handleSpoolmanTest}>Test</button>
+            </div>
+            {spoolmanMsg && (
+              <p className={`settings-status ${spoolmanStatus || ''}`} style={{ marginTop: '6px' }}>{spoolmanMsg}</p>
+            )}
           </div>
-          {teamsterMsg && (
-            <p className={`settings-status ${teamsterStatus || ''}`} style={{ marginTop: '8px', color: teamsterStatus === 'ok' ? 'var(--success)' : teamsterStatus === 'error' ? 'var(--danger)' : 'var(--text-muted)' }}>
-              {teamsterMsg}
+
+          {/* Teamster URL */}
+          <div className="settings-card">
+            <h3 className="settings-card-title">Teamster Scale URL</h3>
+            <p className="settings-card-desc">
+              Connect to a <strong>Teamster</strong> ESP32 load cell to auto-measure spool weights.
             </p>
-          )}
+            <div className="settings-row">
+              <input
+                type="url"
+                className="form-input"
+                placeholder="http://192.168.1.50"
+                value={teamsterUrl}
+                onChange={e => setTeamsterUrl(e.target.value)}
+                style={{ flex: 1, minWidth: '140px' }}
+              />
+              <button className="btn btn-sm btn-primary" onClick={handleTeamsterSave}>Save</button>
+              <button className="btn btn-sm" onClick={handleTeamsterTest}>Test</button>
+            </div>
+            {teamsterMsg && (
+              <p className={`settings-status ${teamsterStatus || ''}`} style={{ marginTop: '6px' }}>{teamsterMsg}</p>
+            )}
+          </div>
         </div>
 
         {/* Bambu Connect */}
@@ -1210,119 +1181,69 @@ export default function SettingsPage() {
               }
             </p>
 
-            {/* Status badge */}
-            <div className="settings-row" style={{ marginBottom: '16px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
+            {/* Status + actions row */}
+            <div className="settings-row" style={{ marginBottom: '10px' }}>
               {!dockerStatus.created ? (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not installed</span>
+                <span className="status-pill idle">Not installed</span>
               ) : dockerStatus.running ? (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid var(--success)' }}>Running</span>
+                <span className="status-pill running">Running</span>
               ) : (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(245,158,11,0.15)', color: 'var(--warning,#f59e0b)', border: '1px solid var(--warning,#f59e0b)' }}>{dockerStatus.status}</span>
+                <span className="status-pill stopped">{dockerStatus.status}</span>
+              )}
+
+              {!dockerStatus.created ? (
+                <>
+                  <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
+                  <input type="number" className="form-input" value={installPort}
+                    onChange={e => setInstallPort(e.target.value)}
+                    style={{ width: '80px', padding: '4px 8px', fontSize: '13px' }}
+                    min="1024" max="65535" />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>→ <code>localhost:{installPort}</code></span>
+                  <button className="btn btn-sm btn-primary" onClick={handleDockerInstall} disabled={dockerBusy}>
+                    {dockerBusy ? 'Installing…' : 'Install Spoolman'}
+                  </button>
+                </>
+              ) : dockerStatus.running ? (
+                <button className="btn btn-sm" onClick={async () => {
+                  setDockerBusy(true);
+                  try { await stopSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message); }
+                  finally { setDockerBusy(false); }
+                }} disabled={dockerBusy}>
+                  {dockerBusy ? 'Stopping…' : 'Stop'}
+                </button>
+              ) : (
+                <button className="btn btn-sm btn-primary" onClick={async () => {
+                  setDockerBusy(true);
+                  try { await startSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message); }
+                  finally { setDockerBusy(false); }
+                }} disabled={dockerBusy}>
+                  {dockerBusy ? 'Starting…' : 'Start'}
+                </button>
+              )}
+
+              {dockerStatus.created && (
+                <button className="btn btn-sm" onClick={() => setShowDockerDanger(v => !v)}
+                  style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+                  {showDockerDanger ? '▲ Danger zone' : '▼ Danger zone'}
+                </button>
               )}
             </div>
 
-            {!dockerStatus.created ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div className="settings-row">
-                  <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>External port:</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={installPort}
-                    onChange={e => setInstallPort(e.target.value)}
-                    style={{ width: '90px', padding: '6px 10px', fontSize: '13px' }}
-                    min="1024" max="65535"
-                  />
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Spoolman will be accessible at <code>http://&lt;host&gt;:{installPort}</code>
-                  </span>
-                </div>
-                <div>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={handleDockerInstall}
-                    disabled={dockerBusy}
-                    style={{ minWidth: '140px' }}
-                  >
-                    {dockerBusy ? 'Installing…' : 'Install Spoolman'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {dockerStatus.running ? (
-                    <button className="btn btn-sm" onClick={async () => {
-                      setDockerBusy(true);
-                      try { await stopSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message); }
-                      finally { setDockerBusy(false); }
-                    }} disabled={dockerBusy}>
-                      {dockerBusy ? 'Stopping…' : 'Stop'}
-                    </button>
-                  ) : (
-                    <button className="btn btn-sm btn-primary" onClick={async () => {
-                      setDockerBusy(true);
-                      try { await startSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message); }
-                      finally { setDockerBusy(false); }
-                    }} disabled={dockerBusy}>
-                      {dockerBusy ? 'Starting…' : 'Start'}
-                    </button>
-                  )}
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => setShowDockerDanger(v => !v)}
-                    style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}
-                  >
-                    {showDockerDanger ? '▲ Hide danger zone' : '▼ Show danger zone'}
-                  </button>
-                </div>
-                {showDockerDanger && (
-                  <div style={{
-                    display: 'flex', flexDirection: 'column', gap: '10px',
-                    padding: '12px', borderRadius: 'var(--radius)',
-                    border: '1px solid var(--danger)', background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <input
-                        type="checkbox"
-                        id="removeData"
-                        checked={removeData}
-                        onChange={e => setRemoveData(e.target.checked)}
-                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                      />
-                      <label htmlFor="removeData" style={{ fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
-                        Also delete all Spoolman data (volume) — irreversible
-                      </label>
-                    </div>
-                    <div>
-                      <button
-                        className="btn btn-sm"
-                        onClick={handleDockerUninstall}
-                        disabled={dockerBusy}
-                        style={{ minWidth: '160px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                      >
-                        {dockerBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
-                      </button>
-                    </div>
-                  </div>
-                )}
+            {showDockerDanger && (
+              <div className="danger-zone">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
+                  <input type="checkbox" id="removeData" checked={removeData} onChange={e => setRemoveData(e.target.checked)} />
+                  Also delete all Spoolman data (volume) — irreversible
+                </label>
+                <button className="btn btn-sm" onClick={handleDockerUninstall} disabled={dockerBusy}
+                  style={{ borderColor: 'var(--danger)', color: 'var(--danger)', alignSelf: 'flex-start' }}>
+                  {dockerBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
+                </button>
               </div>
             )}
 
-            {dockerError && (
-              <p style={{ marginTop: '10px', fontSize: '12px', color: 'var(--danger)' }}>{dockerError}</p>
-            )}
-            {dockerLog.length > 0 && (
-              <div style={{
-                marginTop: '12px', padding: '10px 14px',
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px',
-                maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap',
-              }}>
-                {dockerLog.join('\n')}
-              </div>
-            )}
+            {dockerError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{dockerError}</p>}
+            {dockerLog.length > 0 && <div className="log-output">{dockerLog.join('\n')}</div>}
           </div>
         )}
 
@@ -1335,73 +1256,55 @@ export default function SettingsPage() {
               The image is <code style={{ fontSize: '11px' }}>ghcr.io/hellsparks/marathon-overview-swatch:latest</code>.
             </p>
 
-            <div className="settings-row" style={{ marginBottom: '16px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
+            <div className="settings-row" style={{ marginBottom: '10px' }}>
               {!swatchDockerStatus?.created ? (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not installed</span>
+                <span className="status-pill idle">Not installed</span>
               ) : swatchDockerStatus?.running ? (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid var(--success)' }}>Running</span>
+                <span className="status-pill running">Running</span>
               ) : (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(245,158,11,0.15)', color: 'var(--warning,#f59e0b)', border: '1px solid var(--warning,#f59e0b)' }}>{swatchDockerStatus?.status || 'Stopped'}</span>
+                <span className="status-pill stopped">{swatchDockerStatus?.status || 'Stopped'}</span>
               )}
-            </div>
 
-            {!swatchDockerStatus?.created ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div className="settings-row">
+              {!swatchDockerStatus?.created ? (
+                <>
                   <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
                   <input type="number" className="form-input" value={swatchDockerPort}
                     onChange={e => setSwatchDockerPort(e.target.value)}
-                    style={{ width: '90px', padding: '6px 10px', fontSize: '13px' }} min="1024" max="65535" />
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Service at <code>http://localhost:{swatchDockerPort}</code>
-                  </span>
-                </div>
-                <div>
-                  <button className="btn btn-sm btn-primary" onClick={handleSwatchDockerInstall}
-                    disabled={swatchDockerBusy} style={{ minWidth: '160px' }}>
+                    style={{ width: '80px', padding: '4px 8px', fontSize: '13px' }} min="1024" max="65535" />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>→ <code>localhost:{swatchDockerPort}</code></span>
+                  <button className="btn btn-sm btn-primary" onClick={handleSwatchDockerInstall} disabled={swatchDockerBusy}>
                     {swatchDockerBusy ? 'Installing…' : 'Install Swatch Generator'}
                   </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {swatchDockerStatus?.running ? (
-                    <button className="btn btn-sm" onClick={handleSwatchDockerStop} disabled={swatchDockerBusy}>
-                      {swatchDockerBusy ? 'Stopping…' : 'Stop'}
-                    </button>
-                  ) : (
-                    <button className="btn btn-sm btn-primary" onClick={handleSwatchDockerStart} disabled={swatchDockerBusy}>
-                      {swatchDockerBusy ? 'Starting…' : 'Start'}
-                    </button>
-                  )}
-                  <button className="btn btn-sm" onClick={() => setShowSwatchDanger(v => !v)}
-                    style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-                    {showSwatchDanger ? '▲ Hide danger zone' : '▼ Show danger zone'}
-                  </button>
-                </div>
-                {showSwatchDanger && (
-                  <div style={{
-                    display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px',
-                    borderRadius: 'var(--radius)', border: '1px solid var(--danger)',
-                    background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
-                  }}>
-                    <button className="btn btn-sm" onClick={handleSwatchDockerUninstall} disabled={swatchDockerBusy}
-                      style={{ minWidth: '160px', borderColor: 'var(--danger)', color: 'var(--danger)' }}>
-                      {swatchDockerBusy ? 'Removing…' : 'Remove Container'}
-                    </button>
-                  </div>
-                )}
+                </>
+              ) : swatchDockerStatus?.running ? (
+                <button className="btn btn-sm" onClick={handleSwatchDockerStop} disabled={swatchDockerBusy}>
+                  {swatchDockerBusy ? 'Stopping…' : 'Stop'}
+                </button>
+              ) : (
+                <button className="btn btn-sm btn-primary" onClick={handleSwatchDockerStart} disabled={swatchDockerBusy}>
+                  {swatchDockerBusy ? 'Starting…' : 'Start'}
+                </button>
+              )}
+
+              {swatchDockerStatus?.created && (
+                <button className="btn btn-sm" onClick={() => setShowSwatchDanger(v => !v)}
+                  style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+                  {showSwatchDanger ? '▲ Danger zone' : '▼ Danger zone'}
+                </button>
+              )}
+            </div>
+
+            {showSwatchDanger && (
+              <div className="danger-zone">
+                <button className="btn btn-sm" onClick={handleSwatchDockerUninstall} disabled={swatchDockerBusy}
+                  style={{ borderColor: 'var(--danger)', color: 'var(--danger)', alignSelf: 'flex-start' }}>
+                  {swatchDockerBusy ? 'Removing…' : 'Remove Container'}
+                </button>
               </div>
             )}
 
-            {swatchDockerError && <p style={{ marginTop: '10px', fontSize: '12px', color: 'var(--danger)' }}>{swatchDockerError}</p>}
-            {swatchDockerLog.length > 0 && (
-              <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px', maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
-                {swatchDockerLog.join('\n')}
-              </div>
-            )}
+            {swatchDockerError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{swatchDockerError}</p>}
+            {swatchDockerLog.length > 0 && <div className="log-output">{swatchDockerLog.join('\n')}</div>}
           </div>
         )}
 
@@ -1417,52 +1320,40 @@ export default function SettingsPage() {
               )}
             </p>
 
-            <div className="settings-row" style={{ marginBottom: '16px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
+            <div className="settings-row" style={{ marginBottom: '10px' }}>
               {!swatchLocalStatus.uvAvailable ? (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(245,158,11,0.15)', color: 'var(--warning,#f59e0b)', border: '1px solid var(--warning,#f59e0b)' }}>uv not installed</span>
+                <span className="status-pill stopped">uv not installed</span>
               ) : swatchLocalStatus.running ? (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid var(--success)' }}>Running (PID {swatchLocalStatus.pid})</span>
+                <span className="status-pill running">Running (PID {swatchLocalStatus.pid})</span>
               ) : (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not running</span>
+                <span className="status-pill idle">Not running</span>
               )}
-            </div>
 
-            {swatchLocalStatus.uvAvailable && (
-              swatchLocalStatus.running ? (
-                <button className="btn btn-sm" onClick={handleSwatchLocalStop} disabled={swatchLocalBusy}>
-                  {swatchLocalBusy ? 'Stopping…' : 'Stop'}
-                </button>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div className="settings-row">
+              {swatchLocalStatus.uvAvailable && (
+                swatchLocalStatus.running ? (
+                  <button className="btn btn-sm" onClick={handleSwatchLocalStop} disabled={swatchLocalBusy}>
+                    {swatchLocalBusy ? 'Stopping…' : 'Stop'}
+                  </button>
+                ) : (
+                  <>
                     <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
                     <input type="number" className="form-input" value={swatchLocalPort}
                       onChange={e => setSwatchLocalPort(e.target.value)}
-                      style={{ width: '90px', padding: '6px 10px', fontSize: '13px' }} min="1024" max="65535" />
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      Service at <code>http://localhost:{swatchLocalPort}</code>
-                    </span>
-                  </div>
-                  <div>
-                    <button className="btn btn-sm btn-primary" onClick={handleSwatchLocalStart} disabled={swatchLocalBusy}
-                      style={{ minWidth: '200px' }}>
-                      {swatchLocalBusy ? 'Starting… (downloading cadquery on first run)' : 'Start Swatch Generator'}
+                      style={{ width: '80px', padding: '4px 8px', fontSize: '13px' }} min="1024" max="65535" />
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>→ <code>localhost:{swatchLocalPort}</code></span>
+                    <button className="btn btn-sm btn-primary" onClick={handleSwatchLocalStart} disabled={swatchLocalBusy}>
+                      {swatchLocalBusy ? 'Starting…' : 'Start Swatch Generator'}
                     </button>
-                  </div>
-                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
-                    First start downloads cadquery (~500 MB) — takes a few minutes. Subsequent starts are instant.
-                  </p>
-                </div>
-              )
+                  </>
+                )
+              )}
+            </div>
+            {swatchLocalStatus.uvAvailable && !swatchLocalStatus.running && (
+              <p style={{ margin: '0 0 6px', fontSize: '11px', color: 'var(--text-muted)' }}>First start downloads cadquery (~500 MB) — takes a few minutes.</p>
             )}
 
-            {swatchLocalError && <p style={{ marginTop: '10px', fontSize: '12px', color: 'var(--danger)' }}>{swatchLocalError}</p>}
-            {swatchLocalLog.length > 0 && (
-              <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px', maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
-                {swatchLocalLog.join('\n')}
-              </div>
-            )}
+            {swatchLocalError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{swatchLocalError}</p>}
+            {swatchLocalLog.length > 0 && <div className="log-output">{swatchLocalLog.join('\n')}</div>}
           </div>
         )}
 
@@ -1483,116 +1374,68 @@ export default function SettingsPage() {
               No Docker required — data lives in <code style={{ fontSize: '11px' }}>{nativeStatus.installDir}/data/</code>
             </p>
 
-            {/* Status */}
-            <div className="settings-row" style={{ marginBottom: '16px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
+            {/* Status + actions row */}
+            <div className="settings-row" style={{ marginBottom: '10px' }}>
               {!nativeStatus.installed ? (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not installed</span>
+                <span className="status-pill idle">Not installed</span>
               ) : nativeStatus.running ? (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid var(--success)' }}>Running (PID {nativeStatus.pid}, port {nativeStatus.port})</span>
+                <span className="status-pill running">Running (PID {nativeStatus.pid}, port {nativeStatus.port})</span>
               ) : (
-                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(245,158,11,0.15)', color: 'var(--warning,#f59e0b)', border: '1px solid var(--warning,#f59e0b)' }}>Installed, not running</span>
+                <span className="status-pill stopped">Installed, not running</span>
               )}
               {nativeStatus.pythonVersion && (
                 <span style={{ fontSize: '11px', opacity: 0.5 }}>Python {nativeStatus.pythonVersion}</span>
               )}
-            </div>
 
-            {!nativeStatus.installed ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div className="settings-row">
+              {!nativeStatus.installed ? (
+                <>
                   <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={nativePort}
+                  <input type="number" className="form-input" value={nativePort}
                     onChange={e => setNativePort(e.target.value)}
-                    style={{ width: '90px', padding: '6px 10px', fontSize: '13px' }}
-                    min="1024" max="65535"
-                  />
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Accessible at <code>http://localhost:{nativePort}</code>
-                  </span>
-                </div>
-                <div>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={handleNativeInstall}
-                    disabled={nativeBusy}
-                    style={{ minWidth: '160px' }}
-                  >
+                    style={{ width: '80px', padding: '4px 8px', fontSize: '13px' }} min="1024" max="65535" />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>→ <code>localhost:{nativePort}</code></span>
+                  <button className="btn btn-sm btn-primary" onClick={handleNativeInstall} disabled={nativeBusy}>
                     {nativeBusy ? 'Installing…' : 'Install Spoolman'}
                   </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {nativeStatus.running ? (
-                    <button className="btn btn-sm" onClick={handleNativeStop} disabled={nativeBusy}>
-                      {nativeBusy ? 'Stopping…' : 'Stop'}
-                    </button>
-                  ) : (
-                    <button className="btn btn-sm btn-primary" onClick={handleNativeStart} disabled={nativeBusy}>
-                      {nativeBusy ? 'Starting…' : 'Start'}
-                    </button>
-                  )}
-                </div>
-                <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div>
-                    <button
-                      className="btn btn-sm"
-                      onClick={() => setShowNativeDanger(v => !v)}
-                      style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}
-                    >
-                      {showNativeDanger ? '▲ Hide danger zone' : '▼ Show danger zone'}
-                    </button>
-                  </div>
-                  {showNativeDanger && (
-                    <div style={{
-                      display: 'flex', flexDirection: 'column', gap: '10px',
-                      padding: '12px', borderRadius: 'var(--radius)',
-                      border: '1px solid var(--danger)', background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <input
-                          type="checkbox"
-                          id="nativeRemoveData"
-                          checked={nativeRemoveData}
-                          onChange={e => setNativeRemoveData(e.target.checked)}
-                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                        />
-                        <label htmlFor="nativeRemoveData" style={{ fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
-                          Also delete all Spoolman data — irreversible
-                        </label>
-                      </div>
-                      <button
-                        className="btn btn-sm"
-                        onClick={handleNativeUninstall}
-                        disabled={nativeBusy}
-                        style={{ minWidth: '140px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                      >
-                        {nativeBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
-                      </button>
-                    </div>
-                  )}
-                </div>
+                </>
+              ) : nativeStatus.running ? (
+                <>
+                  <button className="btn btn-sm" onClick={handleNativeStop} disabled={nativeBusy}>
+                    {nativeBusy ? 'Stopping…' : 'Stop'}
+                  </button>
+                  <button className="btn btn-sm" onClick={() => setShowNativeDanger(v => !v)}
+                    style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+                    {showNativeDanger ? '▲ Danger zone' : '▼ Danger zone'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-sm btn-primary" onClick={handleNativeStart} disabled={nativeBusy}>
+                    {nativeBusy ? 'Starting…' : 'Start'}
+                  </button>
+                  <button className="btn btn-sm" onClick={() => setShowNativeDanger(v => !v)}
+                    style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+                    {showNativeDanger ? '▲ Danger zone' : '▼ Danger zone'}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {showNativeDanger && nativeStatus.installed && (
+              <div className="danger-zone">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
+                  <input type="checkbox" id="nativeRemoveData" checked={nativeRemoveData} onChange={e => setNativeRemoveData(e.target.checked)} />
+                  Also delete all Spoolman data — irreversible
+                </label>
+                <button className="btn btn-sm" onClick={handleNativeUninstall} disabled={nativeBusy}
+                  style={{ borderColor: 'var(--danger)', color: 'var(--danger)', alignSelf: 'flex-start' }}>
+                  {nativeBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
+                </button>
               </div>
             )}
 
-            {nativeError && (
-              <p style={{ marginTop: '10px', fontSize: '12px', color: 'var(--danger)' }}>{nativeError}</p>
-            )}
-            {nativeLog.length > 0 && (
-              <div style={{
-                marginTop: '12px', padding: '10px 14px',
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px',
-                maxHeight: '200px', overflowY: 'auto', whiteSpace: 'pre-wrap',
-              }}>
-                {nativeLog.join('\n')}
-              </div>
-            )}
+            {nativeError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{nativeError}</p>}
+            {nativeLog.length > 0 && <div className="log-output">{nativeLog.join('\n')}</div>}
           </div>
         )}
 
@@ -1611,73 +1454,35 @@ export default function SettingsPage() {
         {/* Spoolman Backup & Restore */}
         <div className="settings-card">
           <h3 className="settings-card-title">Spoolman Backup &amp; Restore</h3>
-          <p className="settings-card-desc">
-            Export all vendors, filaments, and spools to a JSON file, or restore from a previous export.
-          </p>
-
-          {/* Export */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={() => handleExport(null)}
-                disabled={exportBusy || !spoolmanSaved}
-              >
-                {exportBusy ? 'Exporting…' : 'Export All'}
-              </button>
-              <button
-                className="btn btn-sm"
-                onClick={() => setShowExportDialog(true)}
-                disabled={exportBusy || !spoolmanSaved}
-              >
-                Select Manufacturers...
-              </button>
-            </div>
-            {!spoolmanSaved && (
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                Configure Spoolman URL above first.
-              </span>
-            )}
-            {exportError && (
-              <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--danger)' }}>{exportError}</p>
-            )}
-          </div>
-
-          {/* Import */}
-          <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Import</label>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '10px' }}>
-              Imports will add new entries — existing data is not deleted or overwritten.
-            </p>
-            <div className="settings-row">
-              <input
-                type="file"
-                accept=".json"
-                onChange={e => setImportFile(e.target.files?.[0] || null)}
-                style={{ fontSize: '13px' }}
-              />
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={handleImport}
-                disabled={importBusy || !importFile || !spoolmanSaved}
-              >
-                {importBusy ? 'Importing…' : 'Import'}
-              </button>
-            </div>
-            {importError && (
-              <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{importError}</p>
-            )}
-            {importLog.length > 0 && (
-              <div style={{
-                marginTop: '10px', padding: '10px 14px',
-                background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px',
-                maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap',
-              }}>
-                {importLog.join('\n')}
+          <div className="settings-2col" style={{ gap: '16px' }}>
+            {/* Export */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button className="btn btn-sm btn-primary" onClick={() => handleExport(null)} disabled={exportBusy || !spoolmanSaved}>
+                  {exportBusy ? 'Exporting…' : 'Export All'}
+                </button>
+                <button className="btn btn-sm" onClick={() => setShowExportDialog(true)} disabled={exportBusy || !spoolmanSaved}>
+                  Select Manufacturers…
+                </button>
               </div>
-            )}
+              {!spoolmanSaved && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Configure Spoolman URL first.</span>}
+              {exportError && <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--danger)' }}>{exportError}</p>}
+            </div>
+
+            {/* Import */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Import</label>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Adds new entries — existing data is not overwritten.</p>
+              <div className="settings-row">
+                <input type="file" accept=".json" onChange={e => setImportFile(e.target.files?.[0] || null)} style={{ fontSize: '13px' }} />
+                <button className="btn btn-sm btn-primary" onClick={handleImport} disabled={importBusy || !importFile || !spoolmanSaved}>
+                  {importBusy ? 'Importing…' : 'Import'}
+                </button>
+              </div>
+              {importError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{importError}</p>}
+              {importLog.length > 0 && <div className="log-output">{importLog.join('\n')}</div>}
+            </div>
           </div>
         </div>
       </Section>
@@ -1758,44 +1563,36 @@ export default function SettingsPage() {
       <Section title="Backup & Restore" defaultOpen={false}>
         <div className="settings-card">
           <h3 className="settings-card-title">Marathon Database</h3>
-          <p className="settings-card-desc">
-            Export or restore the entire Marathon database — includes all printers, print history, maintenance records, files metadata, settings, and more.
-          </p>
+          <p className="settings-card-desc">Export or restore the entire Marathon database — printers, print history, maintenance, settings, and more.</p>
+          <div className="settings-2col" style={{ gap: '16px' }}>
+            {/* Export */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
+              <button className="btn btn-sm btn-primary" onClick={handleDbExport} disabled={dbExportBusy}>
+                {dbExportBusy ? 'Exporting…' : 'Download Database Backup'}
+              </button>
+              {dbExportError && <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--danger)' }}>{dbExportError}</p>}
+            </div>
 
-          {/* Export */}
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px' }}>Export</label>
-            <button
-              className="btn btn-sm btn-primary"
-              onClick={handleDbExport}
-              disabled={dbExportBusy}
-            >
-              {dbExportBusy ? 'Exporting…' : 'Download Database Backup'}
-            </button>
-            {dbExportError && (
-              <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--danger)' }}>{dbExportError}</p>
-            )}
-          </div>
-
-          {/* Import */}
-          <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>Import</label>
-            <p style={{ fontSize: '12px', color: 'var(--danger)', marginBottom: '10px', fontWeight: 500 }}>
-              Warning: this replaces ALL current data. A backup of the current database will be saved first.
-            </p>
-            <div className="settings-row">
-              <input
-                type="file"
-                accept=".zip,.db"
-                onChange={e => { setDbImportFile(e.target.files?.[0] || null); setDbImportResult(null); }}
-                style={{ fontSize: '13px' }}
-              />
-              <button
-                className="btn btn-sm"
-                onClick={handleDbImport}
-                disabled={dbImportBusy || !dbImportFile}
-                style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
-              >
+            {/* Import */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>Import</label>
+              <p style={{ fontSize: '12px', color: 'var(--danger)', marginBottom: '8px', fontWeight: 500 }}>
+                Replaces ALL current data. A backup is saved first.
+              </p>
+              <div className="settings-row">
+                <input
+                  type="file"
+                  accept=".zip,.db"
+                  onChange={e => { setDbImportFile(e.target.files?.[0] || null); setDbImportResult(null); }}
+                  style={{ fontSize: '13px' }}
+                />
+                <button
+                  className="btn btn-sm"
+                  onClick={handleDbImport}
+                  disabled={dbImportBusy || !dbImportFile}
+                  style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                >
                 {dbImportBusy ? 'Restoring…' : 'Restore'}
               </button>
             </div>
@@ -1808,6 +1605,7 @@ export default function SettingsPage() {
             {dbImportResult?.error && (
               <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{dbImportResult.error}</p>
             )}
+            </div>
           </div>
         </div>
       </Section>
@@ -1909,41 +1707,28 @@ export default function SettingsPage() {
       <Section title="GitHub Integration" defaultOpen={false}>
         <div className="settings-card">
           <h3 className="settings-card-title">Bug Reporting</h3>
-          <p style={{ fontSize: '13px', opacity: 0.7, margin: '0 0 16px' }}>
-            Configure a GitHub Personal Access Token to enable direct, one-click bug reporting from the navigation bar.
-          </p>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>GitHub Personal Access Token (PAT)</label>
-              <input
-                className="form-input"
-                type="password"
-                value={githubToken}
-                onChange={e => setGithubToken(e.target.value)}
-                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-              />
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                Requires <code>public_repo</code> or <code>repo</code> scope.
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input
-                type="checkbox"
-                id="direct_reports"
-                checked={directReportsEnabled}
-                onChange={e => setDirectReportsEnabled(e.target.checked)}
-              />
-              <label htmlFor="direct_reports" style={{ fontSize: '14px', cursor: 'pointer' }}>
-                Enable Direct Bug Reporting (No GitHub redirect)
-              </label>
-            </div>
-
+          <p className="settings-card-desc">GitHub PAT for one-click bug reporting from the navbar.</p>
+          <div className="settings-row" style={{ marginBottom: '10px' }}>
+            <input
+              className="form-input"
+              type="password"
+              value={githubToken}
+              onChange={e => setGithubToken(e.target.value)}
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+              style={{ flex: 1, maxWidth: '360px' }}
+            />
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+              Requires <code>public_repo</code> or <code>repo</code> scope.
+            </span>
+          </div>
+          <div className="settings-row">
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+              <input type="checkbox" id="direct_reports" checked={directReportsEnabled}
+                onChange={e => setDirectReportsEnabled(e.target.checked)} />
+              Enable Direct Bug Reporting (no GitHub redirect)
+            </label>
             {(githubToken !== githubTokenSaved || directReportsEnabled !== directReportsSaved) && (
-              <button className="btn btn-sm btn-primary" onClick={handleGithubSettingsSave}>
-                Save GitHub Settings
-              </button>
+              <button className="btn btn-sm btn-primary" onClick={handleGithubSettingsSave}>Save</button>
             )}
           </div>
         </div>
@@ -1971,47 +1756,43 @@ export default function SettingsPage() {
       <Section title="Updates" defaultOpen={false}>
         <div className="settings-card">
           <h3 className="settings-card-title">About &amp; Updates</h3>
-          <div style={{ display: 'flex', gap: '16px', fontSize: '14px', marginBottom: '10px', flexWrap: 'wrap' }}>
-            <span><strong>Version:</strong> {__APP_VERSION__}</span>
-            <span style={{ opacity: 0.6 }}>
-              Deploy mode: {import.meta.env.MODE === 'production' ? 'production' : 'development'}
-            </span>
-          </div>
 
-          {/* Channel selector */}
-          <div style={{ marginBottom: '16px' }}>
-            <span className="form-label" style={{ marginBottom: '6px', display: 'block' }}>Update Channel</span>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <label className="radio-label">
-                <input type="radio" name="update_channel" value="release"
-                  checked={updateChannel === 'release'}
-                  onChange={() => handleChannelChange('release')} />
-                <strong>Releases</strong>
-                <span className="text-muted" style={{ fontSize: '12px', marginLeft: '4px' }}>— Stable tagged versions</span>
-              </label>
-              <label className="radio-label">
-                <input type="radio" name="update_channel" value="dev"
-                  checked={updateChannel === 'dev'}
-                  onChange={() => handleChannelChange('dev')} />
-                <strong>Main</strong>
-                <span className="text-muted" style={{ fontSize: '12px', marginLeft: '4px' }}>— Latest commits on main, checks every 5 min</span>
+          {/* Version + channel + notif all in one compact row area */}
+          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: '12px' }}>
+            <div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Version</div>
+              <strong style={{ fontSize: '14px' }}>{__APP_VERSION__}</strong>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                {import.meta.env.MODE === 'production' ? 'production' : 'development'}
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Channel</div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <label className="radio-label" style={{ fontSize: '13px' }}>
+                  <input type="radio" name="update_channel" value="release"
+                    checked={updateChannel === 'release'}
+                    onChange={() => handleChannelChange('release')} />
+                  Releases
+                </label>
+                <label className="radio-label" style={{ fontSize: '13px' }}>
+                  <input type="radio" name="update_channel" value="dev"
+                    checked={updateChannel === 'dev'}
+                    onChange={() => handleChannelChange('dev')} />
+                  Main
+                </label>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                <input type="checkbox" checked={notifsEnabled}
+                  onChange={e => {
+                    setUpdateNotifsEnabled(e.target.checked);
+                    setNotifsEnabledState(e.target.checked);
+                  }} />
+                Navbar update notifications
               </label>
             </div>
-          </div>
-
-          {/* Notification toggle */}
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={notifsEnabled}
-                onChange={e => {
-                  setUpdateNotifsEnabled(e.target.checked);
-                  setNotifsEnabledState(e.target.checked);
-                }}
-              />
-              <span>Show update notifications in navbar</span>
-            </label>
           </div>
 
           <div className="settings-row" style={{ marginBottom: '12px' }}>
@@ -2131,7 +1912,7 @@ export default function SettingsPage() {
 
           {/* Update log */}
           {updateLog.length > 0 && (
-            <div style={{ marginTop: '12px', padding: '10px', background: 'var(--surface2)', borderRadius: 'var(--radius)', fontSize: '12px', fontFamily: 'monospace', maxHeight: '200px', overflowY: 'auto' }}>
+            <div className="log-output" style={{ maxHeight: '200px' }}>
               {updateLog.map((line, i) => <div key={i}>{line}</div>)}
               {updateApplying && <div style={{ opacity: 0.5 }}>_</div>}
               {!updateApplying && updateLog.some(l => l.includes('Restarting')) && (

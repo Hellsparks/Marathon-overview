@@ -1682,7 +1682,10 @@ router.post('/swatch/install', async (req, res) => {
         }
 
         // Pull image (fall back to local build if not yet published on GHCR)
-        const DOCKERFILE_CTX = path.join(__dirname, '..', '..', '..'); // repo root
+        // In Docker mode the repo is mounted at /repo; locally __dirname=…/backend/src/routes → ../../.. = repo root
+        const DOCKERFILE_CTX = IS_DOCKER
+            ? '/repo'
+            : path.join(__dirname, '..', '..', '..');
         const SWATCH_DOCKERFILE = path.join(DOCKERFILE_CTX, 'swatch-service', 'Dockerfile');
         const hasLocalDockerfile = fs.existsSync(SWATCH_DOCKERFILE);
 

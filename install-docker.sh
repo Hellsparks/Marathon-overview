@@ -56,7 +56,15 @@ else
     ok "$(docker --version)"
 fi
 
-# ── 2. Clone repo ───────────────────────────────────────────────────────────
+# ── 2. Node.js (needed for mcp-server deps) ─────────────────────────────────
+if ! command -v npm &>/dev/null; then
+    step "Installing Node.js..."
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    ok "Node.js $(node --version) installed"
+fi
+
+# ── 3. Clone repo ───────────────────────────────────────────────────────────
 step "Setting up Marathon..."
 REPO_URL="https://github.com/Hellsparks/Marathon-overview.git"
 
@@ -72,14 +80,19 @@ fi
 
 cd "$INSTALL_DIR"
 
-# ── 3. Build and start ──────────────────────────────────────────────────────
+# Pre-install MCP server dependencies so it's usable from Settings
+step "Installing MCP server dependencies..."
+npm --prefix "$INSTALL_DIR/mcp-server" install --omit=dev 2>/dev/null && ok "MCP server ready" || warn "MCP server npm install failed (non-fatal)"
+
+# ── 4. Build and start ──────────────────────────────────────────────────────
 step "Building and starting Marathon (this takes a few minutes on first run)..."
-sudo docker compose up -d --build
-ok "Marathon is running"
+APP_VERSION=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "dev")
+APP_VERSION="$APP_VERSION" sudo --preserve-env=APP_VERSION docker compose up -d --build
+ok "Marathon is running  (version: $APP_VERSION)"
 
 echo ""
 echo -e "  ${GREEN}╔══════════════════════════════════════════╗${NC}"
-echo -e "  ${GREEN}║         Marathon is running!               ║${NC}"
+echo -e "  ${GREEN}║         Marathon is running!             ║${NC}"
 echo -e "  ${GREEN}╚══════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  Install location: ${BOLD}$INSTALL_DIR${NC}"
