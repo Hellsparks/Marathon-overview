@@ -3,6 +3,7 @@
 **Klipper Fleet Manager** — A web dashboard for monitoring and controlling multiple 3D printers from a single interface. Supports Klipper/Moonraker, Bambu Lab, OctoPrint, and Duet/RepRapFirmware.
 
 ![GPL v3](https://img.shields.io/badge/license-GPL%20v3-blue.svg)
+[![Hypercommit](https://img.shields.io/badge/Hypercommit-DB2475)](https://hypercommit.com/marathon-overview)
 
 ## Features
 
