@@ -4,6 +4,10 @@
   "description": "Klipper fleet manager — dev runner",
   "scripts": {
     "dev": "concurrently --names backend,frontend --prefix-colors cyan,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:docker": "concurrently --names backend,frontend,swatch --prefix-colors cyan,magenta,yellow \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\" \"node swatch-service/start.js docker\"",
+    "dev:local": "concurrently --names backend,frontend,swatch --prefix-colors cyan,magenta,yellow \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\" \"node swatch-service/start.js local\"",
+    "swatch:docker": "node swatch-service/start.js docker",
+    "swatch:local": "node swatch-service/start.js local",
     "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend"
   },
   "devDependencies": {

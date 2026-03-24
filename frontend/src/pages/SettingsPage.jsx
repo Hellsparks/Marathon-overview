@@ -4,7 +4,7 @@ import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
-import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation, getFilaments } from '../api/spoolman';
+import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, stopSpoolman, startSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation, getFilaments, installSwatchDocker, uninstallSwatchDocker, getSwatchLocalStatus, startSwatchLocal, stopSwatchLocal } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate, getUpdateChannel, setUpdateChannel, getReleases, getDevCommits, applyUpdate, pullAndRestart, getApplyStatus } from '../api/updates';
 import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
@@ -99,6 +99,27 @@ export default function SettingsPage() {
   const [dockerError, setDockerError] = useState('');
   const [installPort, setInstallPort] = useState('7912');
   const [removeData, setRemoveData] = useState(false);
+  const [showDockerDanger, setShowDockerDanger] = useState(false);
+
+  // Marathon backend port
+  const [backendPort, setBackendPort] = useState('');
+
+  // Swatch generator
+  const [swatchUrl, setSwatchUrl] = useState('');
+  const [swatchUrlSaved, setSwatchUrlSaved] = useState('');
+  const [swatchTestStatus, setSwatchTestStatus] = useState(null); // null | 'ok' | 'error'
+  const [swatchTestMsg, setSwatchTestMsg] = useState('');
+  const [swatchDockerStatus, setSwatchDockerStatus] = useState(null);
+  const [swatchDockerBusy, setSwatchDockerBusy] = useState(false);
+  const [swatchDockerPort, setSwatchDockerPort] = useState('7321');
+  const [swatchDockerLog, setSwatchDockerLog] = useState([]);
+  const [swatchDockerError, setSwatchDockerError] = useState('');
+  const [showSwatchDanger, setShowSwatchDanger] = useState(false);
+  const [swatchLocalStatus, setSwatchLocalStatus] = useState(null);
+  const [swatchLocalBusy, setSwatchLocalBusy] = useState(false);
+  const [swatchLocalLog, setSwatchLocalLog] = useState([]);
+  const [swatchLocalError, setSwatchLocalError] = useState('');
+  const [swatchLocalPort, setSwatchLocalPort] = useState('7321');
 
   // MCP server
   const [mcpStatus, setMcpStatus] = useState(null);
@@ -115,6 +136,7 @@ export default function SettingsPage() {
   const [nativeError, setNativeError] = useState('');
   const [nativePort, setNativePort] = useState('7912');
   const [nativeRemoveData, setNativeRemoveData] = useState(false);
+  const [showNativeDanger, setShowNativeDanger] = useState(false);
 
   // GitHub integration
   const [githubToken, setGithubToken] = useState('');
@@ -136,6 +158,8 @@ export default function SettingsPage() {
       setHueforgeFieldSaved(s.hueforge_td_field || '');
       setSwatchField(s.swatch_extra_field || '');
       setSwatchFieldSaved(s.swatch_extra_field || '');
+      setSwatchUrl(s.swatch_service_url || '');
+      setSwatchUrlSaved(s.swatch_service_url || '');
       setSwatchPromptEnabled(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
       setSwatchPromptSaved(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
       setOrcaslicerField(s.orcaslicer_config_field || '');
@@ -150,6 +174,9 @@ export default function SettingsPage() {
     }).catch(() => { });
     getFields('filament').then(fields => setExtraFields(fields || [])).catch(() => { });
     getDockerStatus().then(setDockerStatus).catch(() => { });
+    fetch('/api/spoolman/swatch/status').then(r => r.json()).then(setSwatchDockerStatus).catch(() => { });
+    getSwatchLocalStatus().then(setSwatchLocalStatus).catch(() => {});
+    setBackendPort(window.location.port || (window.location.protocol === 'https:' ? '443' : '80'));
     getNativeStatus().then(setNativeStatus).catch(() => { });
     getMcpStatus().then(s => {
       setMcpStatus(s);
@@ -206,6 +233,95 @@ export default function SettingsPage() {
     } catch (e) {
       alert(e.message);
     }
+  }
+
+  async function handleSwatchUrlSave() {
+    try {
+      await updateSetting('swatch_service_url', swatchUrl.replace(/\/+$/, ''));
+      setSwatchUrlSaved(swatchUrl.replace(/\/+$/, ''));
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
+  async function handleSwatchTest() {
+    setSwatchTestStatus(null);
+    setSwatchTestMsg('');
+    try {
+      const r = await fetch(`${swatchUrl || ''}/swatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ line1: 'Test', line2: 'Ping' }) });
+      if (r.ok) { setSwatchTestStatus('ok'); setSwatchTestMsg('Service reachable ✓'); }
+      else { setSwatchTestStatus('error'); setSwatchTestMsg(`HTTP ${r.status}`); }
+    } catch (e) {
+      setSwatchTestStatus('error');
+      setSwatchTestMsg(e.message);
+    }
+  }
+
+  async function handleSwatchDockerStop() {
+    setSwatchDockerBusy(true);
+    try {
+      await fetch('/api/spoolman/swatch/stop', { method: 'POST' });
+      const s = await fetch('/api/spoolman/swatch/status').then(r => r.json());
+      setSwatchDockerStatus(s);
+    } catch (e) { /* ignore */ }
+    finally { setSwatchDockerBusy(false); }
+  }
+
+  async function handleSwatchDockerStart() {
+    setSwatchDockerBusy(true);
+    try {
+      await fetch('/api/spoolman/swatch/start', { method: 'POST' });
+      const s = await fetch('/api/spoolman/swatch/status').then(r => r.json());
+      setSwatchDockerStatus(s);
+    } catch (e) { /* ignore */ }
+    finally { setSwatchDockerBusy(false); }
+  }
+
+  async function handleSwatchDockerInstall() {
+    setSwatchDockerBusy(true); setSwatchDockerLog([]); setSwatchDockerError('');
+    try {
+      const result = await installSwatchDocker(parseInt(swatchDockerPort) || 7321);
+      setSwatchDockerLog(result.log || []);
+      if (result.swatchUrl) { setSwatchUrl(result.swatchUrl); setSwatchUrlSaved(result.swatchUrl); }
+      const s = await fetch('/api/spoolman/swatch/status').then(r => r.json());
+      setSwatchDockerStatus(s);
+    } catch (e) { setSwatchDockerError(e.message); }
+    finally { setSwatchDockerBusy(false); }
+  }
+
+  async function handleSwatchDockerUninstall() {
+    if (!confirm('Remove the swatch container?')) return;
+    setSwatchDockerBusy(true); setSwatchDockerLog([]); setSwatchDockerError('');
+    try {
+      const result = await uninstallSwatchDocker();
+      setSwatchDockerLog(result.log || []);
+      const s = await fetch('/api/spoolman/swatch/status').then(r => r.json());
+      setSwatchDockerStatus(s);
+    } catch (e) { setSwatchDockerError(e.message); }
+    finally { setSwatchDockerBusy(false); setShowSwatchDanger(false); }
+  }
+
+  async function handleSwatchLocalStart() {
+    setSwatchLocalBusy(true); setSwatchLocalLog([]); setSwatchLocalError('');
+    try {
+      const result = await startSwatchLocal(parseInt(swatchLocalPort) || 7321);
+      setSwatchLocalLog(result.log || []);
+      if (result.swatchUrl) { setSwatchUrl(result.swatchUrl); setSwatchUrlSaved(result.swatchUrl); }
+      const s = await getSwatchLocalStatus();
+      setSwatchLocalStatus(s);
+    } catch (e) { setSwatchLocalError(e.message); }
+    finally { setSwatchLocalBusy(false); }
+  }
+
+  async function handleSwatchLocalStop() {
+    setSwatchLocalBusy(true); setSwatchLocalLog([]); setSwatchLocalError('');
+    try {
+      const result = await stopSwatchLocal();
+      setSwatchLocalLog(result.log || []);
+      const s = await getSwatchLocalStatus();
+      setSwatchLocalStatus(s);
+    } catch (e) { setSwatchLocalError(e.message); }
+    finally { setSwatchLocalBusy(false); }
   }
 
   async function handleOrcaslicerFieldSave(val) {
@@ -603,6 +719,28 @@ export default function SettingsPage() {
     }
   }
 
+  // After a Spoolman import with field mappings, sync Marathon's own settings so they
+  // point to the correct (possibly remapped) field keys in the target Spoolman instance.
+  async function syncSettingsAfterImport(fieldMappings) {
+    const filamentMappings = fieldMappings?.filament || {};
+    const settingsToSync = [
+      { settingKey: 'url_extra_field',         currentVal: urlField,        setter: v => { setUrlField(v); setUrlFieldSaved(v); } },
+      { settingKey: 'hueforge_td_field',        currentVal: hueforgeField,   setter: v => { setHueforgeField(v); setHueforgeFieldSaved(v); } },
+      { settingKey: 'swatch_extra_field',       currentVal: swatchField,     setter: v => { setSwatchField(v); setSwatchFieldSaved(v); } },
+      { settingKey: 'orcaslicer_config_field',  currentVal: orcaslicerField, setter: v => { setOrcaslicerField(v); setOrcaslicerFieldSaved(v); } },
+      { settingKey: 'material_modifier_field',  currentVal: modifierField,   setter: v => { setModifierField(v); setModifierFieldSaved(v); } },
+    ];
+    for (const { settingKey, currentVal, setter } of settingsToSync) {
+      if (currentVal && filamentMappings[currentVal] !== undefined) {
+        const newVal = filamentMappings[currentVal] === '__skip__' ? '' : filamentMappings[currentVal];
+        try {
+          await updateSetting(settingKey, newVal);
+          setter(newVal);
+        } catch { /* non-fatal */ }
+      }
+    }
+  }
+
   async function handleImportWithMappings(createFields, fieldMappings) {
     const { data, currencyInfo } = importMappingData;
     setImportMappingData(null);
@@ -618,6 +756,7 @@ export default function SettingsPage() {
     try {
       const result = await importSpoolman(data);
       setImportLog(result.log || []);
+      await syncSettingsAfterImport(fieldMappings);
     } catch (e) {
       setImportError(e.message);
     } finally {
@@ -633,6 +772,7 @@ export default function SettingsPage() {
     try {
       const result = await importSpoolman(data);
       setImportLog(result.log || []);
+      await syncSettingsAfterImport(data._fieldMappings);
     } catch (e) {
       setImportError(e.message);
     } finally {
@@ -806,6 +946,29 @@ export default function SettingsPage() {
       {/* ════════════════════ 2. Connections ════════════════════ */}
       <Section title="Connections" defaultOpen={true}>
         {/* Spoolman URL */}
+        {/* Service Ports */}
+        <div className="settings-card">
+          <h3 className="settings-card-title">Service Ports</h3>
+          <p className="settings-card-desc">
+            Overview of ports used by Marathon services. Change ports via the relevant URL fields below or by setting environment variables before starting the service.
+          </p>
+          <table style={{ fontSize: '13px', borderCollapse: 'collapse', width: '100%' }}>
+            <tbody>
+              {[
+                { label: 'Marathon',       value: `${window.location.hostname}:${backendPort}`, note: 'Change via PORT env var + restart' },
+                { label: 'Spoolman',       value: spoolmanUrl || '—',                           note: 'Edit in Spoolman URL card below' },
+                { label: 'Swatch service', value: swatchUrl || '— not configured',              note: 'Edit in Filaments → Swatch Generator below' },
+              ].map(({ label, value, note }) => (
+                <tr key={label} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '8px 12px 8px 0', fontWeight: 500, whiteSpace: 'nowrap' }}>{label}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: '12px', color: value.startsWith('—') ? 'var(--text-muted)' : 'var(--primary)' }}>{value}</td>
+                  <td style={{ padding: '8px 0', fontSize: '11px', color: 'var(--text-muted)' }}>{note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         <div className="settings-card">
           <h3 className="settings-card-title">Spoolman URL</h3>
           <p className="settings-card-desc">
@@ -945,210 +1108,79 @@ export default function SettingsPage() {
 
         {/* Extra Fields */}
         <div className="settings-card">
-          <h3 className="settings-card-title">Filament Extra Fields mapping</h3>
-          <p className="settings-card-desc">
-            Map Spoolman custom fields to the application's interface features.
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* URL Field */}
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
-                Product Link (URL)
-              </label>
-              <div className="settings-row">
-                <select
-                  className="spoolman-filter-select"
-                  style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
-                  value={urlField}
-                  onChange={e => {
-                    setUrlField(e.target.value);
-                    handleUrlFieldSave(e.target.value);
-                  }}
-                >
-                  <option value="">— not set —</option>
-                  {extraFields.map(f => (
-                    <option key={f.key} value={f.key}>{f.name} ({f.key})</option>
-                  ))}
-                </select>
-                {urlField === urlFieldSaved && urlField && (
-                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved &#10003;</span>
-                )}
-                {!urlField && (
-                  <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => handleAutoCreateField('url')}>
-                    Auto-Create Text Field
-                  </button>
-                )}
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                Provides click-to-buy links in the Filaments grid.
-              </p>
-            </div>
-
-            {/* Hueforge Field */}
-            <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
-                HueForge Transmissivity (TD)
-              </label>
-              <div className="settings-row">
-                <select
-                  className="spoolman-filter-select"
-                  style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
-                  value={hueforgeField}
-                  onChange={e => {
-                    setHueforgeField(e.target.value);
-                    handleHueforgeFieldSave(e.target.value);
-                  }}
-                >
-                  <option value="">— not set (default 1) —</option>
-                  {extraFields.map(f => (
-                    <option key={f.key} value={f.key}>{f.name} ({f.key})</option>
-                  ))}
-                </select>
-                {hueforgeField === hueforgeFieldSaved && hueforgeField && (
-                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved &#10003;</span>
-                )}
-                {!hueforgeField && (
-                  <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => handleAutoCreateField('hueforge')}>
-                    Auto-Create Float Field
-                  </button>
-                )}
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                Allows HueForge TD tracking for lithophanes and blends.
-              </p>
-            </div>
-
-            {/* Swatch Tracking */}
-            <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
-                Color Swatch Tracking
-              </label>
-              <div className="settings-row" style={{ marginBottom: '12px' }}>
-                <select
-                  className="spoolman-filter-select"
-                  style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
-                  value={swatchField}
-                  onChange={e => setSwatchField(e.target.value)}
-                >
-                  <option value="">— disabled —</option>
-                  {extraFields.map(f => (
-                    <option key={f.key} value={f.key}>{f.name} ({f.key})</option>
-                  ))}
-                </select>
-                {!swatchField && (
-                  <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => handleAutoCreateField('swatch')}>
-                    Auto-Create Boolean Field
-                  </button>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                <input
-                  type="checkbox"
-                  id="swatchPrompt"
-                  checked={swatchPromptEnabled}
-                  onChange={e => setSwatchPromptEnabled(e.target.checked)}
-                  style={{
-                    appearance: 'none', WebkitAppearance: 'none', width: '20px', height: '20px',
-                    border: '2px solid var(--border)', borderRadius: '4px', cursor: 'pointer',
-                    backgroundColor: 'var(--surface)', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', flexShrink: 0, accentColor: 'var(--primary, #0ea5e9)'
-                  }}
-                />
-                <label htmlFor="swatchPrompt" style={{ fontSize: '13px', cursor: 'pointer', userSelect: 'none' }}>
-                  Prompt to print/download an STL Swatch when a new color spool is added.
-                </label>
-              </div>
-
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={handleSwatchSettingsSave}
-                disabled={swatchField === swatchFieldSaved && swatchPromptEnabled === swatchPromptSaved}
-                style={{ padding: '6px 16px' }}
-              >
-                {(swatchField === swatchFieldSaved && swatchPromptEnabled === swatchPromptSaved) ? 'Saved' : 'Save Swatch Settings'}
-              </button>
-            </div>
-
-            {/* OrcaSlicer Filament Profiles */}
-            <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
-                OrcaSlicer Filament Profiles
-              </label>
-              <div className="settings-row">
-                <select
-                  className="spoolman-filter-select"
-                  style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
-                  value={orcaslicerField}
-                  onChange={e => {
-                    setOrcaslicerField(e.target.value);
-                    handleOrcaslicerFieldSave(e.target.value);
-                  }}
-                >
-                  <option value="">— not set —</option>
-                  {extraFields.map(f => (
-                    <option key={f.key} value={f.key}>{f.name} ({f.key})</option>
-                  ))}
-                </select>
-                {orcaslicerField === orcaslicerFieldSaved && orcaslicerField && (
-                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved &#10003;</span>
-                )}
-                {!orcaslicerField && (
-                  <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => handleAutoCreateField('orcaslicer')}>
-                    Auto-Create Text Field
-                  </button>
-                )}
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                Stores OrcaSlicer filament settings for export. Enables the OrcaSlicer panel and export options.
-              </p>
-
-              {!!orcaslicerField && (
-                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button className="btn btn-sm btn-primary" style={{ padding: '6px 12px' }} onClick={handleExportAllOrcaSlicer}>
-                    Export All Profiles (ZIP)
-                  </button>
-                  <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => setShowOrcaDefaults(true)}>
-                    Configure Defaults
-                  </button>
-                </div>
-              )}
-            {/* Material Modifier Field */}
-            <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>
-                Material Modifier (Silk, CF, GF, HF, etc.)
-              </label>
-              <div className="settings-row">
-                <select
-                  className="spoolman-filter-select"
-                  style={{ minWidth: '240px', padding: '8px 32px 8px 12px', fontSize: '13px' }}
-                  value={modifierField}
-                  onChange={e => {
-                    setModifierField(e.target.value);
-                    handleModifierFieldSave(e.target.value);
-                  }}
-                >
-                  <option value="">— not set —</option>
-                  {extraFields.map(f => (
-                    <option key={f.key} value={f.key}>{f.name} ({f.key})</option>
-                  ))}
-                </select>
-                {modifierField === modifierFieldSaved && modifierField && (
-                  <span style={{ fontSize: '12px', color: 'var(--success)' }}>Saved &#10003;</span>
-                )}
-                {!modifierField && (
-                  <button className="btn btn-sm" style={{ padding: '6px 12px' }} onClick={() => handleAutoCreateField('material_modifier')}>
-                    Auto-Create Text Field
-                  </button>
-                )}
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                Stores the filament variant (Silk, CF, GF, Matte, 95A, etc.) separately from the base material type. Used for abrasive detection and filtering.
-              </p>
-            </div>
-            </div>
-          </div>
+          <h3 className="settings-card-title">Filament Extra Fields</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <tbody>
+              {[
+                { label: 'Product Link',      field: urlField,       saved: urlFieldSaved,       onChange: v => { setUrlField(v); handleUrlFieldSave(v); },      createType: 'url',               defaultOpt: '— not set —',        actions: null },
+                { label: 'HueForge TD',       field: hueforgeField,  saved: hueforgeFieldSaved,  onChange: v => { setHueforgeField(v); handleHueforgeFieldSave(v); }, createType: 'hueforge',       defaultOpt: '— not set —',        actions: null },
+                { label: 'OrcaSlicer Config', field: orcaslicerField,saved: orcaslicerFieldSaved, onChange: v => { setOrcaslicerField(v); handleOrcaslicerFieldSave(v); }, createType: 'orcaslicer', defaultOpt: '— not set —',     actions: orcaslicerField ? [{ label: 'Export ZIP', onClick: handleExportAllOrcaSlicer, primary: true }, { label: 'Defaults', onClick: () => setShowOrcaDefaults(true) }] : null },
+                { label: 'Material Modifier', field: modifierField,  saved: modifierFieldSaved,  onChange: v => { setModifierField(v); handleModifierFieldSave(v); }, createType: 'material_modifier', defaultOpt: '— not set —',  actions: null },
+                { label: 'Swatch Tracking',   field: swatchField,    saved: swatchFieldSaved,    onChange: v => setSwatchField(v),                                createType: 'swatch',            defaultOpt: '— disabled —',       actions: null },
+              ].map(({ label, field, saved, onChange, createType, defaultOpt, actions }) => (
+                <tr key={label} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '8px 12px 8px 0', fontWeight: 500, whiteSpace: 'nowrap', width: '160px', color: 'var(--text-muted)', fontSize: '12px' }}>{label}</td>
+                  <td style={{ padding: '6px 8px 6px 0' }}>
+                    <select className="spoolman-filter-select" style={{ width: '100%', padding: '5px 28px 5px 10px', fontSize: '13px' }}
+                      value={field} onChange={e => onChange(e.target.value)}>
+                      <option value="">{defaultOpt}</option>
+                      {extraFields.map(f => <option key={f.key} value={f.key}>{f.name} ({f.key})</option>)}
+                    </select>
+                  </td>
+                  <td style={{ padding: '6px 0', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {(!field || !extraFields.some(f => f.key === field)) && (
+                        <button className="btn btn-sm" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => handleAutoCreateField(createType)}>
+                          {field ? 'Re-Create' : 'Auto-Create'}
+                        </button>
+                      )}
+                      {field && field === saved && <span style={{ fontSize: '12px', color: 'var(--success)' }}>✓</span>}
+                      {actions?.map(a => (
+                        <button key={a.label} className={`btn btn-sm${a.primary ? ' btn-primary' : ''}`} style={{ padding: '4px 10px', fontSize: '12px' }} onClick={a.onClick}>{a.label}</button>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {/* Swatch prompt toggle — sub-row under Swatch Tracking */}
+              <tr>
+                <td />
+                <td colSpan={2} style={{ padding: '4px 0 10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '12px', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                      <input type="checkbox" checked={swatchPromptEnabled} onChange={e => setSwatchPromptEnabled(e.target.checked)} />
+                      Prompt to print swatch when adding a spool
+                    </label>
+                    <button className="btn btn-sm btn-primary" style={{ padding: '3px 12px', fontSize: '12px' }}
+                      onClick={handleSwatchSettingsSave}
+                      disabled={swatchField === swatchFieldSaved && swatchPromptEnabled === swatchPromptSaved}>
+                      {swatchField === swatchFieldSaved && swatchPromptEnabled === swatchPromptSaved ? 'Saved' : 'Save'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {/* Swatch service URL row */}
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <td style={{ padding: '8px 12px 8px 0', fontWeight: 500, whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '12px' }}>Swatch Service URL</td>
+                <td style={{ padding: '6px 8px 6px 0' }}>
+                  <input type="text" className="form-input" placeholder="http://localhost:7321"
+                    value={swatchUrl} onChange={e => setSwatchUrl(e.target.value)}
+                    style={{ width: '100%', padding: '5px 10px', fontSize: '13px' }} />
+                </td>
+                <td style={{ padding: '6px 0', whiteSpace: 'nowrap' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <button className="btn btn-sm" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={handleSwatchTest} disabled={!swatchUrl}>Test</button>
+                    <button className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={handleSwatchUrlSave} disabled={swatchUrl === swatchUrlSaved}>
+                      {swatchUrl === swatchUrlSaved ? 'Saved' : 'Save'}
+                    </button>
+                    {swatchTestStatus && (
+                      <span style={{ fontSize: '12px', color: swatchTestStatus === 'ok' ? 'var(--success)' : 'var(--danger)' }}>{swatchTestMsg}</span>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         {showOrcaDefaults && (
@@ -1216,29 +1248,63 @@ export default function SettingsPage() {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <input
-                    type="checkbox"
-                    id="removeData"
-                    checked={removeData}
-                    onChange={e => setRemoveData(e.target.checked)}
-                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                  />
-                  <label htmlFor="removeData" style={{ fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
-                    Also delete all Spoolman data (volume) — irreversible
-                  </label>
-                </div>
-                <div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {dockerStatus.running ? (
+                    <button className="btn btn-sm" onClick={async () => {
+                      setDockerBusy(true);
+                      try { await stopSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message); }
+                      finally { setDockerBusy(false); }
+                    }} disabled={dockerBusy}>
+                      {dockerBusy ? 'Stopping…' : 'Stop'}
+                    </button>
+                  ) : (
+                    <button className="btn btn-sm btn-primary" onClick={async () => {
+                      setDockerBusy(true);
+                      try { await startSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message); }
+                      finally { setDockerBusy(false); }
+                    }} disabled={dockerBusy}>
+                      {dockerBusy ? 'Starting…' : 'Start'}
+                    </button>
+                  )}
                   <button
                     className="btn btn-sm"
-                    onClick={handleDockerUninstall}
-                    disabled={dockerBusy}
-                    style={{ minWidth: '160px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                    onClick={() => setShowDockerDanger(v => !v)}
+                    style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}
                   >
-                    {dockerBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
+                    {showDockerDanger ? '▲ Hide danger zone' : '▼ Show danger zone'}
                   </button>
                 </div>
+                {showDockerDanger && (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: '10px',
+                    padding: '12px', borderRadius: 'var(--radius)',
+                    border: '1px solid var(--danger)', background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <input
+                        type="checkbox"
+                        id="removeData"
+                        checked={removeData}
+                        onChange={e => setRemoveData(e.target.checked)}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                      />
+                      <label htmlFor="removeData" style={{ fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
+                        Also delete all Spoolman data (volume) — irreversible
+                      </label>
+                    </div>
+                    <div>
+                      <button
+                        className="btn btn-sm"
+                        onClick={handleDockerUninstall}
+                        disabled={dockerBusy}
+                        style={{ minWidth: '160px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                      >
+                        {dockerBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1253,6 +1319,146 @@ export default function SettingsPage() {
                 maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap',
               }}>
                 {dockerLog.join('\n')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Swatch Generator — Docker */}
+        {dockerStatus?.available && (
+          <div className="settings-card">
+            <h3 className="settings-card-title">Swatch Generator — Docker</h3>
+            <p className="settings-card-desc">
+              Run the swatch STL generator as a Docker container. Requires Docker.
+              The image is <code style={{ fontSize: '11px' }}>ghcr.io/hellsparks/marathon-overview-swatch:latest</code>.
+            </p>
+
+            <div className="settings-row" style={{ marginBottom: '16px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
+              {!swatchDockerStatus?.created ? (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not installed</span>
+              ) : swatchDockerStatus?.running ? (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid var(--success)' }}>Running</span>
+              ) : (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(245,158,11,0.15)', color: 'var(--warning,#f59e0b)', border: '1px solid var(--warning,#f59e0b)' }}>{swatchDockerStatus?.status || 'Stopped'}</span>
+              )}
+            </div>
+
+            {!swatchDockerStatus?.created ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="settings-row">
+                  <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
+                  <input type="number" className="form-input" value={swatchDockerPort}
+                    onChange={e => setSwatchDockerPort(e.target.value)}
+                    style={{ width: '90px', padding: '6px 10px', fontSize: '13px' }} min="1024" max="65535" />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Service at <code>http://localhost:{swatchDockerPort}</code>
+                  </span>
+                </div>
+                <div>
+                  <button className="btn btn-sm btn-primary" onClick={handleSwatchDockerInstall}
+                    disabled={swatchDockerBusy} style={{ minWidth: '160px' }}>
+                    {swatchDockerBusy ? 'Installing…' : 'Install Swatch Generator'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {swatchDockerStatus?.running ? (
+                    <button className="btn btn-sm" onClick={handleSwatchDockerStop} disabled={swatchDockerBusy}>
+                      {swatchDockerBusy ? 'Stopping…' : 'Stop'}
+                    </button>
+                  ) : (
+                    <button className="btn btn-sm btn-primary" onClick={handleSwatchDockerStart} disabled={swatchDockerBusy}>
+                      {swatchDockerBusy ? 'Starting…' : 'Start'}
+                    </button>
+                  )}
+                  <button className="btn btn-sm" onClick={() => setShowSwatchDanger(v => !v)}
+                    style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
+                    {showSwatchDanger ? '▲ Hide danger zone' : '▼ Show danger zone'}
+                  </button>
+                </div>
+                {showSwatchDanger && (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px',
+                    borderRadius: 'var(--radius)', border: '1px solid var(--danger)',
+                    background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
+                  }}>
+                    <button className="btn btn-sm" onClick={handleSwatchDockerUninstall} disabled={swatchDockerBusy}
+                      style={{ minWidth: '160px', borderColor: 'var(--danger)', color: 'var(--danger)' }}>
+                      {swatchDockerBusy ? 'Removing…' : 'Remove Container'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {swatchDockerError && <p style={{ marginTop: '10px', fontSize: '12px', color: 'var(--danger)' }}>{swatchDockerError}</p>}
+            {swatchDockerLog.length > 0 && (
+              <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px', maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                {swatchDockerLog.join('\n')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Swatch Generator — Local (uv) */}
+        {swatchLocalStatus && (
+          <div className="settings-card">
+            <h3 className="settings-card-title">Swatch Generator — Local (uv)</h3>
+            <p className="settings-card-desc">
+              Run the swatch generator as a local Python process via <strong>uv</strong>.
+              No Docker required. uv automatically manages Python 3.12 and cadquery.
+              {!swatchLocalStatus.uvAvailable && (
+                <> Install uv: <code style={{ fontSize: '11px' }}>winget install astral-sh.uv</code> (Windows) or <code style={{ fontSize: '11px' }}>curl -LsSf https://astral.sh/uv/install.sh | sh</code> (Mac/Linux).</>
+              )}
+            </p>
+
+            <div className="settings-row" style={{ marginBottom: '16px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 500 }}>Status:</span>
+              {!swatchLocalStatus.uvAvailable ? (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(245,158,11,0.15)', color: 'var(--warning,#f59e0b)', border: '1px solid var(--warning,#f59e0b)' }}>uv not installed</span>
+              ) : swatchLocalStatus.running ? (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid var(--success)' }}>Running (PID {swatchLocalStatus.pid})</span>
+              ) : (
+                <span style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '9999px', background: 'var(--surface)', border: '1px solid var(--border)' }}>Not running</span>
+              )}
+            </div>
+
+            {swatchLocalStatus.uvAvailable && (
+              swatchLocalStatus.running ? (
+                <button className="btn btn-sm" onClick={handleSwatchLocalStop} disabled={swatchLocalBusy}>
+                  {swatchLocalBusy ? 'Stopping…' : 'Stop'}
+                </button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="settings-row">
+                    <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
+                    <input type="number" className="form-input" value={swatchLocalPort}
+                      onChange={e => setSwatchLocalPort(e.target.value)}
+                      style={{ width: '90px', padding: '6px 10px', fontSize: '13px' }} min="1024" max="65535" />
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      Service at <code>http://localhost:{swatchLocalPort}</code>
+                    </span>
+                  </div>
+                  <div>
+                    <button className="btn btn-sm btn-primary" onClick={handleSwatchLocalStart} disabled={swatchLocalBusy}
+                      style={{ minWidth: '200px' }}>
+                      {swatchLocalBusy ? 'Starting… (downloading cadquery on first run)' : 'Start Swatch Generator'}
+                    </button>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)' }}>
+                    First start downloads cadquery (~500 MB) — takes a few minutes. Subsequent starts are instant.
+                  </p>
+                </div>
+              )
+            )}
+
+            {swatchLocalError && <p style={{ marginTop: '10px', fontSize: '12px', color: 'var(--danger)' }}>{swatchLocalError}</p>}
+            {swatchLocalLog.length > 0 && (
+              <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontFamily: 'monospace', fontSize: '12px', maxHeight: '160px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                {swatchLocalLog.join('\n')}
               </div>
             )}
           </div>
@@ -1330,27 +1536,44 @@ export default function SettingsPage() {
                     </button>
                   )}
                 </div>
-                <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                    <input
-                      type="checkbox"
-                      id="nativeRemoveData"
-                      checked={nativeRemoveData}
-                      onChange={e => setNativeRemoveData(e.target.checked)}
-                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                    />
-                    <label htmlFor="nativeRemoveData" style={{ fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
-                      Also delete all Spoolman data — irreversible
-                    </label>
+                <div style={{ borderTop: '1px solid var(--border-light, rgba(255,255,255,0.05))', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => setShowNativeDanger(v => !v)}
+                      style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}
+                    >
+                      {showNativeDanger ? '▲ Hide danger zone' : '▼ Show danger zone'}
+                    </button>
                   </div>
-                  <button
-                    className="btn btn-sm"
-                    onClick={handleNativeUninstall}
-                    disabled={nativeBusy}
-                    style={{ minWidth: '140px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                  >
-                    {nativeBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
-                  </button>
+                  {showNativeDanger && (
+                    <div style={{
+                      display: 'flex', flexDirection: 'column', gap: '10px',
+                      padding: '12px', borderRadius: 'var(--radius)',
+                      border: '1px solid var(--danger)', background: 'color-mix(in srgb, var(--danger) 6%, transparent)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input
+                          type="checkbox"
+                          id="nativeRemoveData"
+                          checked={nativeRemoveData}
+                          onChange={e => setNativeRemoveData(e.target.checked)}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="nativeRemoveData" style={{ fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
+                          Also delete all Spoolman data — irreversible
+                        </label>
+                      </div>
+                      <button
+                        className="btn btn-sm"
+                        onClick={handleNativeUninstall}
+                        disabled={nativeBusy}
+                        style={{ minWidth: '140px', borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                      >
+                        {nativeBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

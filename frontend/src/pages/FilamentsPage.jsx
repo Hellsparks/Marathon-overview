@@ -310,7 +310,9 @@ export default function FilamentsPage() {
                                             <td className="sm-catalogue-muted">{f.vendor?.name || '—'}</td>
                                             <td className="sm-catalogue-muted">{f.material || '—'}</td>
                                             {modifierField && (
-                                                <td className="sm-catalogue-muted">{f.extra?.[modifierField] || '—'}</td>
+                                                <td className="sm-catalogue-muted">{
+                                                    (() => { const v = f.extra?.[modifierField]; return (typeof v === 'string' && v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1) : v) || '—'; })()
+                                                }</td>
                                             )}
                                             <td className="sm-catalogue-muted" style={{ fontFamily: 'monospace' }}>
                                                 {f.color_hex ? `#${f.color_hex.slice(0, 6).toUpperCase()}` : '—'}
@@ -379,7 +381,7 @@ export default function FilamentsPage() {
                                             <span className="spool-card-material">
                                                 {f.material || '—'}
                                                 {modifierField && f.extra?.[modifierField] && (
-                                                    <span style={{ marginLeft: '4px', padding: '1px 5px', borderRadius: '3px', background: 'rgba(255,255,255,0.07)', fontSize: '10px' }}>{f.extra[modifierField]}</span>
+                                                    <span style={{ marginLeft: '4px', padding: '1px 5px', borderRadius: '3px', background: 'rgba(255,255,255,0.07)', fontSize: '10px' }}>{(() => { const v = f.extra[modifierField]; return typeof v === 'string' && v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1) : v; })()}</span>
                                                 )}
                                                 {f.color_hex && (
                                                     <span className="spool-card-hex">#{f.color_hex.toUpperCase()}</span>

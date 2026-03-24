@@ -157,6 +157,7 @@ export default function Sidebar({ onNavigate }) {
                   { to: '/spoolman/filaments', label: 'Filaments' },
                   { to: '/spoolman/manufacturers', label: 'Manufacturers' },
                   { to: '/spoolman/inventory', label: 'Inventory' },
+                  { to: '/spoolman/calibration', label: 'Calibration' },
                 ].map(({ to, label, end }) => (
                   <li key={to}>
                     <NavLink

@@ -340,6 +340,22 @@ export async function installSpoolman(port = 7912) {
     return body;
 }
 
+/** Stop the running Spoolman Docker container (keeps it installed). */
+export async function stopSpoolman() {
+    const r = await fetch(`${API}/docker/stop`, { method: 'POST' });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+/** Start a stopped Spoolman Docker container. */
+export async function startSpoolman() {
+    const r = await fetch(`${API}/docker/start`, { method: 'POST' });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
 /** Stop and remove the Spoolman Docker container. */
 export async function uninstallSpoolman(removeData = false) {
     const r = await fetch(`${API}/docker/uninstall?removeData=${removeData}`, { method: 'DELETE' });
@@ -457,6 +473,55 @@ export async function patchSpool(id, data) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+// ── Swatch generator management ───────────────────────────────────────────────
+
+/** Install the swatch Docker container. */
+export async function installSwatchDocker(port = 7321) {
+    const r = await fetch(`${API}/swatch/install`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port }),
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+/** Remove the swatch Docker container. */
+export async function uninstallSwatchDocker() {
+    const r = await fetch(`${API}/swatch/uninstall`, { method: 'DELETE' });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+/** Get the status of the local (uv) swatch service. */
+export async function getSwatchLocalStatus() {
+    const r = await fetch(`${API}/swatch/local/status`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+}
+
+/** Start the local (uv) swatch service. */
+export async function startSwatchLocal(port = 7321) {
+    const r = await fetch(`${API}/swatch/local/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port }),
+    });
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+}
+
+/** Stop the local (uv) swatch service. */
+export async function stopSwatchLocal() {
+    const r = await fetch(`${API}/swatch/local/stop`, { method: 'POST' });
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
     return body;

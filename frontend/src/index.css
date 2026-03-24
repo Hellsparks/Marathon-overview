@@ -1755,6 +1755,15 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   margin: 0;
 }
 
+.meas-input::-webkit-outer-spin-button,
+.meas-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.meas-input {
+  -moz-appearance: textfield;
+}
+
 .temp-target-input:hover {
   border-color: var(--border);
 }

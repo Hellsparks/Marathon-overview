@@ -98,22 +98,40 @@ router.post('/spoolman', async (req, res) => {
 // GET /api/setup/check-deps — check optional dependency status
 router.get('/check-deps', (_req, res) => {
     const { execSync } = require('child_process');
+    const os = require('os');
+    const path = require('path');
+    const fs = require('fs');
     const deps = {};
 
-    // Check Python
-    try {
-        const pyVer = execSync('python3 --version 2>&1 || python --version 2>&1', { encoding: 'utf8', timeout: 5000 }).trim();
-        deps.python = { available: true, version: pyVer };
-    } catch {
-        deps.python = { available: false };
+    function findBin(cmd) {
+        try {
+            const out = execSync(process.platform === 'win32' ? `where ${cmd}` : `which ${cmd}`,
+                { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+            const p = out.trim().split('\n')[0].trim();
+            if (p) return p;
+        } catch { /* fall through */ }
+        const home = os.homedir();
+        const candidates = process.platform === 'win32'
+            ? [path.join(home, '.cargo', 'bin', cmd + '.exe')]
+            : [path.join(home, '.local', 'bin', cmd), path.join(home, '.cargo', 'bin', cmd)];
+        return candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || null;
     }
 
-    // Check CadQuery
-    try {
-        execSync('python3 -c "import cadquery" 2>&1 || python -c "import cadquery" 2>&1', { timeout: 10000 });
-        deps.cadquery = { available: true };
-    } catch {
-        deps.cadquery = { available: false };
+    // Check uv
+    const uvPath = findBin('uv');
+    deps.uv = { available: !!uvPath, path: uvPath };
+
+    // Check Docker
+    const dockerPath = findBin('docker');
+    if (dockerPath) {
+        try {
+            execSync('docker info', { stdio: 'ignore', timeout: 5000 });
+            deps.docker = { available: true, path: dockerPath };
+        } catch {
+            deps.docker = { available: false, installed: true }; // installed but daemon not running
+        }
+    } else {
+        deps.docker = { available: false, installed: false };
     }
 
     res.json(deps);

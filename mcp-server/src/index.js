@@ -802,7 +802,7 @@ async function handleTool(name, args) {
       if (url !== undefined && urlKey) extra[urlKey] = `"${url}"`;
       if (swatch !== undefined && swatchKey) extra[swatchKey] = String(swatch);
       if (pressure_advance !== undefined) extra['pressure_advance'] = String(pressure_advance);
-      if (material_modifier !== undefined && modifierKey) extra[modifierKey] = material_modifier;
+      if (material_modifier !== undefined && modifierKey) extra[modifierKey] = `"${material_modifier}"`;
       if (Object.keys(extra).length) body.extra = extra;
       return isUpdate
         ? patch(`/api/spoolman/filaments/${filament_id}`, body)

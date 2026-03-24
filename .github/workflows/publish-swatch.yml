@@ -1,0 +1,42 @@
+name: Publish Swatch Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'swatch-service/**'
+      - 'backend/src/services/swatch_generator.py'
+      - 'backend/src/services/Arial.ttf'
+      - 'swatch.step'
+
+jobs:
+  publish:
+    name: Build & Push Swatch Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push swatch image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          dockerfile: ./swatch-service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/marathon-overview-swatch:latest

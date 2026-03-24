@@ -3,8 +3,21 @@
 
 import json
 import os
+import sys
 import tempfile
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# Locate swatch_generator: same dir (Docker) or ../backend/src/services (local dev)
+_here = os.path.dirname(os.path.abspath(__file__))
+if os.path.exists(os.path.join(_here, 'swatch_generator.py')):
+    _gen_dir = _here
+else:
+    _gen_dir = os.environ.get(
+        'SWATCH_GENERATOR_DIR',
+        os.path.join(_here, '..', 'backend', 'src', 'services'),
+    )
+if _gen_dir not in sys.path:
+    sys.path.insert(0, _gen_dir)
 
 import swatch_generator
 

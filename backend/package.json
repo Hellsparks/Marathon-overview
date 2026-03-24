@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "dev": "SWATCH_SERVICE_URL=http://localhost:7321 nodemon src/index.js",
+    "dev": "SWATCH_SERVICE_URL=http://localhost:7321 nodemon --ignore data/ src/index.js",
     "test": "jest --forceExit",
     "test:watch": "jest --watch --forceExit"
   },

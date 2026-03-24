@@ -104,9 +104,10 @@ router.post('/import', upload.single('database'), (req, res) => {
             return res.status(400).json({ error: 'Database file in zip is not valid SQLite.' });
         }
 
-        // Backup current uploads — use copy+clear instead of rename so Docker
-        // volume mount points (which can't be renamed) are handled correctly.
-        const uploadsBackup = UPLOADS_DIR + '.bak-' + timestamp;
+        // Backup current uploads inside the data dir (same place as the DB backup),
+        // so we don't need write access to the parent of the uploads folder.
+        const dataDir = path.dirname(DB_PATH);
+        const uploadsBackup = path.join(dataDir, 'uploads-backup-' + timestamp);
         if (fs.existsSync(UPLOADS_DIR)) {
             fs.cpSync(UPLOADS_DIR, uploadsBackup, { recursive: true });
             for (const entry of fs.readdirSync(UPLOADS_DIR)) {

@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { getDb } = require('../db');
 
 const router = express.Router();
 
@@ -49,8 +50,9 @@ function spawnPython(args, onSuccess, onFailure) {
 router.post('/swatch', async (req, res) => {
     const { line1 = '', line2 = '', filename = 'swatch.stl' } = req.body;
 
-    // If a swatch microservice is running, delegate to it
-    const serviceUrl = process.env.SWATCH_SERVICE_URL;
+    // If a swatch microservice is configured, delegate to it (DB setting takes priority over env)
+    const dbSwatchUrl = (() => { try { return getDb().prepare("SELECT value FROM settings WHERE key = 'swatch_service_url'").get()?.value || ''; } catch { return ''; } })();
+    const serviceUrl = dbSwatchUrl || process.env.SWATCH_SERVICE_URL;
     if (serviceUrl) {
         try {
             const upstream = await fetch(`${serviceUrl}/swatch`, {

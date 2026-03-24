@@ -3,6 +3,8 @@ dist/
 .env
 *.db
 uploads/
+uploads.bak*/
+backend/uploads.bak*/
 data/
 .DS_Store
 .restart-tmp.*

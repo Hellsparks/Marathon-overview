@@ -191,13 +191,13 @@ export default function SetupWizardPage() {
                                 <div>
                                     <div style={{ fontWeight: 600 }}>
                                         3D Swatch Generation
-                                        {deps && !deps.cadquery?.available && (
-                                            <span style={{ fontSize: '11px', color: 'var(--warning)', marginLeft: '8px', fontWeight: 400 }}>
-                                                (requires CadQuery — {deps.python?.available ? 'run: pip install cadquery' : 'install Python first'})
+                                        {deps && (
+                                            <span style={{ fontSize: '11px', marginLeft: '8px', fontWeight: 400, color: (deps.uv?.available || deps.docker?.available) ? 'var(--success)' : 'var(--text-muted)' }}>
+                                                {deps.uv?.available ? '(uv ready)' : deps.docker?.available ? '(Docker ready)' : '(set up in Settings after install)'}
                                             </span>
                                         )}
                                     </div>
-                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Generate printable color swatch STL files</div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Generate printable color swatch STL files — runs via uv or Docker</div>
                                 </div>
                             </label>
 

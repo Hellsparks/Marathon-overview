@@ -790,6 +790,29 @@ router.post('/filaments/:id/swatch', async (req, res) => {
             .filter(Boolean).join(' ').replace(/[^\w\s-]/g, '').replace(/\s+/g, '_').trim();
         const filename = `${safeName}.stl`;
 
+        // Try swatch microservice first (DB setting takes priority over env)
+        const dbSwatchUrl = getDb().prepare("SELECT value FROM settings WHERE key = 'swatch_service_url'").get()?.value || '';
+        const swatchServiceUrl = dbSwatchUrl || process.env.SWATCH_SERVICE_URL;
+        if (swatchServiceUrl) {
+            const upstream = await fetch(`${swatchServiceUrl}/swatch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ line1, line2 }),
+                signal: AbortSignal.timeout(30000),
+            });
+            if (!upstream.ok) {
+                const msg = await upstream.text();
+                return res.status(500).json({ error: msg });
+            }
+            const DATA_DIR = process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, '../../data');
+            const swatchDir = path.join(DATA_DIR, 'swatches');
+            if (!fs.existsSync(swatchDir)) fs.mkdirSync(swatchDir, { recursive: true });
+            const outPath = path.join(swatchDir, filename);
+            fs.writeFileSync(outPath, Buffer.from(await upstream.arrayBuffer()));
+            return res.json({ ok: true, path: outPath, filename });
+        }
+
+        // Fallback: local Python
         const DATA_DIR = process.env.DB_PATH ? path.dirname(process.env.DB_PATH) : path.join(__dirname, '../../data');
         const swatchDir = path.join(DATA_DIR, 'swatches');
         if (!fs.existsSync(swatchDir)) fs.mkdirSync(swatchDir, { recursive: true });
@@ -799,7 +822,7 @@ router.post('/filaments/:id/swatch', async (req, res) => {
         const bins = [...PYTHON_BINS];
         function trySpawn() {
             const bin = bins.shift();
-            if (!bin) return res.status(500).json({ error: 'Python not found' });
+            if (!bin) return res.status(500).json({ error: 'Python not found. Configure a swatch service URL in Settings or install CadQuery.' });
             const proc = spawn(bin, [SWATCH_SCRIPT, arg, outPath]);
             const stderr = [];
             proc.stderr.on('data', d => stderr.push(d.toString()));
@@ -1310,6 +1333,8 @@ router.post('/import', async (req, res) => {
         let spoolsOk = 0;
         for (const s of (data.spools || [])) {
             const { id, registered, filament, extra, ...fields } = s;
+            // Spoolman rejects requests that include both; prefer remaining_weight.
+            if (fields.remaining_weight != null) delete fields.used_weight;
             if (filament?.id !== undefined) {
                 const newId = filamentIdMap[filament.id];
                 if (!newId) { push(`  Spool id=${id} skipped: filament not found`); continue; }
@@ -1364,6 +1389,8 @@ const SPOOLMAN_CONTAINER = 'marathon-spoolman';
 const SPOOLMAN_IMAGE = 'ghcr.io/donkie/spoolman:latest';
 const SPOOLMAN_VOLUME = 'spoolman_data';
 const SPOOLMAN_NETWORK = 'marathon_net';
+const SWATCH_CONTAINER = 'marathon-swatch';
+const SWATCH_IMAGE = 'ghcr.io/hellsparks/marathon-overview-swatch:latest';
 
 const IS_DOCKER = process.env.MARATHON_DEPLOY_MODE === 'docker';
 
@@ -1398,9 +1425,10 @@ function dockerCall(method, path, body) {
 }
 
 /** Run a docker CLI command (non-Docker-mode). Resolves with stdout. */
-function cliRun(cmd, timeoutMs = 300000) {
+function cliRun(cmd, opts = {}) {
+    const { cwd, timeoutMs = 300000 } = typeof opts === 'number' ? { timeoutMs: opts } : opts;
     return new Promise((resolve, reject) => {
-        const child = exec(cmd, { timeout: timeoutMs }, (err, stdout, stderr) => {
+        const child = exec(cmd, { timeout: timeoutMs, ...(cwd ? { cwd } : {}) }, (err, stdout, stderr) => {
             if (err) reject(new Error(stderr?.trim() || err.message));
             else resolve(stdout.trim());
         });
@@ -1467,6 +1495,10 @@ router.post('/docker/install', async (req, res) => {
             await dockerCall('POST', '/volumes/create', { Name: SPOOLMAN_VOLUME }).catch(() => {});
             push('Volume ready.');
 
+            push('Removing any existing container…');
+            await dockerCall('POST', `/containers/${SPOOLMAN_CONTAINER}/stop`).catch(() => {});
+            await dockerCall('DELETE', `/containers/${SPOOLMAN_CONTAINER}`).catch(() => {});
+
             push('Creating container…');
             await dockerCall('POST', `/containers/create?name=${SPOOLMAN_CONTAINER}`, {
                 Image: SPOOLMAN_IMAGE,
@@ -1505,6 +1537,9 @@ router.post('/docker/install', async (req, res) => {
             await cliRun(`docker volume create ${SPOOLMAN_VOLUME}`).catch(() => {});
             push('Volume ready.');
 
+            push('Removing any existing container…');
+            await cliRun(`docker rm -f ${SPOOLMAN_CONTAINER}`).catch(() => {});
+
             push('Creating and starting container…');
             await cliRun(
                 `docker run -d --name ${SPOOLMAN_CONTAINER} --restart unless-stopped` +
@@ -1521,6 +1556,326 @@ router.post('/docker/install', async (req, res) => {
             push(`Spoolman URL set to ${spoolmanUrl}`);
             return res.json({ ok: true, log, spoolmanUrl, externalPort: port });
         }
+    } catch (err) {
+        push(`Error: ${err.message}`);
+        res.status(500).json({ error: err.message, log });
+    }
+});
+
+// POST /api/spoolman/docker/stop
+router.post('/docker/stop', async (_req, res) => {
+    const log = [];
+    const push = msg => { log.push(msg); console.log('[spoolman-stop]', msg); };
+    try {
+        if (IS_DOCKER) {
+            push('Stopping container…');
+            await dockerCall('POST', `/containers/${SPOOLMAN_CONTAINER}/stop`);
+            push('Container stopped.');
+        } else {
+            if (!await dockerCliAvailable()) return res.status(400).json({ error: 'Docker not available', log });
+            push('Stopping container…');
+            await cliRun(`docker stop ${SPOOLMAN_CONTAINER}`);
+            push('Container stopped.');
+        }
+        res.json({ ok: true, log });
+    } catch (err) {
+        push(`Error: ${err.message}`);
+        res.status(500).json({ error: err.message, log });
+    }
+});
+
+// POST /api/spoolman/docker/start
+router.post('/docker/start', async (_req, res) => {
+    const log = [];
+    const push = msg => { log.push(msg); console.log('[spoolman-start]', msg); };
+    try {
+        if (IS_DOCKER) {
+            push('Starting container…');
+            await dockerCall('POST', `/containers/${SPOOLMAN_CONTAINER}/start`);
+            push('Container started.');
+        } else {
+            if (!await dockerCliAvailable()) return res.status(400).json({ error: 'Docker not available', log });
+            push('Starting container…');
+            await cliRun(`docker start ${SPOOLMAN_CONTAINER}`);
+            push('Container started.');
+        }
+        res.json({ ok: true, log });
+    } catch (err) {
+        push(`Error: ${err.message}`);
+        res.status(500).json({ error: err.message, log });
+    }
+});
+
+// GET /api/spoolman/swatch/status
+router.get('/swatch/status', async (_req, res) => {
+    try {
+        if (IS_DOCKER) {
+            const info = await dockerCall('GET', `/containers/${SWATCH_CONTAINER}/json`);
+            return res.json({ available: true, created: true, running: info.State?.Running || false, status: info.State?.Status || 'unknown' });
+        }
+        if (!await dockerCliAvailable()) return res.json({ available: false });
+        const { stdout } = await cliRun(`docker inspect --format "{{.State.Status}}" ${SWATCH_CONTAINER}`).catch(() => ({ stdout: '' }));
+        if (!stdout.trim()) return res.json({ available: true, created: false });
+        return res.json({ available: true, created: true, running: stdout.trim() === 'running', status: stdout.trim() });
+    } catch {
+        return res.json({ available: true, created: false });
+    }
+});
+
+// POST /api/spoolman/swatch/stop
+router.post('/swatch/stop', async (_req, res) => {
+    const log = [];
+    const push = msg => { log.push(msg); console.log('[swatch-stop]', msg); };
+    try {
+        if (IS_DOCKER) {
+            push('Stopping swatch container…');
+            await dockerCall('POST', `/containers/${SWATCH_CONTAINER}/stop`);
+        } else {
+            if (!await dockerCliAvailable()) return res.status(400).json({ error: 'Docker not available', log });
+            push('Stopping swatch container…');
+            await cliRun(`docker stop ${SWATCH_CONTAINER}`);
+        }
+        push('Swatch container stopped.');
+        res.json({ ok: true, log });
+    } catch (err) {
+        push(`Error: ${err.message}`);
+        res.status(500).json({ error: err.message, log });
+    }
+});
+
+// POST /api/spoolman/swatch/start
+router.post('/swatch/start', async (_req, res) => {
+    const log = [];
+    const push = msg => { log.push(msg); console.log('[swatch-start]', msg); };
+    try {
+        if (IS_DOCKER) {
+            push('Starting swatch container…');
+            await dockerCall('POST', `/containers/${SWATCH_CONTAINER}/start`);
+        } else {
+            if (!await dockerCliAvailable()) return res.status(400).json({ error: 'Docker not available', log });
+            push('Starting swatch container…');
+            await cliRun(`docker start ${SWATCH_CONTAINER}`);
+        }
+        push('Swatch container started.');
+        res.json({ ok: true, log });
+    } catch (err) {
+        push(`Error: ${err.message}`);
+        res.status(500).json({ error: err.message, log });
+    }
+});
+
+// POST /api/spoolman/swatch/install — pull & run the swatch Docker container
+// Body: { port: 7321 }
+router.post('/swatch/install', async (req, res) => {
+    const port = parseInt(req.body?.port) || 7321;
+    const log = [];
+    const push = msg => { log.push(msg); console.log('[swatch-install]', msg); };
+    try {
+        // Remove any existing container
+        if (IS_DOCKER) {
+            await dockerCall('POST', `/containers/${SWATCH_CONTAINER}/stop`).catch(() => {});
+            await dockerCall('DELETE', `/containers/${SWATCH_CONTAINER}`).catch(() => {});
+        } else {
+            if (!await dockerCliAvailable()) return res.status(400).json({ error: 'Docker not available', log });
+            await cliRun(`docker stop ${SWATCH_CONTAINER}`).catch(() => {});
+            await cliRun(`docker rm ${SWATCH_CONTAINER}`).catch(() => {});
+        }
+
+        // Pull image (fall back to local build if not yet published on GHCR)
+        const DOCKERFILE_CTX = path.join(__dirname, '..', '..', '..'); // repo root
+        const SWATCH_DOCKERFILE = path.join(DOCKERFILE_CTX, 'swatch-service', 'Dockerfile');
+        const hasLocalDockerfile = fs.existsSync(SWATCH_DOCKERFILE);
+
+        async function pullOrBuild() {
+            try {
+                push('Pulling swatch image…');
+                if (IS_DOCKER) {
+                    await dockerCall('POST', `/images/create?fromImage=${encodeURIComponent(SWATCH_IMAGE)}`);
+                } else {
+                    await cliRun(`docker pull ${SWATCH_IMAGE}`);
+                }
+                push('Image pulled.');
+            } catch (pullErr) {
+                const msg = pullErr.message || '';
+                const isNotPublished = msg.includes('denied') || msg.includes('not found') || msg.includes('manifest unknown') || msg.includes('no such host');
+                if (!isNotPublished || !hasLocalDockerfile) throw pullErr;
+                push('Image not found on GHCR — building locally (this may take 10-15 min on first run)…');
+                if (IS_DOCKER) {
+                    // Docker-in-Docker: can't build via socket easily; use CLI if available
+                    await cliRun(`docker build -t ${SWATCH_IMAGE} -f swatch-service/Dockerfile .`, { cwd: DOCKERFILE_CTX });
+                } else {
+                    await cliRun(`docker build -t ${SWATCH_IMAGE} -f swatch-service/Dockerfile .`, { cwd: DOCKERFILE_CTX });
+                }
+                push('Local build complete.');
+            }
+        }
+
+        await pullOrBuild();
+
+        push('Creating container…');
+        if (IS_DOCKER) {
+            await dockerCall('POST', `/containers/create?name=${SWATCH_CONTAINER}`, {
+                Image: SWATCH_IMAGE,
+                ExposedPorts: { '7321/tcp': {} },
+                HostConfig: {
+                    PortBindings: { '7321/tcp': [{ HostPort: String(port) }] },
+                    RestartPolicy: { Name: 'unless-stopped' },
+                    NetworkMode: 'marathon_net',
+                },
+            });
+            push('Starting container…');
+            await dockerCall('POST', `/containers/${SWATCH_CONTAINER}/start`);
+        } else {
+            push('Starting container…');
+            await cliRun(
+                `docker run -d --name ${SWATCH_CONTAINER} --restart unless-stopped` +
+                ` -p ${port}:7321 ${SWATCH_IMAGE}`
+            );
+        }
+
+        push('Swatch service started.');
+        const swatchUrl = `http://localhost:${port}`;
+        getDb().prepare(`INSERT INTO settings (key, value) VALUES ('swatch_service_url', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(swatchUrl);
+        push(`Swatch URL set to ${swatchUrl}`);
+        res.json({ ok: true, log, swatchUrl });
+    } catch (err) {
+        push(`Error: ${err.message}`);
+        res.status(500).json({ error: err.message, log });
+    }
+});
+
+// DELETE /api/spoolman/swatch/uninstall
+router.delete('/swatch/uninstall', async (_req, res) => {
+    const log = [];
+    const push = msg => { log.push(msg); console.log('[swatch-uninstall]', msg); };
+    try {
+        if (IS_DOCKER) {
+            push('Stopping container…');
+            await dockerCall('POST', `/containers/${SWATCH_CONTAINER}/stop`).catch(() => {});
+            push('Removing container…');
+            await dockerCall('DELETE', `/containers/${SWATCH_CONTAINER}`);
+        } else {
+            if (!await dockerCliAvailable()) return res.status(400).json({ error: 'Docker not available', log });
+            push('Stopping container…');
+            await cliRun(`docker stop ${SWATCH_CONTAINER}`).catch(() => {});
+            push('Removing container…');
+            await cliRun(`docker rm ${SWATCH_CONTAINER}`);
+        }
+        push('Swatch container removed.');
+        res.json({ ok: true, log });
+    } catch (err) {
+        push(`Error: ${err.message}`);
+        res.status(500).json({ error: err.message, log });
+    }
+});
+
+// ── Swatch local (uv) management ─────────────────────────────────────────────
+
+const SWATCH_SERVER = path.join(__dirname, '../../../swatch-service/server.py');
+const SWATCH_PID_FILE = (() => {
+    const dataDir = process.env.DB_PATH ? require('path').dirname(process.env.DB_PATH) : require('path').join(__dirname, '../../data');
+    return require('path').join(dataDir, 'swatch.pid');
+})();
+
+function swatchLocalPid() {
+    try {
+        const pid = parseInt(fs.readFileSync(SWATCH_PID_FILE, 'utf8'));
+        if (!pid) return null;
+        process.kill(pid, 0); // throws if not running
+        return pid;
+    } catch { return null; }
+}
+
+/** Returns the full path to cmd, or null if not found. */
+function findCmd(cmd) {
+    try {
+        const { execSync } = require('child_process');
+        const out = execSync(process.platform === 'win32' ? `where ${cmd}` : `which ${cmd}`, { stdio: ['ignore', 'pipe', 'ignore'] });
+        const p = out.toString().trim().split('\n')[0].trim();
+        if (p) return p;
+    } catch { /* fall through */ }
+    // Check common user-local install dirs (e.g. uv installs to ~/.local/bin)
+    const home = require('os').homedir();
+    const candidates = process.platform === 'win32'
+        ? [path.join(home, '.cargo', 'bin', cmd + '.exe'), path.join(home, 'AppData', 'Local', 'Programs', cmd, cmd + '.exe')]
+        : [path.join(home, '.local', 'bin', cmd), path.join(home, '.cargo', 'bin', cmd), `/usr/local/bin/${cmd}`];
+    return candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || null;
+}
+
+function hasCmd(cmd) { return !!findCmd(cmd); }
+
+// GET /api/spoolman/swatch/local/status
+router.get('/swatch/local/status', (_req, res) => {
+    const uvAvailable = hasCmd('uv');
+    const pid = swatchLocalPid();
+    const dbUrl = (() => { try { return getDb().prepare("SELECT value FROM settings WHERE key = 'swatch_service_url'").get()?.value || ''; } catch { return ''; } })();
+    res.json({
+        uvAvailable,
+        installed: fs.existsSync(SWATCH_SERVER),
+        running: !!pid,
+        pid: pid || null,
+        platform: process.platform,
+        configuredUrl: dbUrl,
+    });
+});
+
+// POST /api/spoolman/swatch/local/start
+router.post('/swatch/local/start', async (req, res) => {
+    const port = parseInt(req.body?.port) || 7321;
+    const log = [];
+    const push = msg => { log.push(msg); console.log('[swatch-local]', msg); };
+
+    if (swatchLocalPid()) {
+        return res.json({ ok: true, log: ['Already running'], pid: swatchLocalPid() });
+    }
+    if (!hasCmd('uv')) {
+        return res.status(400).json({ error: 'uv not found. Install from https://docs.astral.sh/uv/', log });
+    }
+    if (!fs.existsSync(SWATCH_SERVER)) {
+        return res.status(400).json({ error: 'server.py not found', log });
+    }
+
+    push(`Starting swatch service on port ${port} via uv…`);
+    push('First run will download cadquery — may take a few minutes.');
+
+    const uvBin = findCmd('uv');
+    const child = spawn(uvBin, ['run', '--python', '3.12', '--with', 'cadquery', SWATCH_SERVER], {
+        cwd: path.dirname(SWATCH_SERVER),
+        env: { ...process.env, PORT: String(port) },
+        detached: true,
+        stdio: 'ignore',
+    });
+    child.unref();
+
+    // Wait a moment then verify it started
+    await new Promise(r => setTimeout(r, 1500));
+    try { fs.writeFileSync(SWATCH_PID_FILE, String(child.pid)); } catch {}
+
+    const running = !!swatchLocalPid();
+    if (running) {
+        const swatchUrl = `http://localhost:${port}`;
+        getDb().prepare(`INSERT INTO settings (key, value) VALUES ('swatch_service_url', ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(swatchUrl);
+        push(`Swatch service started (PID ${child.pid}) on port ${port}`);
+        res.json({ ok: true, log, pid: child.pid, port, swatchUrl });
+    } else {
+        push('Process exited immediately — cadquery may still be downloading. Try again in a minute.');
+        res.status(500).json({ error: 'Process exited immediately', log });
+    }
+});
+
+// POST /api/spoolman/swatch/local/stop
+router.post('/swatch/local/stop', (_req, res) => {
+    const log = [];
+    const push = msg => { log.push(msg); console.log('[swatch-local]', msg); };
+    const pid = swatchLocalPid();
+    if (!pid) return res.json({ ok: true, log: ['Not running'] });
+    try {
+        process.kill(pid, 'SIGTERM');
+        try { fs.unlinkSync(SWATCH_PID_FILE); } catch {}
+        push(`Stopped swatch service (PID ${pid})`);
+        res.json({ ok: true, log });
     } catch (err) {
         push(`Error: ${err.message}`);
         res.status(500).json({ error: err.message, log });
@@ -1618,6 +1973,7 @@ function spawnSpoolman(port) {
         ? [venv.spoolman, []]
         : [venv.python, ['-m', 'uvicorn', 'spoolman.main:app', '--host', '0.0.0.0', '--port', String(port)]];
     const child = spawn(cmd, args, {
+        cwd: SPOOLMAN_INSTALL_DIR,
         detached: true,
         stdio: ['ignore', logFd, logFd],
         env: spoolmanEnv,
@@ -1676,13 +2032,15 @@ router.post('/native/install', async (req, res) => {
         fs.mkdirSync(NATIVE_DIR, { recursive: true });
 
         push('Fetching latest Spoolman release…');
-        // Official install: download zip from GitHub releases, extract, run install.sh
+        // Download to /tmp to avoid permission issues with the target directory.
+        // Pass -systemd=no so install.sh never prompts for input (stdin is /dev/null).
+        const tmpZip = '/tmp/spoolman_install.zip';
         const shellCmd = 'curl -s https://api.github.com/repos/Donkie/Spoolman/releases/latest'
             + ' | grep -o \'https://[^"]*spoolman.zip\''
-            + ' | xargs curl -sSL -o temp.zip'
-            + ' && unzip -o temp.zip -d ./Spoolman'
-            + ' && rm temp.zip'
-            + ' && cd ./Spoolman && bash ./scripts/install.sh';
+            + ` | xargs curl -sSL -o ${tmpZip}`
+            + ` && unzip -o ${tmpZip} -d ./Spoolman`
+            + ` && rm -f ${tmpZip}`
+            + ' && cd ./Spoolman && bash ./scripts/install.sh -systemd=no';
 
         await new Promise((resolve, reject) => {
             const proc = spawn('bash', ['-c', shellCmd], {

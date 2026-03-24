@@ -368,18 +368,13 @@ export default function AddFilamentDialog({ onClose, onCreated, onAddVendor, fil
                 }
 
                 if (f.field_type === 'float' || f.field_type === 'integer') {
-                    // Spoolman natively treats all extra fields as strings under the hood, but validating them
-                    // depends on Pydantic correctly decoding the string.
                     extraOut[f.key] = String(parseFloat(val));
                 } else {
-                    if (typeof val === 'string' && !val.startsWith('"') && !val.startsWith('{') && !val.startsWith('[')) {
-                        val = `"${val}"`;
-                    }
                     extraOut[f.key] = val;
                 }
             }
             
-            if (orcaslicerFieldKey) {
+            if (orcaslicerFieldKey && extraFields.some(f => f.key === orcaslicerFieldKey)) {
                 const configToSave = {};
                 for (const [k, v] of Object.entries(orcaslicerConfig)) {
                     if (v !== '') configToSave[k] = v;

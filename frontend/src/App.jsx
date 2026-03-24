@@ -16,6 +16,7 @@ import ProjectsPage from './pages/ProjectsPage';
 import ArchivePage from './pages/ArchivePage';
 import HistoryPage from './pages/HistoryPage';
 import ExtrasPage from './pages/ExtrasPage';
+import ShrinkageCalibrationPage from './pages/ShrinkageCalibrationPage';
 import SetupWizardPage from './pages/SetupWizardPage';
 import { ThemeProvider } from './components/layout/ThemeProvider';
 
@@ -57,6 +58,7 @@ export default function App() {
               <Route path="spoolman/filaments" element={<FilamentsPage />} />
               <Route path="spoolman/manufacturers" element={<ManufacturersPage />} />
               <Route path="spoolman/inventory" element={<InventoryPage />} />
+              <Route path="spoolman/calibration" element={<ShrinkageCalibrationPage />} />
               <Route path="printer/:printerId" element={<PrinterIframePage />} />
               <Route path="maintenance" element={<MaintenancePage />} />
               <Route path="history" element={<HistoryPage />} />
