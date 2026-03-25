@@ -42,10 +42,35 @@ services:
     networks:
       - marathon_net
 
+  spoolman:
+    image: ghcr.io/donkie/spoolman:latest
+    container_name: marathon-spoolman
+    restart: unless-stopped
+    ports:
+      - "${SPOOLMAN_PORT:-7912}:8000"
+    volumes:
+      - spoolman_data:/home/app/.local/share/spoolman
+    networks:
+      - marathon_net
+
+  swatch:
+    build:
+      context: .
+      dockerfile: swatch-service/Dockerfile
+    image: ghcr.io/hellsparks/marathon-overview-swatch:latest
+    container_name: marathon-swatch
+    restart: unless-stopped
+    ports:
+      - "${SWATCH_PORT:-7321}:7321"
+    networks:
+      - marathon_net
+
 volumes:
   backend_data:
     driver: local
   gcode_uploads:
+    driver: local
+  spoolman_data:
     driver: local
 
 networks:

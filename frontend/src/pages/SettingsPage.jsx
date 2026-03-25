@@ -4,7 +4,7 @@ import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
-import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getDockerStatus, installSpoolman, stopSpoolman, startSpoolman, uninstallSpoolman, getNativeStatus, installNative, startNative, stopNative, uninstallNative, getStorageLocation, setStorageLocation, getFilaments, installSwatchDocker, getSwatchInstallStatus, uninstallSwatchDocker, getSwatchLocalStatus, startSwatchLocal, stopSwatchLocal } from '../api/spoolman';
+import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getStorageLocation, setStorageLocation, getFilaments, getServicesStatus } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate, getUpdateChannel, setUpdateChannel, getReleases, getDevCommits, applyUpdate, pullAndRestart, getApplyStatus } from '../api/updates';
 import { getUpdateNotifsEnabled, setUpdateNotifsEnabled } from '../hooks/useUpdateCheck';
@@ -94,34 +94,12 @@ export default function SettingsPage() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [currencyData, setCurrencyData] = useState(null); // { data, source, target }
 
-  // Docker setup
-  const [dockerStatus, setDockerStatus] = useState(null); // null = loading
-  const [dockerBusy, setDockerBusy] = useState(false);
-  const [dockerLog, setDockerLog] = useState([]);
-  const [dockerError, setDockerError] = useState('');
-  const [installPort, setInstallPort] = useState('7912');
-  const [removeData, setRemoveData] = useState(false);
-  const [showDockerDanger, setShowDockerDanger] = useState(false);
+  // Services status (bundled/external Spoolman + Swatch)
+  const [servicesStatus, setServicesStatus] = useState(null);
 
   // Marathon backend port
   const [backendPort, setBackendPort] = useState('');
 
-  // Swatch generator
-  const [swatchUrl, setSwatchUrl] = useState('');
-  const [swatchUrlSaved, setSwatchUrlSaved] = useState('');
-  const [swatchTestStatus, setSwatchTestStatus] = useState(null); // null | 'ok' | 'error'
-  const [swatchTestMsg, setSwatchTestMsg] = useState('');
-  const [swatchDockerStatus, setSwatchDockerStatus] = useState(null);
-  const [swatchDockerBusy, setSwatchDockerBusy] = useState(false);
-  const [swatchDockerPort, setSwatchDockerPort] = useState('7321');
-  const [swatchDockerLog, setSwatchDockerLog] = useState([]);
-  const [swatchDockerError, setSwatchDockerError] = useState('');
-  const [showSwatchDanger, setShowSwatchDanger] = useState(false);
-  const [swatchLocalStatus, setSwatchLocalStatus] = useState(null);
-  const [swatchLocalBusy, setSwatchLocalBusy] = useState(false);
-  const [swatchLocalLog, setSwatchLocalLog] = useState([]);
-  const [swatchLocalError, setSwatchLocalError] = useState('');
-  const [swatchLocalPort, setSwatchLocalPort] = useState('7321');
 
   // MCP server
   const [mcpStatus, setMcpStatus] = useState(null);
@@ -130,15 +108,6 @@ export default function SettingsPage() {
   const [mcpPort, setMcpPort] = useState('3001');
   const [mcpMarathonUrl, setMcpMarathonUrl] = useState('http://localhost:3000');
   const [mcpCopied, setMcpCopied] = useState(false);
-
-  // Native (Python venv) setup
-  const [nativeStatus, setNativeStatus] = useState(null);
-  const [nativeBusy, setNativeBusy] = useState(false);
-  const [nativeLog, setNativeLog] = useState([]);
-  const [nativeError, setNativeError] = useState('');
-  const [nativePort, setNativePort] = useState('7912');
-  const [nativeRemoveData, setNativeRemoveData] = useState(false);
-  const [showNativeDanger, setShowNativeDanger] = useState(false);
 
   // GitHub integration
   const [githubToken, setGithubToken] = useState('');
@@ -160,8 +129,6 @@ export default function SettingsPage() {
       setHueforgeFieldSaved(s.hueforge_td_field || '');
       setSwatchField(s.swatch_extra_field || '');
       setSwatchFieldSaved(s.swatch_extra_field || '');
-      setSwatchUrl(s.swatch_service_url || '');
-      setSwatchUrlSaved(s.swatch_service_url || '');
       setSwatchPromptEnabled(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
       setSwatchPromptSaved(s.swatch_prompt_enabled === 'true' || s.swatch_prompt_enabled === true);
       setOrcaslicerField(s.orcaslicer_config_field || '');
@@ -175,11 +142,7 @@ export default function SettingsPage() {
       setStorageLocationSaved(loc);
     }).catch(() => { });
     getFields('filament').then(fields => setExtraFields(fields || [])).catch(() => { });
-    getDockerStatus().then(setDockerStatus).catch(() => { });
-    fetch('/api/spoolman/swatch/status').then(r => r.json()).then(setSwatchDockerStatus).catch(() => { });
-    getSwatchLocalStatus().then(setSwatchLocalStatus).catch(() => {});
     setBackendPort(window.location.port || (window.location.protocol === 'https:' ? '443' : '80'));
-    getNativeStatus().then(setNativeStatus).catch(() => { });
     getMcpStatus().then(s => {
       setMcpStatus(s);
       if (s.port) setMcpPort(String(s.port));
@@ -193,6 +156,12 @@ export default function SettingsPage() {
       setDirectReportsEnabled(s.direct_reports_enabled === 'true' || s.direct_reports_enabled === true);
       setDirectReportsSaved(s.direct_reports_enabled === 'true' || s.direct_reports_enabled === true);
     }).catch(() => { });
+  }, []);
+
+  useEffect(() => {
+    getServicesStatus().then(setServicesStatus).catch(() => {});
+    const iv = setInterval(() => getServicesStatus().then(setServicesStatus).catch(() => {}), 10000);
+    return () => clearInterval(iv);
   }, []);
 
   async function handleSpoolmanSave() {
@@ -237,107 +206,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleSwatchUrlSave() {
-    try {
-      await updateSetting('swatch_service_url', swatchUrl.replace(/\/+$/, ''));
-      setSwatchUrlSaved(swatchUrl.replace(/\/+$/, ''));
-    } catch (e) {
-      alert(e.message);
-    }
-  }
-
-  async function handleSwatchTest() {
-    setSwatchTestStatus(null);
-    setSwatchTestMsg('');
-    try {
-      const r = await fetch(`${swatchUrl || ''}/swatch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ line1: 'Test', line2: 'Ping' }) });
-      if (r.ok) { setSwatchTestStatus('ok'); setSwatchTestMsg('Service reachable ✓'); }
-      else { setSwatchTestStatus('error'); setSwatchTestMsg(`HTTP ${r.status}`); }
-    } catch (e) {
-      setSwatchTestStatus('error');
-      setSwatchTestMsg(e.message);
-    }
-  }
-
-  async function handleSwatchDockerStop() {
-    setSwatchDockerBusy(true);
-    try {
-      await fetch('/api/spoolman/swatch/stop', { method: 'POST' });
-      const s = await fetch('/api/spoolman/swatch/status').then(r => r.json());
-      setSwatchDockerStatus(s);
-    } catch (e) { /* ignore */ }
-    finally { setSwatchDockerBusy(false); }
-  }
-
-  async function handleSwatchDockerStart() {
-    setSwatchDockerBusy(true);
-    try {
-      await fetch('/api/spoolman/swatch/start', { method: 'POST' });
-      const s = await fetch('/api/spoolman/swatch/status').then(r => r.json());
-      setSwatchDockerStatus(s);
-    } catch (e) { /* ignore */ }
-    finally { setSwatchDockerBusy(false); }
-  }
-
-  async function handleSwatchDockerInstall() {
-    setSwatchDockerBusy(true); setSwatchDockerLog([]); setSwatchDockerError('');
-    try {
-      await installSwatchDocker(parseInt(swatchDockerPort) || 7321);
-      // Poll for progress
-      const poll = setInterval(async () => {
-        try {
-          const s = await getSwatchInstallStatus();
-          setSwatchDockerLog(s.log || []);
-          if (!s.running) {
-            clearInterval(poll);
-            setSwatchDockerBusy(false);
-            if (s.result?.error) setSwatchDockerError(s.result.error);
-            if (s.result?.swatchUrl) { setSwatchUrl(s.result.swatchUrl); setSwatchUrlSaved(s.result.swatchUrl); }
-            const st = await fetch('/api/spoolman/swatch/status').then(r => r.json());
-            setSwatchDockerStatus(st);
-          }
-        } catch { /* keep polling */ }
-      }, 1000);
-    } catch (e) {
-      setSwatchDockerError(e.message);
-      setSwatchDockerBusy(false);
-    }
-  }
-
-  async function handleSwatchDockerUninstall() {
-    if (!confirm('Remove the swatch container?')) return;
-    setSwatchDockerBusy(true); setSwatchDockerLog([]); setSwatchDockerError('');
-    try {
-      const result = await uninstallSwatchDocker();
-      setSwatchDockerLog(result.log || []);
-      const s = await fetch('/api/spoolman/swatch/status').then(r => r.json());
-      setSwatchDockerStatus(s);
-    } catch (e) { setSwatchDockerError(e.message); }
-    finally { setSwatchDockerBusy(false); setShowSwatchDanger(false); }
-  }
-
-  async function handleSwatchLocalStart() {
-    setSwatchLocalBusy(true); setSwatchLocalLog([]); setSwatchLocalError('');
-    try {
-      const result = await startSwatchLocal(parseInt(swatchLocalPort) || 7321);
-      setSwatchLocalLog(result.log || []);
-      if (result.swatchUrl) { setSwatchUrl(result.swatchUrl); setSwatchUrlSaved(result.swatchUrl); }
-      const s = await getSwatchLocalStatus();
-      setSwatchLocalStatus(s);
-    } catch (e) { setSwatchLocalError(e.message); }
-    finally { setSwatchLocalBusy(false); }
-  }
-
-  async function handleSwatchLocalStop() {
-    setSwatchLocalBusy(true); setSwatchLocalLog([]); setSwatchLocalError('');
-    try {
-      const result = await stopSwatchLocal();
-      setSwatchLocalLog(result.log || []);
-      const s = await getSwatchLocalStatus();
-      setSwatchLocalStatus(s);
-    } catch (e) { setSwatchLocalError(e.message); }
-    finally { setSwatchLocalBusy(false); }
-  }
 
   async function handleOrcaslicerFieldSave(val) {
     try {
@@ -795,106 +663,6 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleDockerInstall() {
-    setDockerBusy(true);
-    setDockerLog([]);
-    setDockerError('');
-    try {
-      const result = await installSpoolman(parseInt(installPort) || 7912);
-      setDockerLog(result.log || []);
-      // Refresh URL field and docker status
-      if (result.spoolmanUrl) {
-        setSpoolmanUrl(result.spoolmanUrl);
-        setSpoolmanSaved(result.spoolmanUrl);
-      }
-      const status = await getDockerStatus();
-      setDockerStatus(status);
-    } catch (e) {
-      setDockerError(e.message);
-    } finally {
-      setDockerBusy(false);
-    }
-  }
-
-  async function handleDockerUninstall() {
-    if (!confirm(`Remove the Spoolman container?${removeData ? '\n\nThis will also delete all Spoolman data (volume). This cannot be undone.' : ''}`)) return;
-    setDockerBusy(true);
-    setDockerLog([]);
-    setDockerError('');
-    try {
-      const result = await uninstallSpoolman(removeData);
-      setDockerLog(result.log || []);
-      const status = await getDockerStatus();
-      setDockerStatus(status);
-    } catch (e) {
-      setDockerError(e.message);
-    } finally {
-      setDockerBusy(false);
-    }
-  }
-
-  async function handleNativeInstall() {
-    setNativeBusy(true);
-    setNativeLog([]);
-    setNativeError('');
-    try {
-      const result = await installNative(parseInt(nativePort) || 7912);
-      setNativeLog(result.log || []);
-      if (result.spoolmanUrl) { setSpoolmanUrl(result.spoolmanUrl); setSpoolmanSaved(result.spoolmanUrl); }
-      setNativeStatus(await getNativeStatus());
-    } catch (e) {
-      setNativeError(e.message);
-    } finally {
-      setNativeBusy(false);
-    }
-  }
-
-  async function handleNativeStart() {
-    setNativeBusy(true);
-    setNativeLog([]);
-    setNativeError('');
-    try {
-      const result = await startNative();
-      setNativeLog(result.log || [result.message || 'Started']);
-      setNativeStatus(await getNativeStatus());
-    } catch (e) {
-      setNativeError(e.message);
-    } finally {
-      setNativeBusy(false);
-    }
-  }
-
-  async function handleNativeStop() {
-    setNativeBusy(true);
-    setNativeLog([]);
-    setNativeError('');
-    try {
-      const result = await stopNative();
-      setNativeLog([result.message || 'Stopped']);
-      setNativeStatus(await getNativeStatus());
-    } catch (e) {
-      setNativeError(e.message);
-    } finally {
-      setNativeBusy(false);
-    }
-  }
-
-  async function handleNativeUninstall() {
-    if (!confirm(`Remove Spoolman?${nativeRemoveData ? '\n\nThis will also delete all Spoolman data. This cannot be undone.' : ''}`)) return;
-    setNativeBusy(true);
-    setNativeLog([]);
-    setNativeError('');
-    try {
-      const result = await uninstallNative(nativeRemoveData);
-      setNativeLog(result.log || []);
-      setNativeStatus(await getNativeStatus());
-    } catch (e) {
-      setNativeError(e.message);
-    } finally {
-      setNativeBusy(false);
-    }
-  }
-
   async function handleMcpStart() {
     setMcpBusy(true);
     setMcpError('');
@@ -963,22 +731,51 @@ export default function SettingsPage() {
         <div className="settings-2col">
           {/* Spoolman URL */}
           <div className="settings-card">
-            <h3 className="settings-card-title">Spoolman URL</h3>
+            <h3 className="settings-card-title">Spoolman</h3>
             <p className="settings-card-desc">
-              Connect to <a href="https://github.com/Donkie/Spoolman" target="_blank" rel="noopener noreferrer">Spoolman</a> to track filament spools on each printer.
+              Track filament spools on each printer via <a href="https://github.com/Donkie/Spoolman" target="_blank" rel="noopener noreferrer">Spoolman</a>.
             </p>
-            <div className="settings-row">
-              <input
-                type="url"
-                className="form-input"
-                placeholder="http://10.0.0.24:32000"
-                value={spoolmanUrl}
-                onChange={e => setSpoolmanUrl(e.target.value)}
-                style={{ flex: 1, minWidth: '140px' }}
-              />
-              <button className="btn btn-sm btn-primary" onClick={handleSpoolmanSave}>Save</button>
-              <button className="btn btn-sm" onClick={handleSpoolmanTest}>Test</button>
-            </div>
+
+            {servicesStatus?.deployMode === 'docker' && (
+              <div className="settings-row" style={{ marginBottom: '8px' }}>
+                <button
+                  className={`btn btn-sm${spoolmanUrl === 'http://marathon-spoolman:8000' ? ' btn-primary' : ''}`}
+                  onClick={async () => {
+                    setSpoolmanUrl('http://marathon-spoolman:8000');
+                    await updateSetting('spoolman_url', 'http://marathon-spoolman:8000');
+                    setSpoolmanSaved('http://marathon-spoolman:8000');
+                    setSpoolmanMsg('Using bundled Spoolman');
+                    setSpoolmanStatus('ok');
+                    getServicesStatus().then(setServicesStatus).catch(() => {});
+                  }}
+                >Bundled</button>
+                <button
+                  className={`btn btn-sm${spoolmanUrl !== 'http://marathon-spoolman:8000' ? ' btn-primary' : ''}`}
+                  onClick={() => { setSpoolmanUrl(''); setSpoolmanSaved(''); setSpoolmanStatus(null); setSpoolmanMsg(''); }}
+                >External</button>
+                {servicesStatus?.spoolman && (
+                  <span className={`status-pill ${servicesStatus.spoolman.reachable ? 'running' : 'stopped'}`}>
+                    {servicesStatus.spoolman.reachable ? 'Connected' : 'Not reachable'}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {(servicesStatus?.deployMode !== 'docker' || spoolmanUrl !== 'http://marathon-spoolman:8000') && (
+              <div className="settings-row">
+                <input
+                  type="url"
+                  className="form-input"
+                  placeholder="http://10.0.0.24:7912"
+                  value={spoolmanUrl}
+                  onChange={e => setSpoolmanUrl(e.target.value)}
+                  style={{ flex: 1, minWidth: '140px' }}
+                />
+                <button className="btn btn-sm btn-primary" onClick={handleSpoolmanSave}>Save</button>
+                <button className="btn btn-sm" onClick={handleSpoolmanTest}>Test</button>
+              </div>
+            )}
+
             {spoolmanMsg && (
               <p className={`settings-status ${spoolmanStatus || ''}`} style={{ marginTop: '6px' }}>{spoolmanMsg}</p>
             )}
@@ -1145,328 +942,12 @@ export default function SettingsPage() {
                   </div>
                 </td>
               </tr>
-              {/* Swatch service URL row */}
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '8px 12px 8px 0', fontWeight: 500, whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '12px' }}>Swatch Service URL</td>
-                <td style={{ padding: '6px 8px 6px 0' }}>
-                  <input type="text" className="form-input" placeholder="http://localhost:7321"
-                    value={swatchUrl} onChange={e => setSwatchUrl(e.target.value)}
-                    style={{ width: '100%', padding: '5px 10px', fontSize: '13px' }} />
-                </td>
-                <td style={{ padding: '6px 0', whiteSpace: 'nowrap' }}>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <button className="btn btn-sm" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={handleSwatchTest} disabled={!swatchUrl}>Test</button>
-                    <button className="btn btn-sm btn-primary" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={handleSwatchUrlSave} disabled={swatchUrl === swatchUrlSaved}>
-                      {swatchUrl === swatchUrlSaved ? 'Saved' : 'Save'}
-                    </button>
-                    {swatchTestStatus && (
-                      <span style={{ fontSize: '12px', color: swatchTestStatus === 'ok' ? 'var(--success)' : 'var(--danger)' }}>{swatchTestMsg}</span>
-                    )}
-                  </div>
-                </td>
-              </tr>
             </tbody>
           </table>
         </div>
 
         {showOrcaDefaults && (
             <OrcaSlicerDefaultsDialog onClose={() => setShowOrcaDefaults(false)} />
-        )}
-
-        {/* Docker Setup */}
-        {dockerStatus?.reason === 'docker_not_found' ? (
-          <div className="settings-card" style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-            <h3 className="settings-card-title">Docker Setup</h3>
-            <p style={{ marginTop: '6px' }}>
-              Docker was not found on this system. Install{' '}
-              <a href="https://docs.docker.com/get-docker/" target="_blank" rel="noopener noreferrer">Docker Desktop</a>{' '}
-              and restart Marathon to enable one-click Spoolman install.
-            </p>
-          </div>
-        ) : dockerStatus?.available && (
-          <div className="settings-card">
-            <h3 className="settings-card-title">Docker Setup</h3>
-            <p className="settings-card-desc">
-              Install and manage a Spoolman container directly from Marathon.
-              {dockerStatus.mode === 'docker'
-                ? <> The container joins the <code>marathon_net</code> network and exposes a port for browser access.</>
-                : <> The container is managed via the Docker CLI and will be accessible at <code>localhost:{installPort}</code>.</>
-              }
-            </p>
-
-            {/* Status + actions row */}
-            <div className="settings-row" style={{ marginBottom: '10px' }}>
-              {!dockerStatus.created ? (
-                <span className="status-pill idle">Not installed</span>
-              ) : dockerStatus.running ? (
-                <span className="status-pill running">Running</span>
-              ) : (
-                <span className="status-pill stopped">{dockerStatus.status}</span>
-              )}
-
-              {!dockerStatus.created ? (
-                <>
-                  <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
-                  <input type="number" className="form-input" value={installPort}
-                    onChange={e => setInstallPort(e.target.value)}
-                    style={{ width: '80px', padding: '4px 8px', fontSize: '13px' }}
-                    min="1024" max="65535" />
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>→ <code>localhost:{installPort}</code></span>
-                  <button className="btn btn-sm btn-primary" onClick={handleDockerInstall} disabled={dockerBusy}>
-                    {dockerBusy ? 'Installing…' : 'Install Spoolman'}
-                  </button>
-                </>
-              ) : dockerStatus.running ? (
-                <button className="btn btn-sm" onClick={async () => {
-                  setDockerBusy(true);
-                  try { await stopSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message); }
-                  finally { setDockerBusy(false); }
-                }} disabled={dockerBusy}>
-                  {dockerBusy ? 'Stopping…' : 'Stop'}
-                </button>
-              ) : (
-                <button className="btn btn-sm btn-primary" onClick={async () => {
-                  setDockerBusy(true); setDockerError('');
-                  try { await startSpoolman(); const s = await getDockerStatus(); setDockerStatus(s); } catch (e) { setDockerError(e.message || 'Failed to start container'); }
-                  finally { setDockerBusy(false); }
-                }} disabled={dockerBusy}>
-                  {dockerBusy ? 'Starting…' : 'Start'}
-                </button>
-              )}
-
-              {dockerStatus.created && (
-                <button className="btn btn-sm" onClick={() => setShowDockerDanger(v => !v)}
-                  style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-                  {showDockerDanger ? '▲ Danger zone' : '▼ Danger zone'}
-                </button>
-              )}
-            </div>
-
-            {showDockerDanger && (
-              <div className="danger-zone">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
-                  <input type="checkbox" id="removeData" checked={removeData} onChange={e => setRemoveData(e.target.checked)} />
-                  Also delete all Spoolman data (volume) — irreversible
-                </label>
-                <button className="btn btn-sm" onClick={handleDockerUninstall} disabled={dockerBusy}
-                  style={{ borderColor: 'var(--danger)', color: 'var(--danger)', alignSelf: 'flex-start' }}>
-                  {dockerBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
-                </button>
-              </div>
-            )}
-
-            {dockerError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{dockerError}</p>}
-            {dockerLog.length > 0 && <div className="log-output">{dockerLog.join('\n')}</div>}
-          </div>
-        )}
-
-        {/* Swatch Generator — Docker */}
-        {dockerStatus?.available && (
-          <div className="settings-card">
-            <h3 className="settings-card-title">Swatch Generator — Docker</h3>
-            <p className="settings-card-desc">
-              Run the swatch STL generator as a Docker container. Requires Docker.
-              The image is <code style={{ fontSize: '11px' }}>ghcr.io/hellsparks/marathon-overview-swatch:latest</code>.
-            </p>
-
-            <div className="settings-row" style={{ marginBottom: '10px' }}>
-              {!swatchDockerStatus?.created ? (
-                <span className="status-pill idle">Not installed</span>
-              ) : swatchDockerStatus?.running ? (
-                <span className="status-pill running">Running</span>
-              ) : (
-                <span className="status-pill stopped">{swatchDockerStatus?.status || 'Stopped'}</span>
-              )}
-
-              {!swatchDockerStatus?.created ? (
-                <>
-                  <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
-                  <input type="number" className="form-input" value={swatchDockerPort}
-                    onChange={e => setSwatchDockerPort(e.target.value)}
-                    style={{ width: '80px', padding: '4px 8px', fontSize: '13px' }} min="1024" max="65535" />
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>→ <code>localhost:{swatchDockerPort}</code></span>
-                  <button className="btn btn-sm btn-primary" onClick={handleSwatchDockerInstall} disabled={swatchDockerBusy}>
-                    {swatchDockerBusy ? 'Installing…' : 'Install Swatch Generator'}
-                  </button>
-                </>
-              ) : swatchDockerStatus?.running ? (
-                <button className="btn btn-sm" onClick={handleSwatchDockerStop} disabled={swatchDockerBusy}>
-                  {swatchDockerBusy ? 'Stopping…' : 'Stop'}
-                </button>
-              ) : (
-                <button className="btn btn-sm btn-primary" onClick={handleSwatchDockerStart} disabled={swatchDockerBusy}>
-                  {swatchDockerBusy ? 'Starting…' : 'Start'}
-                </button>
-              )}
-
-              {swatchDockerStatus?.created && (
-                <button className="btn btn-sm" onClick={() => setShowSwatchDanger(v => !v)}
-                  style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-                  {showSwatchDanger ? '▲ Danger zone' : '▼ Danger zone'}
-                </button>
-              )}
-            </div>
-
-            {showSwatchDanger && (
-              <div className="danger-zone">
-                <button className="btn btn-sm" onClick={handleSwatchDockerUninstall} disabled={swatchDockerBusy}
-                  style={{ borderColor: 'var(--danger)', color: 'var(--danger)', alignSelf: 'flex-start' }}>
-                  {swatchDockerBusy ? 'Removing…' : 'Remove Container'}
-                </button>
-              </div>
-            )}
-
-            {swatchDockerError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{swatchDockerError}</p>}
-            {swatchDockerLog.length > 0 && (
-              <div className="log-output">
-                {swatchDockerLog.map((line, i) => <div key={i}>{line}</div>)}
-                {swatchDockerBusy && <div style={{ opacity: 0.5 }}>_</div>}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Swatch Generator — Local (uv) */}
-        {swatchLocalStatus && (
-          <div className="settings-card">
-            <h3 className="settings-card-title">Swatch Generator — Local (uv)</h3>
-            <p className="settings-card-desc">
-              Run the swatch generator as a local Python process via <strong>uv</strong>.
-              No Docker required. uv automatically manages Python 3.12 and cadquery.
-              {!swatchLocalStatus.uvAvailable && (
-                <> Install uv: <code style={{ fontSize: '11px' }}>winget install astral-sh.uv</code> (Windows) or <code style={{ fontSize: '11px' }}>curl -LsSf https://astral.sh/uv/install.sh | sh</code> (Mac/Linux).</>
-              )}
-            </p>
-
-            <div className="settings-row" style={{ marginBottom: '10px' }}>
-              {!swatchLocalStatus.uvAvailable ? (
-                <span className="status-pill stopped">uv not installed</span>
-              ) : swatchLocalStatus.running ? (
-                <span className="status-pill running">Running (PID {swatchLocalStatus.pid})</span>
-              ) : (
-                <span className="status-pill idle">Not running</span>
-              )}
-
-              {swatchLocalStatus.uvAvailable && (
-                swatchLocalStatus.running ? (
-                  <button className="btn btn-sm" onClick={handleSwatchLocalStop} disabled={swatchLocalBusy}>
-                    {swatchLocalBusy ? 'Stopping…' : 'Stop'}
-                  </button>
-                ) : (
-                  <>
-                    <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
-                    <input type="number" className="form-input" value={swatchLocalPort}
-                      onChange={e => setSwatchLocalPort(e.target.value)}
-                      style={{ width: '80px', padding: '4px 8px', fontSize: '13px' }} min="1024" max="65535" />
-                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>→ <code>localhost:{swatchLocalPort}</code></span>
-                    <button className="btn btn-sm btn-primary" onClick={handleSwatchLocalStart} disabled={swatchLocalBusy}>
-                      {swatchLocalBusy ? 'Starting…' : 'Start Swatch Generator'}
-                    </button>
-                  </>
-                )
-              )}
-            </div>
-            {swatchLocalStatus.uvAvailable && !swatchLocalStatus.running && (
-              <p style={{ margin: '0 0 6px', fontSize: '11px', color: 'var(--text-muted)' }}>First start downloads cadquery (~500 MB) — takes a few minutes.</p>
-            )}
-
-            {swatchLocalError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{swatchLocalError}</p>}
-            {swatchLocalLog.length > 0 && <div className="log-output">{swatchLocalLog.join('\n')}</div>}
-          </div>
-        )}
-
-        {/* Native (Python) Install */}
-        {nativeStatus && nativeStatus.platform === 'win32' && (
-          <div className="settings-card" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-            <h3 className="settings-card-title">Native Install</h3>
-            <p style={{ marginTop: '4px' }}>
-              Native Install is only available on Linux. Use Docker instead.
-            </p>
-          </div>
-        )}
-        {nativeStatus && nativeStatus.platform !== 'win32' && (nativeStatus.pythonAvailable || nativeStatus.installed) && (
-          <div className="settings-card">
-            <h3 className="settings-card-title">Native Install (Python)</h3>
-            <p className="settings-card-desc">
-              Install Spoolman directly alongside Marathon using a Python virtual environment.
-              No Docker required — data lives in <code style={{ fontSize: '11px' }}>{nativeStatus.installDir}/data/</code>
-            </p>
-
-            {/* Status + actions row */}
-            <div className="settings-row" style={{ marginBottom: '10px' }}>
-              {!nativeStatus.installed ? (
-                <span className="status-pill idle">Not installed</span>
-              ) : nativeStatus.running ? (
-                <span className="status-pill running">Running (PID {nativeStatus.pid}, port {nativeStatus.port})</span>
-              ) : (
-                <span className="status-pill stopped">Installed, not running</span>
-              )}
-              {nativeStatus.pythonVersion && (
-                <span style={{ fontSize: '11px', opacity: 0.5 }}>Python {nativeStatus.pythonVersion}</span>
-              )}
-
-              {!nativeStatus.installed ? (
-                <>
-                  <label style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>Port:</label>
-                  <input type="number" className="form-input" value={nativePort}
-                    onChange={e => setNativePort(e.target.value)}
-                    style={{ width: '80px', padding: '4px 8px', fontSize: '13px' }} min="1024" max="65535" />
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>→ <code>localhost:{nativePort}</code></span>
-                  <button className="btn btn-sm btn-primary" onClick={handleNativeInstall} disabled={nativeBusy}>
-                    {nativeBusy ? 'Installing…' : 'Install Spoolman'}
-                  </button>
-                </>
-              ) : nativeStatus.running ? (
-                <>
-                  <button className="btn btn-sm" onClick={handleNativeStop} disabled={nativeBusy}>
-                    {nativeBusy ? 'Stopping…' : 'Stop'}
-                  </button>
-                  <button className="btn btn-sm" onClick={() => setShowNativeDanger(v => !v)}
-                    style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-                    {showNativeDanger ? '▲ Danger zone' : '▼ Danger zone'}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button className="btn btn-sm btn-primary" onClick={handleNativeStart} disabled={nativeBusy}>
-                    {nativeBusy ? 'Starting…' : 'Start'}
-                  </button>
-                  <button className="btn btn-sm" onClick={() => setShowNativeDanger(v => !v)}
-                    style={{ fontSize: '12px', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-                    {showNativeDanger ? '▲ Danger zone' : '▼ Danger zone'}
-                  </button>
-                </>
-              )}
-            </div>
-
-            {showNativeDanger && nativeStatus.installed && (
-              <div className="danger-zone">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', color: 'var(--danger)' }}>
-                  <input type="checkbox" id="nativeRemoveData" checked={nativeRemoveData} onChange={e => setNativeRemoveData(e.target.checked)} />
-                  Also delete all Spoolman data — irreversible
-                </label>
-                <button className="btn btn-sm" onClick={handleNativeUninstall} disabled={nativeBusy}
-                  style={{ borderColor: 'var(--danger)', color: 'var(--danger)', alignSelf: 'flex-start' }}>
-                  {nativeBusy ? 'Uninstalling…' : 'Uninstall Spoolman'}
-                </button>
-              </div>
-            )}
-
-            {nativeError && <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--danger)' }}>{nativeError}</p>}
-            {nativeLog.length > 0 && <div className="log-output">{nativeLog.join('\n')}</div>}
-          </div>
-        )}
-
-        {/* Python not found note */}
-        {nativeStatus && nativeStatus.platform !== 'win32' && !nativeStatus.pythonAvailable && !nativeStatus.installed && (
-          <div className="settings-card" style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-            <h3 className="settings-card-title">Native Install</h3>
-            <p style={{ marginTop: '4px' }}>
-              Python 3.8+ was not found on this system.{' '}
-              <a href="https://www.python.org/downloads/" target="_blank" rel="noopener noreferrer">Install Python</a>{' '}
-              to enable a Docker-free Spoolman install.
-            </p>
-          </div>
         )}
 
         {/* Spoolman Backup & Restore */}

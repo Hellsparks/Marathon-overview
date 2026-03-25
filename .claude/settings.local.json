@@ -33,7 +33,19 @@
       "Bash(git -C /mnt/windows/Github/Marathon-overview status --short)",
       "Bash(git -C /mnt/windows/Github/Marathon-overview diff HEAD -- swatch-service/ backend/Dockerfile)",
       "Bash(git -C /mnt/windows/Github/Marathon-overview add backend/Dockerfile swatch-service/Dockerfile swatch-service/server.py)",
-      "Bash(git -C:*)"
+      "Bash(git -C:*)",
+      "Bash(git push:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(curl -fsSL https://raw.githubusercontent.com/Hellsparks/Marathon-overview/main/install-docker.sh)",
+      "Bash(npm run:*)",
+      "Bash(node -e \"require\\(''''./backend/src/routes/updates.js''''\\)\")",
+      "Bash(node -e \"const path = require\\(''''path''''\\), fs = require\\(''''fs''''\\); require\\(''''./backend/src/routes/spoolman.js''''\\)\")",
+      "Bash(node --check backend/src/routes/mcp.js)",
+      "Bash(node --check backend/src/routes/updates.js)",
+      "Bash(node --check backend/src/routes/spoolman.js)",
+      "Bash(git rm:*)",
+      "Bash(node -e \"require\\(''''./backend/src/routes/spoolman.js''''\\)\")"
     ]
   }
 }

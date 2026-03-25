@@ -97,6 +97,8 @@ echo -e "  ${GREEN}╚═══════════════════�
 echo ""
 echo -e "  Install location: ${BOLD}$INSTALL_DIR${NC}"
 echo -e "  Open ${CYAN}http://localhost${NC} in your browser"
+echo -e "  Spoolman:  ${CYAN}http://localhost:7912${NC}"
+echo -e "  Swatch:    ${CYAN}http://localhost:7321${NC} (internal)"
 echo ""
 echo -e "  To stop:   ${GRAY}cd $INSTALL_DIR && sudo docker compose down${NC}"
 echo -e "  To update: go to ${CYAN}Settings → Updates${NC} inside Marathon"

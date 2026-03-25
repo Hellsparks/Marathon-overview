@@ -319,92 +319,6 @@ export async function importSpoolman(jsonData) {
     return body;
 }
 
-/** Get the status of the managed Spoolman Docker container. */
-export async function getDockerStatus() {
-    const r = await fetch(`${API}/docker/status`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
-}
-
-/** Install and start the Spoolman Docker container. */
-export async function installSpoolman(port = 7912) {
-    const r = await fetch(`${API}/docker/install`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ port }),
-        // Image pull can take a while
-        signal: AbortSignal.timeout(300000),
-    });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-/** Stop the running Spoolman Docker container (keeps it installed). */
-export async function stopSpoolman() {
-    const r = await fetch(`${API}/docker/stop`, { method: 'POST' });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-/** Start a stopped Spoolman Docker container. */
-export async function startSpoolman() {
-    const r = await fetch(`${API}/docker/start`, { method: 'POST' });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-/** Stop and remove the Spoolman Docker container. */
-export async function uninstallSpoolman(removeData = false) {
-    const r = await fetch(`${API}/docker/uninstall?removeData=${removeData}`, { method: 'DELETE' });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-// ── Native (Python venv) management ──────────────────────────────────────────
-
-export async function getNativeStatus() {
-    const r = await fetch(`${API}/native/status`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
-}
-
-export async function installNative(port = 7912) {
-    const r = await fetch(`${API}/native/install`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ port }),
-        signal: AbortSignal.timeout(600000), // pip install can be slow
-    });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-export async function startNative() {
-    const r = await fetch(`${API}/native/start`, { method: 'POST' });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-export async function stopNative() {
-    const r = await fetch(`${API}/native/stop`, { method: 'POST' });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-export async function uninstallNative(removeData = false) {
-    const r = await fetch(`${API}/native/uninstall?removeData=${removeData}`, { method: 'DELETE' });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
 // ── Spool Storage management ─────────────────────────────────────────────────
 
 /** Get the configured storage location name (default: "Storage"). */
@@ -478,58 +392,9 @@ export async function patchSpool(id, data) {
     return body;
 }
 
-// ── Swatch generator management ───────────────────────────────────────────────
-
-/** Start a swatch Docker install (non-blocking). Poll getSwatchInstallStatus() for progress. */
-export async function installSwatchDocker(port = 7321) {
-    const r = await fetch(`${API}/swatch/install`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ port }),
-    });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-/** Poll progress of a swatch Docker install. */
-export async function getSwatchInstallStatus() {
-    const r = await fetch(`${API}/swatch/install-status`);
+/** Get deploy mode + reachability status of bundled/configured services. */
+export async function getServicesStatus() {
+    const r = await fetch(`${API}/services/status`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
-}
-
-/** Remove the swatch Docker container. */
-export async function uninstallSwatchDocker() {
-    const r = await fetch(`${API}/swatch/uninstall`, { method: 'DELETE' });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-/** Get the status of the local (uv) swatch service. */
-export async function getSwatchLocalStatus() {
-    const r = await fetch(`${API}/swatch/local/status`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
-}
-
-/** Start the local (uv) swatch service. */
-export async function startSwatchLocal(port = 7321) {
-    const r = await fetch(`${API}/swatch/local/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ port }),
-    });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
-}
-
-/** Stop the local (uv) swatch service. */
-export async function stopSwatchLocal() {
-    const r = await fetch(`${API}/swatch/local/stop`, { method: 'POST' });
-    const body = await r.json();
-    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
-    return body;
 }
