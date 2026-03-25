@@ -356,11 +356,16 @@ export async function testTeamsterConnection() {
     return r.json();
 }
 
-/** Probe the network for a Teamster device via mDNS. */
+/** Probe the network for a Teamster device via mDNS (browser-side, bypasses Docker DNS). */
 export async function detectTeamster() {
-    const r = await fetch('/api/spoolman/teamster/detect');
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
+    const candidates = ['http://teamster.local', 'http://teamster.local:80'];
+    for (const base of candidates) {
+        try {
+            const r = await fetch(`${base}/data`, { signal: AbortSignal.timeout(3000) });
+            if (r.ok) return { found: true, url: base };
+        } catch { /* try next */ }
+    }
+    return { found: false };
 }
 
 /** Zero the Teamster scale. */
