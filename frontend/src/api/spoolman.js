@@ -356,6 +356,13 @@ export async function testTeamsterConnection() {
     return r.json();
 }
 
+/** Probe the network for a Teamster device via mDNS. */
+export async function detectTeamster() {
+    const r = await fetch('/api/spoolman/teamster/detect');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+}
+
 /** Zero the Teamster scale. */
 export async function tareTeamster() {
     const r = await fetch('/api/spoolman/teamster/tare', { method: 'POST' });

@@ -4,7 +4,7 @@ import { usePrinters } from '../hooks/usePrinters';
 import PrinterList from '../components/printers/PrinterList';
 import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
-import { testConnection, testTeamsterConnection, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getStorageLocation, setStorageLocation, getFilaments, getServicesStatus } from '../api/spoolman';
+import { testConnection, testTeamsterConnection, detectTeamster, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getStorageLocation, setStorageLocation, getFilaments, getServicesStatus } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
 import { checkForUpdate, getUpdateChannel, setUpdateChannel, getReleases, getDevCommits, applyUpdate, pullAndRestart, getApplyStatus } from '../api/updates';
 import { getUpdateNotifsEnabled, setUpdateNotifsEnabled } from '../hooks/useUpdateCheck';
@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [teamsterSaved, setTeamsterSaved] = useState('');
   const [teamsterStatus, setTeamsterStatus] = useState(null);
   const [teamsterMsg, setTeamsterMsg] = useState('');
+  const [teamsterDetecting, setTeamsterDetecting] = useState(false);
   const [teamsterLive, setTeamsterLive] = useState(null);
   const [teamsterPolling, setTeamsterPolling] = useState(false);
   const [teamsterTareBusy, setTeamsterTareBusy] = useState(false);
@@ -335,6 +336,30 @@ export default function SettingsPage() {
     setTeamsterSaved(teamsterUrl);
     setTeamsterStatus(null);
     setTeamsterMsg('Saved.');
+  }
+
+  async function handleTeamsterDetect() {
+    setTeamsterDetecting(true);
+    setTeamsterMsg('Scanning network...');
+    setTeamsterStatus(null);
+    try {
+      const result = await detectTeamster();
+      if (result.found) {
+        setTeamsterUrl(result.url);
+        setTeamsterSaved(result.url);
+        await updateSetting('teamster_url', result.url);
+        setTeamsterStatus('ok');
+        setTeamsterMsg(`Found at ${result.url}`);
+      } else {
+        setTeamsterStatus('error');
+        setTeamsterMsg('No Teamster found. Is it on the same network?');
+      }
+    } catch (e) {
+      setTeamsterStatus('error');
+      setTeamsterMsg(e.message);
+    } finally {
+      setTeamsterDetecting(false);
+    }
   }
 
   async function handleTeamsterTest() {
@@ -798,33 +823,13 @@ export default function SettingsPage() {
               />
               <button className="btn btn-sm btn-primary" onClick={handleTeamsterSave}>Save</button>
               <button className="btn btn-sm" onClick={handleTeamsterTest}>Test</button>
+              <button className="btn btn-sm" onClick={handleTeamsterDetect} disabled={teamsterDetecting}>
+                {teamsterDetecting ? 'Scanning…' : 'Detect'}
+              </button>
             </div>
             {teamsterMsg && (
               <p className={`settings-status ${teamsterStatus || ''}`} style={{ marginTop: '6px' }}>{teamsterMsg}</p>
             )}
-          </div>
-        </div>
-
-        {/* Bambu Connect */}
-        <div className="settings-card">
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-            <div style={{ fontSize: '28px', lineHeight: 1 }}>&#x1f43c;</div>
-            <div style={{ flex: 1 }}>
-              <h3 className="settings-card-title">Bambu Connect Integration</h3>
-              <p className="settings-card-desc" style={{ marginBottom: '8px' }}>
-                Cloud-based integration via the Bambu Connect desktop app is planned for a future release.
-                For now, connect your Bambu Lab printers directly using <strong>LAN Developer Mode</strong>
-                — enable it in the printer's settings under <em>Network &rarr; LAN Only Mode</em>, then add the
-                printer from the Printers section above and select "Bambu Lab (LAN Developer Mode)".
-              </p>
-              <span style={{
-                display: 'inline-block', fontSize: '11px', fontWeight: 600, letterSpacing: '0.05em',
-                padding: '2px 8px', borderRadius: '9999px',
-                background: 'var(--warning, #f59e0b)', color: '#fff', opacity: 0.8,
-              }}>
-                Coming soon
-              </span>
-            </div>
           </div>
         </div>
 

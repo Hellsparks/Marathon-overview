@@ -1426,6 +1426,18 @@ function getTeamsterUrl() {
     return row?.value || '';
 }
 
+/** GET /api/spoolman/teamster/detect — probe mDNS candidates and return first responding Teamster */
+router.get('/teamster/detect', async (_req, res) => {
+    const candidates = ['http://teamster.local', 'http://teamster.local:80'];
+    for (const base of candidates) {
+        try {
+            const r = await fetch(`${base}/data`, { signal: AbortSignal.timeout(2000) });
+            if (r.ok) return res.json({ found: true, url: base });
+        } catch { /* try next */ }
+    }
+    res.json({ found: false });
+});
+
 /** GET /api/spoolman/teamster/weight — fetch live weight from the Teamster ESP device */
 router.get('/teamster/weight', async (_req, res) => {
     const url = getTeamsterUrl();
