@@ -30,6 +30,12 @@ jobs:
       - name: Run frontend tests
         run: cd frontend && npm ci && npm test
 
+      - name: Install Playwright browsers
+        run: cd frontend && npx playwright install --with-deps chromium
+
+      - name: Run E2E smoke tests
+        run: cd frontend && npm run test:smoke
+
       - name: Read current version
         id: version
         run: |

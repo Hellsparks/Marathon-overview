@@ -11,6 +11,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/tests/setup.js'],
+    exclude: ['tests/e2e/**', 'node_modules/**'],
   },
   define: {
     __APP_VERSION__: JSON.stringify(version),

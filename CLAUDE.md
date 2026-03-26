@@ -15,12 +15,20 @@ Always run tests before any commit. Use the `/run-tests` skill:
 
 Or manually:
 ```bash
-cd backend && npm test          # Jest + Supertest (node)
-cd frontend && npm test         # Vitest + @testing-library/react
+cd backend && npm test              # Jest + Supertest (node)
+cd frontend && npm test             # Vitest + @testing-library/react (unit + component)
+cd frontend && npm run test:smoke   # Playwright E2E smoke tests (no backend needed)
 ```
 
 Backend tests use an in-memory SQLite DB — no real data is touched.
-Frontend tests run in jsdom. Both should pass before committing.
+Frontend unit/component tests run in jsdom.
+Smoke tests use Playwright with mocked API — run in CI before every Docker build.
+
+After **intentional UI changes**, update visual baselines:
+```bash
+cd frontend && npm run test:visual:update   # regenerate screenshots
+# then commit the new snapshots in tests/e2e/visual.spec.js-snapshots/
+```
 
 ---
 

@@ -8,7 +8,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:e2e": "playwright test",
+    "test:smoke": "playwright test smoke.spec.js",
+    "test:visual": "playwright test visual.spec.js",
+    "test:visual:update": "playwright test visual.spec.js --update-snapshots"
   },
   "dependencies": {
     "jszip": "^3.10.1",
@@ -19,6 +23,7 @@
     "three-bvh-csg": "^0.0.18"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
