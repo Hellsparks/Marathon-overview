@@ -2,6 +2,7 @@ const express = require('express');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { getDb } = require('../db');
 const MoonrakerClient = require('../services/moonraker');
 const BambuClient = require('../services/bambu');
@@ -1392,16 +1393,47 @@ async function httpPing(url, timeoutMs = 3000) {
     } catch { return false; }
 }
 
+/** Returns the first non-loopback LAN IPv4 (prefers 192.168/10.x over Docker 172.x). */
+function getLanIp() {
+    const ifaces = os.networkInterfaces();
+    let fallback = null;
+    for (const iface of Object.values(ifaces).flat()) {
+        if (iface.family !== 'IPv4' || iface.internal) continue;
+        if (iface.address.startsWith('192.168.') || iface.address.startsWith('10.')) return iface.address;
+        fallback ??= iface.address;
+    }
+    return fallback;
+}
+
 // GET /api/spoolman/services/status — deploy mode + Spoolman reachability
-router.get('/services/status', async (_req, res) => {
+router.get('/services/status', async (req, res) => {
     const spoolmanUrl = getSpoolmanUrl();
     const reachable = spoolmanUrl ? await httpPing(`${spoolmanUrl}/api/v1/health`) : false;
+
+    let externalUrl = null;
+    if (IS_DOCKER) {
+        // In Docker: host is visible via the browser's request Host header (works when accessed via LAN IP)
+        const host = (req.headers['x-forwarded-host'] || req.headers.host || '').split(':')[0];
+        const port = process.env.SPOOLMAN_PORT || '7912';
+        const resolvedHost = (host && host !== 'localhost' && host !== '127.0.0.1') ? host : getLanIp();
+        if (resolvedHost) externalUrl = `http://${resolvedHost}:${port}`;
+    } else if (spoolmanUrl) {
+        // Native: use the server's own LAN IP + port from the configured Spoolman URL
+        const lanIp = getLanIp();
+        try {
+            const port = new URL(spoolmanUrl).port || '7912';
+            if (lanIp) externalUrl = `http://${lanIp}:${port}`;
+        } catch { /* invalid URL, skip */ }
+    }
+
     res.json({
         deployMode: IS_DOCKER ? 'docker' : 'native',
+        lanIp: getLanIp(),
         spoolman: {
             reachable,
             configuredUrl: spoolmanUrl,
             bundledUrl: IS_DOCKER ? BUNDLED_SPOOLMAN_URL : null,
+            externalUrl,
         },
     });
 });

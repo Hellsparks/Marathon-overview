@@ -1,6 +1,6 @@
 FROM node:24-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git smbclient && rm -rf /var/lib/apt/lists/*
 
 # Copy docker CLI + compose plugin from official image so the update route
 # can run `docker compose pull && up` against the host socket.

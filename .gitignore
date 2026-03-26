@@ -11,5 +11,7 @@ data/
 frontend/package-lock.json
 frontend/package.json
 .claude/settings.local.json
+backups/
+**/backups/
 **/__pycache__/
 *.pyc

@@ -20,6 +20,7 @@ const updatesRouter = require('./routes/updates');
 const statsRouter = require('./routes/stats');
 const extrasRouter = require('./routes/extras');
 const databaseRouter = require('./routes/database');
+const backupRouter = require('./routes/backup');
 const mcpRouter = require('./routes/mcp');
 const setupRouter = require('./routes/setup');
 const errorHandler = require('./middleware/errorHandler');
@@ -49,6 +50,7 @@ app.use('/api/updates', updatesRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/extras', extrasRouter);
 app.use('/api/database', databaseRouter);
+app.use('/api/backup', backupRouter);
 app.use('/api/mcp', mcpRouter);
 app.use('/api/setup', setupRouter);
 

@@ -16,6 +16,7 @@ services:
       MARATHON_DEPLOY_MODE: docker
       MARATHON_CONTAINER_NAME: marathon-backend
       APP_VERSION: ${APP_VERSION:-dev}
+      SPOOLMAN_PORT: ${SPOOLMAN_PORT:-7912}
       # OCTOPRINT_API_KEY: changeme
     volumes:
       - backend_data:/app/data

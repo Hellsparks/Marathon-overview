@@ -6,6 +6,7 @@ import PresetList from '../components/printers/PresetList';
 import { getSettings, updateSetting } from '../api/settings';
 import { testConnection, testTeamsterConnection, detectTeamster, fetchTeamsterWeight, tareTeamster, calibrateTeamster, getFields, createField, exportSpoolman, importSpoolman, validateImport, getStorageLocation, setStorageLocation, getFilaments, getServicesStatus } from '../api/spoolman';
 import { exportDatabase, importDatabase } from '../api/database';
+import { getBackupStatus, runBackup, deleteBackup } from '../api/backup';
 import { checkForUpdate, getUpdateChannel, setUpdateChannel, getReleases, getDevCommits, applyUpdate, pullAndRestart, getApplyStatus } from '../api/updates';
 import { getUpdateNotifsEnabled, setUpdateNotifsEnabled } from '../hooks/useUpdateCheck';
 import { getMcpStatus, startMcp, stopMcp } from '../api/mcp';
@@ -98,6 +99,27 @@ export default function SettingsPage() {
   // Services status (bundled/external Spoolman + Swatch)
   const [servicesStatus, setServicesStatus] = useState(null);
 
+  // Scheduled backups
+  const [backupStatus, setBackupStatus] = useState(null);
+  const [backupDir, setBackupDir] = useState('');
+  const [backupDirSaved, setBackupDirSaved] = useState('');
+  const [backupDir2, setBackupDir2] = useState('');
+  const [backupDir2Saved, setBackupDir2Saved] = useState('');
+  const [spoolmanDataDir, setSpoolmanDataDir] = useState('');
+  const [smbUser1, setSmbUser1] = useState('');
+  const [smbPass1, setSmbPass1] = useState('');
+  const [smbUser2, setSmbUser2] = useState('');
+  const [smbPass2, setSmbPass2] = useState('');
+  const [marathonBackupEnabled, setMarathonBackupEnabled] = useState(false);
+  const [marathonBackupInterval, setMarathonBackupInterval] = useState('24');
+  const [marathonBackupKeep, setMarathonBackupKeep] = useState('7');
+  const [marathonBackupUploads, setMarathonBackupUploads] = useState(true);
+  const [spoolmanBackupEnabled, setSpoolmanBackupEnabled] = useState(false);
+  const [spoolmanBackupInterval, setSpoolmanBackupInterval] = useState('24');
+  const [spoolmanBackupKeep, setSpoolmanBackupKeep] = useState('7');
+  const [backupRunning, setBackupRunning] = useState(null); // 'marathon'|'spoolman'|'all'|null
+  const [backupMsg, setBackupMsg] = useState(null); // { text, ok }
+
   // Marathon backend port
   const [backendPort, setBackendPort] = useState('');
 
@@ -156,7 +178,24 @@ export default function SettingsPage() {
       setGithubTokenSaved(s.github_token || '');
       setDirectReportsEnabled(s.direct_reports_enabled === 'true' || s.direct_reports_enabled === true);
       setDirectReportsSaved(s.direct_reports_enabled === 'true' || s.direct_reports_enabled === true);
+      setBackupDir(s.backup_dir || '');
+      setBackupDirSaved(s.backup_dir || '');
+      setBackupDir2(s.backup_dir_2 || '');
+      setBackupDir2Saved(s.backup_dir_2 || '');
+      setSpoolmanDataDir(s.spoolman_data_dir || '');
+      setSmbUser1(s.backup_smb_user_1 || '');
+      setSmbPass1(s.backup_smb_pass_1 || '');
+      setSmbUser2(s.backup_smb_user_2 || '');
+      setSmbPass2(s.backup_smb_pass_2 || '');
+      setMarathonBackupEnabled(s.marathon_backup_enabled === '1');
+      setMarathonBackupInterval(s.marathon_backup_interval || '24');
+      setMarathonBackupKeep(s.marathon_backup_keep || '7');
+      setMarathonBackupUploads(s.marathon_backup_include_uploads !== '0');
+      setSpoolmanBackupEnabled(s.spoolman_backup_enabled === '1');
+      setSpoolmanBackupInterval(s.spoolman_backup_interval || '24');
+      setSpoolmanBackupKeep(s.spoolman_backup_keep || '7');
     }).catch(() => { });
+    getBackupStatus().then(setBackupStatus).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -731,6 +770,40 @@ export default function SettingsPage() {
     });
   }
 
+  async function handleBackupDirSave() {
+    await updateSetting('backup_dir', backupDir);
+    setBackupDirSaved(backupDir);
+    getBackupStatus().then(setBackupStatus).catch(() => {});
+  }
+
+  async function handleRunBackup(target) {
+    setBackupRunning(target);
+    setBackupMsg(null);
+    try {
+      const result = await runBackup(target);
+      if (result.ok) {
+        setBackupMsg({ text: 'Backup complete.', ok: true });
+      } else {
+        const errs = result.errors?.map(e => `${e.target}: ${e.error}`).join('; ') || 'Unknown error';
+        setBackupMsg({ text: errs, ok: false });
+      }
+      getBackupStatus().then(setBackupStatus).catch(() => {});
+    } catch (e) {
+      setBackupMsg({ text: e.message, ok: false });
+    } finally {
+      setBackupRunning(null);
+    }
+  }
+
+  async function handleDeleteBackup(filename) {
+    await deleteBackup(filename);
+    getBackupStatus().then(setBackupStatus).catch(() => {});
+  }
+
+  const slicerOrigin = servicesStatus?.lanIp
+    ? `${window.location.protocol}//${servicesStatus.lanIp}${window.location.port ? ':' + window.location.port : ''}`
+    : window.location.origin;
+
   return (
     <div className="page">
       <h1 className="page-title">Settings</h1>
@@ -786,12 +859,18 @@ export default function SettingsPage() {
               </div>
             )}
 
+            {servicesStatus?.spoolman?.externalUrl && (
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', marginBottom: '0' }}>
+                External access: <code>{servicesStatus.spoolman.externalUrl}</code>
+              </p>
+            )}
+
             {(servicesStatus?.deployMode !== 'docker' || spoolmanUrl !== 'http://marathon-spoolman:8000') && (
               <div className="settings-row">
                 <input
                   type="url"
                   className="form-input"
-                  placeholder="http://10.0.0.24:7912"
+                  placeholder="http://192.168.1.100:7912"
                   value={spoolmanUrl}
                   onChange={e => setSpoolmanUrl(e.target.value)}
                   style={{ flex: 1, minWidth: '140px' }}
@@ -838,14 +917,20 @@ export default function SettingsPage() {
           <h3 className="settings-card-title">Slicer Integration</h3>
           <p className="settings-card-desc">
             Configure your slicer to upload G-code to this server using the OctoPrint preset.
-            Point it at <code>{window.location.origin}</code> — no API key required by default.
+            Point it at <code>{slicerOrigin}</code> — no API key required by default.
           </p>
           <ul style={{ paddingLeft: '20px', fontSize: '13px', marginBottom: '8px' }}>
-            <li><strong>PrusaSlicer / SuperSlicer:</strong> Physical Printer &rarr; Host type: OctoPrint &rarr; Host: <code>{window.location.origin}</code></li>
-            <li><strong>OrcaSlicer:</strong> Printer Settings &rarr; "Send to" &rarr; OctoPrint &rarr; URL: <code>{window.location.origin}</code></li>
-            <li><strong>Cura:</strong> Marketplace &rarr; OctoPrint plugin &rarr; OctoPrint URL: <code>{window.location.origin}</code></li>
+            <li><strong>PrusaSlicer / SuperSlicer:</strong> Physical Printer &rarr; Host type: OctoPrint &rarr; Host: <code>{slicerOrigin}</code></li>
+            <li><strong>OrcaSlicer:</strong> Printer Settings &rarr; "Send to" &rarr; OctoPrint &rarr; URL: <code>{slicerOrigin}</code></li>
+            <li><strong>Cura:</strong> Marketplace &rarr; OctoPrint plugin &rarr; OctoPrint URL: <code>{slicerOrigin}</code></li>
           </ul>
           <p style={{ fontSize: '13px' }}>Uploaded files will appear in the <a href="/files">Files</a> page.</p>
+          {(servicesStatus?.spoolman?.externalUrl || servicesStatus?.spoolman?.configuredUrl) && (
+            <p style={{ fontSize: '13px', marginTop: '6px', marginBottom: '0' }}>
+              <strong>Spoolman URL</strong> (for filament sync in OrcaSlicer / PrusaSlicer):{' '}
+              <code>{servicesStatus.spoolman.externalUrl || servicesStatus.spoolman.configuredUrl}</code>
+            </p>
+          )}
         </div>
       </Section>
 
@@ -1111,6 +1196,274 @@ export default function SettingsPage() {
             )}
             </div>
           </div>
+        </div>
+
+        {/* Scheduled Backups */}
+        <div className="settings-card" style={{ marginTop: '16px' }}>
+          <h3 className="settings-card-title">Scheduled Backups</h3>
+          <p className="settings-card-desc">
+            Automatically back up Marathon and Spoolman on a schedule. Backups are saved as <code>.zip</code> files.
+          </p>
+
+          {/* Backup directories */}
+          {(() => {
+            const dir1IsSMB = backupStatus?.dir1IsSMB || /^smb:/i.test(backupDir) || backupDir.startsWith('//');
+            const dir2IsSMB = backupStatus?.dir2IsSMB || /^smb:/i.test(backupDir2) || backupDir2.startsWith('//');
+            return (
+              <div style={{ marginBottom: '16px' }}>
+                {/* Primary dir */}
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px' }}>Primary Backup Directory</label>
+                <div className="settings-row">
+                  <input type="text" className="form-input"
+                    placeholder={backupStatus?.defaultDir || '/app/data/backups'}
+                    value={backupDir} onChange={e => setBackupDir(e.target.value)}
+                    style={{ flex: 1, minWidth: '200px', fontFamily: 'monospace', fontSize: '12px' }} />
+                  <button className="btn btn-sm btn-primary" onClick={handleBackupDirSave}>Save</button>
+                </div>
+                {dir1IsSMB && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                    <input type="text" className="form-input" placeholder="Username"
+                      value={smbUser1} onChange={e => setSmbUser1(e.target.value)}
+                      style={{ flex: 1, fontSize: '12px' }} />
+                    <input type="password" className="form-input" placeholder="Password"
+                      value={smbPass1} onChange={e => setSmbPass1(e.target.value)}
+                      style={{ flex: 1, fontSize: '12px' }} />
+                    <button className="btn btn-sm btn-primary" onClick={async () => {
+                      await updateSetting('backup_smb_user_1', smbUser1);
+                      await updateSetting('backup_smb_pass_1', smbPass1);
+                    }}>Save</button>
+                  </div>
+                )}
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Leave blank to use the default ({backupStatus?.defaultDir || '…'}).
+                </p>
+
+                {/* Secondary dir */}
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', marginTop: '10px' }}>
+                  Secondary Backup Directory <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional — e.g. network drive)</span>
+                </label>
+                <div className="settings-row">
+                  <input type="text" className="form-input" placeholder="smb://10.0.0.24/Backups or /mnt/nas/backups"
+                    value={backupDir2} onChange={e => setBackupDir2(e.target.value)}
+                    style={{ flex: 1, minWidth: '200px', fontFamily: 'monospace', fontSize: '12px' }}
+                    placeholder="smb://192.168.1.100/Backups or /mnt/nas/backups" />
+                  <button className="btn btn-sm btn-primary" onClick={async () => {
+                    await updateSetting('backup_dir_2', backupDir2);
+                    setBackupDir2Saved(backupDir2);
+                    getBackupStatus().then(setBackupStatus).catch(() => {});
+                  }}>Save</button>
+                </div>
+                {dir2IsSMB && (
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                    <input type="text" className="form-input" placeholder="Username"
+                      value={smbUser2} onChange={e => setSmbUser2(e.target.value)}
+                      style={{ flex: 1, fontSize: '12px' }} />
+                    <input type="password" className="form-input" placeholder="Password"
+                      value={smbPass2} onChange={e => setSmbPass2(e.target.value)}
+                      style={{ flex: 1, fontSize: '12px' }} />
+                    <button className="btn btn-sm btn-primary" onClick={async () => {
+                      await updateSetting('backup_smb_user_2', smbUser2);
+                      await updateSetting('backup_smb_pass_2', smbPass2);
+                    }}>Save</button>
+                  </div>
+                )}
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Both directories receive each backup independently — if one fails the other still succeeds.
+                  SMB paths (<code>smb://server/share/path</code>) require credentials above.
+                </p>
+              </div>
+            );
+          })()}
+
+          {/* Per-service config */}
+          <div className="settings-2col">
+            {/* Marathon */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <strong style={{ fontSize: '13px' }}>Marathon</strong>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={marathonBackupEnabled}
+                    onChange={async e => {
+                      setMarathonBackupEnabled(e.target.checked);
+                      await updateSetting('marathon_backup_enabled', e.target.checked ? '1' : '0');
+                    }} />
+                  Enabled
+                </label>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', opacity: marathonBackupEnabled ? 1 : 0.4 }}>
+                <label style={{ fontSize: '12px' }}>Every
+                  <select className="form-input" style={{ marginLeft: '8px', fontSize: '12px', width: 'auto' }}
+                    value={marathonBackupInterval}
+                    disabled={!marathonBackupEnabled}
+                    onChange={async e => {
+                      setMarathonBackupInterval(e.target.value);
+                      await updateSetting('marathon_backup_interval', e.target.value);
+                    }}>
+                    <option value="1">1 hour</option>
+                    <option value="4">4 hours</option>
+                    <option value="6">6 hours</option>
+                    <option value="12">12 hours</option>
+                    <option value="24">24 hours (daily)</option>
+                    <option value="48">48 hours</option>
+                    <option value="72">72 hours (3 days)</option>
+                    <option value="168">7 days (weekly)</option>
+                  </select>
+                </label>
+                <label style={{ fontSize: '12px' }}>Keep
+                  <input type="number" min="1" max="99" className="form-input"
+                    style={{ marginLeft: '8px', width: '60px', fontSize: '12px', display: 'inline' }}
+                    value={marathonBackupKeep}
+                    disabled={!marathonBackupEnabled}
+                    onChange={async e => {
+                      setMarathonBackupKeep(e.target.value);
+                      await updateSetting('marathon_backup_keep', e.target.value);
+                    }} />
+                  {' '}backups
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={marathonBackupUploads}
+                    disabled={!marathonBackupEnabled}
+                    onChange={async e => {
+                      setMarathonBackupUploads(e.target.checked);
+                      await updateSetting('marathon_backup_include_uploads', e.target.checked ? '1' : '0');
+                    }} />
+                  Include G-code uploads <span style={{ color: 'var(--text-muted)' }}>(large)</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                  <button className="btn btn-sm" disabled={backupRunning != null}
+                    onClick={() => handleRunBackup('marathon')}>
+                    {backupRunning === 'marathon' ? 'Backing up…' : 'Backup Now'}
+                  </button>
+                  {backupStatus?.marathon?.lastBackup && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Last: {new Date(backupStatus.marathon.lastBackup).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Spoolman */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                <strong style={{ fontSize: '13px' }}>Spoolman</strong>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={spoolmanBackupEnabled}
+                    onChange={async e => {
+                      setSpoolmanBackupEnabled(e.target.checked);
+                      await updateSetting('spoolman_backup_enabled', e.target.checked ? '1' : '0');
+                    }} />
+                  Enabled
+                </label>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', opacity: spoolmanBackupEnabled ? 1 : 0.4 }}>
+                <label style={{ fontSize: '12px' }}>Every
+                  <select className="form-input" style={{ marginLeft: '8px', fontSize: '12px', width: 'auto' }}
+                    value={spoolmanBackupInterval}
+                    disabled={!spoolmanBackupEnabled}
+                    onChange={async e => {
+                      setSpoolmanBackupInterval(e.target.value);
+                      await updateSetting('spoolman_backup_interval', e.target.value);
+                    }}>
+                    <option value="1">1 hour</option>
+                    <option value="4">4 hours</option>
+                    <option value="6">6 hours</option>
+                    <option value="12">12 hours</option>
+                    <option value="24">24 hours (daily)</option>
+                    <option value="48">48 hours</option>
+                    <option value="72">72 hours (3 days)</option>
+                    <option value="168">7 days (weekly)</option>
+                  </select>
+                </label>
+                <label style={{ fontSize: '12px' }}>Keep
+                  <input type="number" min="1" max="99" className="form-input"
+                    style={{ marginLeft: '8px', width: '60px', fontSize: '12px', display: 'inline' }}
+                    value={spoolmanBackupKeep}
+                    disabled={!spoolmanBackupEnabled}
+                    onChange={async e => {
+                      setSpoolmanBackupKeep(e.target.value);
+                      await updateSetting('spoolman_backup_keep', e.target.value);
+                    }} />
+                  {' '}backups
+                </label>
+                {spoolmanDataDir !== '' && (
+                  <div style={{ marginTop: '4px' }}>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '3px' }}>
+                      Spoolman data directory <span style={{ color: 'var(--text-muted)' }}>(only needed if Spoolman is not running in Docker)</span>
+                    </label>
+                    <div className="settings-row">
+                      <input type="text" className="form-input" placeholder="~/.local/share/spoolman"
+                        value={spoolmanDataDir} onChange={e => setSpoolmanDataDir(e.target.value)}
+                        style={{ flex: 1, fontFamily: 'monospace', fontSize: '11px' }} />
+                      <button className="btn btn-xs btn-primary" onClick={async () => {
+                        await updateSetting('spoolman_data_dir', spoolmanDataDir);
+                        getBackupStatus().then(setBackupStatus).catch(() => {});
+                      }}>Save</button>
+                    </div>
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                  <button className="btn btn-sm" disabled={backupRunning != null}
+                    onClick={() => handleRunBackup('spoolman')}>
+                    {backupRunning === 'spoolman' ? 'Backing up…' : 'Backup Now'}
+                  </button>
+                  {backupStatus?.spoolman?.lastBackup && (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                      Last: {new Date(backupStatus.spoolman.lastBackup).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Status message */}
+          {backupMsg && (
+            <p style={{ marginTop: '10px', fontSize: '12px', color: backupMsg.ok ? 'var(--success)' : 'var(--danger)' }}>
+              {backupMsg.text}
+            </p>
+          )}
+
+          {/* Backup file lists */}
+          {(backupStatus?.marathon?.files?.length > 0 || backupStatus?.spoolman?.files?.length > 0) && (
+            <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+              <p style={{ fontSize: '12px', fontWeight: 500, marginBottom: '8px' }}>Stored Backups</p>
+              <div className="settings-2col">
+                {/* Marathon files */}
+                <div>
+                  {backupStatus.marathon.files.length > 0 && (
+                    <>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Marathon</p>
+                      {backupStatus.marathon.files.map(f => (
+                        <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '11px', flex: 1, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{(f.size / 1048576).toFixed(1)} MB</span>
+                          <button className="btn btn-xs" style={{ color: 'var(--danger)', borderColor: 'var(--danger)', padding: '1px 6px', fontSize: '11px' }}
+                            onClick={() => handleDeleteBackup(f.name)}>✕</button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+                {/* Spoolman files */}
+                <div>
+                  {backupStatus.spoolman.files.length > 0 && (
+                    <>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Spoolman</p>
+                      {backupStatus.spoolman.files.map(f => (
+                        <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '11px', flex: 1, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{(f.size / 1048576).toFixed(1)} MB</span>
+                          <button className="btn btn-xs" style={{ color: 'var(--danger)', borderColor: 'var(--danger)', padding: '1px 6px', fontSize: '11px' }}
+                            onClick={() => handleDeleteBackup(f.name)}>✕</button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </Section>
 
