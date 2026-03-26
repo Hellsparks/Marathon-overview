@@ -5,7 +5,35 @@
       "Bash(npm install three-bvh-csg)",
       "Bash(python3 -c \":*)",
       "Bash(node -e \":*)",
-      "Bash(python -c \"import cadquery; print\\(cadquery.__version__\\); import inspect; print\\(inspect.signature\\(cadquery.Workplane.text\\)\\)\")"
+      "Bash(python -c \"import cadquery; print\\(cadquery.__version__\\); import inspect; print\\(inspect.signature\\(cadquery.Workplane.text\\)\\)\")",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(git ls-remote*)",
+      "Bash(ls*)",
+      "Bash(npm test*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(rm -rf /mnt/ssd/Github/Marathon-overview/backend/src*)",
+      "Bash(rm -rf /mnt/ssd/Github/Marathon-overview/frontend/src*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/post-edit-tests.sh\""
+          }
+        ]
+      }
     ]
   }
 }
