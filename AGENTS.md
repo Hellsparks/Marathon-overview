@@ -13,7 +13,7 @@ monitor and control multiple Klipper/Moonraker printers from a single dashboard.
 
 **Tech stack:**
 - **Frontend:** React 18 + Vite (SPA, no framework — vanilla React Router)
-- **Backend:** Express.js + SQLite (REST API, proxies to Moonraker)
+- **Backend:** Express.js + **`node:sqlite`** (`DatabaseSync` — synchronous, built-in Node 22; **not** `better-sqlite3`)
 - **Styling:** Vanilla CSS with CSS custom properties (NO Tailwind)
 - **Deployment:** Docker Compose (nginx reverse proxy + Node.js)
 
@@ -30,11 +30,11 @@ frontend/src/
 ├── pages/
 │   ├── DashboardPage.jsx       Grid of PrinterCards + status polling
 │   ├── PrinterIframePage.jsx   Full-screen Mainsail iframe for a single printer (/printer/:id)
-│   ├── FilesPage.jsx           G-code file browser + upload
+│   ├── FilesPage.jsx           G-code file browser + upload + folder management
 │   ├── QueuePage.jsx           Per-printer print queue
 │   ├── SpoolmanPage.jsx        Spool management + drag-to-assign
 │   ├── MaintenancePage.jsx     Maintenance tasks/intervals config + printer cards
-│   └── SettingsPage.jsx        Printer CRUD + theme settings
+│   └── SettingsPage.jsx        Printer CRUD + theme + backup + connection settings
 ├── components/
 │   ├── dashboard/
 │   │   ├── PrinterCard.jsx ★ Most complex component — per-printer theming, CSS scoping
@@ -57,28 +57,39 @@ frontend/src/
                             both import this so scraped CSS is cached across page navigations
 
 backend/src/
-├── index.js                Entry point: DB init → Express listen → start poller
-├── app.js                  Express app: CORS, body-parser, route mounting
-├── db/                     SQLite schema, migrations (001–012), connection singleton
+├── index.js                Entry point: DB init → Express listen → start poller + backup scheduler
+├── app.js                  Express app: CORS, body-parser, route mounting (20+ routers)
+├── db/                     SQLite schema, migrations (001–040), connection singleton
 ├── routes/
 │   ├── printers.js         CRUD printers + scrape-theme endpoint
-│   ├── control.js          Moonraker proxy: gcode, pause, resume, cancel
+│   ├── control.js          Moonraker proxy: print start/pause/resume/cancel/gcode
 │   ├── status.js           Cached printer status (from poller)
 │   ├── files.js            G-code upload/list/delete + send-to-printer
+│   ├── folders.js          File folder CRUD
+│   ├── templates.js        Print templates CRUD + plate/filament management
+│   ├── projects.js         Projects CRUD + plate/filament/template-instance management
 │   ├── queue.js            Per-printer print queue management
 │   ├── presets.js          Temperature presets CRUD
 │   ├── themes.js           Community theme git clone/list/delete
+│   ├── settings.js         GET/PUT flat key-value settings store
 │   ├── stats.js            Fleet + per-file print statistics
-│   ├── spoolman.js         Spoolman proxy (spool list, active spool assignment)
+│   ├── spoolman.js         Spoolman proxy + LAN IP + services status
 │   ├── maintenance.js      Maintenance tasks, intervals, history, mark-done
-│   ├── extras.js           Extras: POST /api/extras/swatch → generates STL via Python/CadQuery
-│   └── octoprint.js        OctoPrint stub (partial implementation)
+│   ├── extras.js           POST /api/extras/swatch → generates STL via Python/CadQuery
+│   ├── backup.js           Scheduled backup status/run/delete
+│   ├── database.js         DB export/import (download/upload marathon.db)
+│   ├── mcp.js              MCP tool registration + context endpoint
+│   ├── setup.js            First-run setup wizard state
+│   ├── updates.js          Docker image pull + restart
+│   └── octoprint.js        OctoPrint-compatible stub (/api/version, /api/printer)
 ├── services/
-│   ├── poller.js           Status polling loop; logs print jobs + accumulates runtime_s
+│   ├── poller.js           Status polling loop (3s); logs print jobs + accumulates runtime_s
+│   ├── backup.js           Scheduled backup (60s tick); Marathon DB + Spoolman via docker cp
 │   └── swatch_generator.py Python/CadQuery script: loads swatch.step, debosses text, exports STL
 ├── swatch.step             STEP file for the swatch base shape (Autodesk, mm, Z-up)
 └── middleware/
-    └── upload.js           Multer config for G-code uploads
+    ├── upload.js           Multer config for G-code uploads
+    └── errorHandler.js     Global Express error handler
 
 **Python dependency:** The swatch generator requires Python 3 + CadQuery (`pip install cadquery`).
 In Docker this is installed automatically. For direct installs, set `PYTHON_BIN` env var if
@@ -120,55 +131,152 @@ in `THEMING.md`. Here are the critical rules:
 
 All routes are prefixed with `/api`.
 
+### Printers
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/printers` | List all printers |
 | POST | `/printers` | Add a printer |
 | PUT | `/printers/:id` | Update printer settings |
 | DELETE | `/printers/:id` | Remove a printer |
-| POST | `/printers/scrape-theme` | Fetch Mainsail CSS from printer |
+| POST | `/printers/scrape-theme` | Fetch Mainsail CSS from a printer |
+
+### Status & Control (mounted under `/api/printers/:id`)
+| Method | Endpoint | Description |
+|---|---|---|
 | GET | `/status` | All printer statuses (from poller cache) |
-| POST | `/control/gcode` | Send G-code to a printer via Moonraker |
-| POST | `/control/pause` | Pause a print |
-| POST | `/control/resume` | Resume a print |
-| POST | `/control/cancel` | Cancel a print |
-| GET | `/files/:printerId` | List G-code files on a printer |
+| POST | `/printers/:id/print/start` | Start a print |
+| POST | `/printers/:id/print/pause` | Pause the current print |
+| POST | `/printers/:id/print/resume` | Resume a paused print |
+| POST | `/printers/:id/print/cancel` | Cancel the current print |
+| POST | `/printers/:id/gcode` | Send raw G-code |
+| GET | `/printers/:id/queue` | Get print queue for a printer |
+| POST | `/printers/:id/queue` | Add item to queue |
+| DELETE | `/printers/:id/queue/:itemId` | Remove item from queue |
+| POST | `/printers/:id/queue/start` | Start the queue |
+
+### Files & Folders
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/files` | List all uploaded G-code files + metadata |
 | POST | `/files/upload` | Upload G-code to Marathon server |
-| POST | `/files/send` | Send uploaded file to a printer |
-| GET | `/queue/:printerId` | Get print queue for a printer |
-| POST | `/queue/:printerId` | Add file to queue |
-| DELETE | `/queue/:printerId/:itemId` | Remove from queue |
+| DELETE | `/files/:id` | Delete an uploaded file |
+| POST | `/files/send` | Send file to a printer |
+| GET | `/folders` | List folders |
+| POST | `/folders` | Create a folder |
+| PUT | `/folders/:id` | Rename a folder |
+| DELETE | `/folders/:id` | Delete a folder |
+
+### Templates & Projects
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/templates` | List templates |
+| POST | `/templates` | Create a template |
+| PUT | `/templates/:id` | Update a template |
+| DELETE | `/templates/:id` | Delete a template |
+| GET | `/projects` | List projects |
+| POST | `/projects` | Create a project |
+| PUT | `/projects/:id` | Update a project |
+| DELETE | `/projects/:id` | Delete a project |
+
+### Settings & Presets
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/settings` | Get all settings as `{ key: value }` map |
+| PUT | `/settings` | Batch-save settings (`{ key: value }` body) |
 | GET | `/presets` | List temperature presets |
 | POST | `/presets` | Create a preset |
 | DELETE | `/presets/:id` | Delete a preset |
+
+### Themes
+| Method | Endpoint | Description |
+|---|---|---|
 | GET | `/themes` | List community themes |
-| POST | `/themes` | Install community themes from GitHub |
+| POST | `/themes` | Install a community theme from GitHub |
 | DELETE | `/themes/:name` | Remove a community theme |
+
+### Stats
+| Method | Endpoint | Description |
+|---|---|---|
 | GET | `/stats/fleet` | Aggregate fleet print statistics |
 | GET | `/stats/files` | Per-file print statistics |
+
+### Spoolman
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/spoolman/services/status` | Spoolman connection status + LAN IP + externalUrl |
 | GET | `/spoolman/spools` | List spools from Spoolman |
+| GET | `/spoolman/filaments` | List filament profiles from Spoolman |
 | POST | `/spoolman/active/:printerId` | Set active spool on a printer |
+
+### Maintenance
+| Method | Endpoint | Description |
+|---|---|---|
 | GET | `/maintenance` | All tasks, printers (full row), intervals, last-done history |
 | POST | `/maintenance/tasks` | Create a maintenance task |
 | DELETE | `/maintenance/tasks/:id` | Delete a task and all its history |
 | PUT | `/maintenance/intervals/:taskId/:printerId` | Set interval (hours) for a task+printer |
 | POST | `/maintenance/done/:taskId/:printerId` | Record task completion at current runtime |
 
+### Backup
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/backup/status` | Backup config + file lists from all configured dirs |
+| POST | `/backup/run` | Manual trigger (`{ target: 'marathon'|'spoolman'|'all' }`) |
+| DELETE | `/backup/:filename` | Delete a backup file from all dirs |
+
+### Database
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/database/download` | Download `marathon.db` |
+| POST | `/database/upload` | Upload + restore `marathon.db` |
+
+### Updates
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/updates/pull` | `docker compose pull && up -d` |
+
+### Extras
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/extras/swatch` | Generate swatch STL (Python/CadQuery) |
+
+### Setup & MCP
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/setup/status` | Setup wizard completion state |
+| PUT | `/setup/complete` | Mark setup wizard as done |
+| GET | `/mcp/context` | MCP tool context (printers, spools, etc.) |
+
 ---
 
 ## Database
 
-SQLite database at `backend/data/marathon.db`. Schema is auto-created on first run.
+SQLite database at `backend/data/marathon.db`. Uses **`node:sqlite`** (`DatabaseSync`) — built into Node 22.
+Schema is auto-applied from `backend/src/db/migrations/` (NNN_name.sql, run in order at startup).
 
 ### Key tables:
-- `printers` — id, name, host, port, theme_mode, custom_css, runtime_s (cumulative print seconds), etc.
+- `printers` — id, name, host, port, firmware_type, theme_mode, custom_css, runtime_s, etc.
+- `settings` — key TEXT PK, value TEXT (flat key-value store for all app settings)
 - `queue_items` — printer_id, filename, position, status
 - `presets` — name, hotend_temp, bed_temp
 - `gcode_files` — uploaded G-code file metadata
+- `gcode_folders` — folder hierarchy for G-code files
 - `gcode_print_jobs` — completed print log (duration, filament, spool info, status)
 - `maintenance_tasks` — global named tasks (e.g. "Lubricate rails")
 - `maintenance_intervals` — task_id + printer_id + interval_hours (PK: task_id, printer_id)
 - `maintenance_history` — when each task was done on each printer, runtime_s at that time
+- `templates` / `template_plates` / `template_plate_filaments` — reusable print templates
+- `projects` / `project_plates` / `project_plate_filaments` — active print projects
+
+### Settings table key namespaces:
+- `marathon_backup_*` — Marathon backup config (enabled, interval, keep, include_uploads, last_backup)
+- `spoolman_backup_*` — Spoolman backup config
+- `backup_dir`, `backup_dir_2` — Backup destination paths (local or `smb://...`)
+- `backup_smb_user_1`, `backup_smb_pass_1`, `backup_smb_user_2`, `backup_smb_pass_2` — SMB credentials
+- `spoolman_data_dir` — Fallback Spoolman DB path for non-Docker installs
+- `spoolman_url` — Spoolman base URL
+- `teamster_*` — Teamster/MQTT connection settings
+- `setup_complete` — First-run wizard flag
 
 ### Runtime tracking
 `printers.runtime_s` accumulates when the poller detects a print transition from
@@ -290,3 +398,22 @@ The `/api/maintenance` endpoint returns full printer rows (including `host`, `po
 
 5. **SQLite has no concurrent write support.** The poller and API routes write to the
    same DB — this works fine at low scale but may need WAL mode for heavy use.
+
+6. **Use `node:sqlite` (DatabaseSync), NOT `better-sqlite3`.** Marathon uses the
+   built-in Node 22 SQLite module. The API is synchronous and slightly different from
+   `better-sqlite3` — check `backend/src/db/index.js` for the connection pattern.
+
+7. **Backend tests require `--forceExit`** (already in `package.json`). The polling
+   timer in `poller.js` keeps the process alive after tests complete without it.
+
+8. **Spoolman always runs in Docker**, even in native dev mode. Use
+   `docker cp marathon-spoolman:/home/app/.local/share/spoolman/spoolman.db <dest>`
+   to access its DB. Do NOT assume Spoolman is accessible via the filesystem directly.
+
+9. **SMB backup paths** use `smb://server/share/path`, `smb:/user@server/share/path`,
+   or `//server/share/path`. Credentials go in `backup_smb_user_1`/`backup_smb_pass_1`
+   settings and are passed to `smbclient` via a temp file (mode 0600) — never in a
+   shell argument (visible in `ps`).
+
+10. **Don't hardcode IP addresses or credentials** in source code or placeholders.
+    Use `192.168.1.x` ranges as examples, never real home/office IPs.

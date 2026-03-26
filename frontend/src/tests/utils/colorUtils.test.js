@@ -12,9 +12,9 @@ describe('buildColorStyle', () => {
         expect(style).toEqual({ '--spool-color': '#888888' });
     });
 
-    it('returns --spool-color for 8-char hex (with alpha)', () => {
+    it('returns --spool-color for 8-char hex (alpha stripped to 6)', () => {
         const style = buildColorStyle({ color_hex: 'FF000080' });
-        expect(style).toEqual({ '--spool-color': '#FF000080' });
+        expect(style).toEqual({ '--spool-color': '#FF0000' });
     });
 
     it('returns --spool-color for single entry in multi_color_hexes', () => {
